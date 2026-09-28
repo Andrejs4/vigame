@@ -43,7 +43,9 @@ persistence.
   invariant too: the random-game test runs it after every tick.
 - A new state field or entity field needs no change to the server or the
   sync: the room mirrors `publicView` generically. Change `publicView` only
-  to hide something from players.
+  to hide something from players, or to keep a counter that changes every
+  tick out of it (units' experience is hidden for that): a changed field
+  resends its whole unit or building to every player.
 - Changing the state's shape: bump `STATE_VERSION`. Saved snapshots of the old
   shape then fail `checkState`, and the room rebuilds those games from their
   command logs, which only works if old commands still replay.
@@ -77,7 +79,8 @@ persistence.
   tick, then adopt the copy. The tests check that a failed write changes
   nothing.
 - The clock runs only while every seat is held by a player who is here.
-- Commands are flat objects of short strings and numbers; the room rejects
+- Commands are flat objects of short strings, numbers and short lists of
+  short strings (such as a crew's unit ids); the room rejects
   anything else before the core sees it (`flatCommand`).
 - Only signed-in players join: `gameRoom(storage)` in `server/room.js` makes
   the room class whose static `onAuth` checks the `players` table. Colyseus

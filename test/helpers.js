@@ -5,6 +5,10 @@
 import { TERRAIN } from '../src/core/board.js';
 import { STATE_VERSION, advance, checkState } from '../src/core/game.js';
 import { hexagon, key } from '../src/core/hex.js';
+import { BUILDING_TYPES, SKILLS } from '../src/core/rules.js';
+
+/** Every skill at `level`. */
+export const skillsAt = (/** @type {number} */ level) => Object.fromEntries(Object.keys(SKILLS).map((s) => [s, level]));
 
 /**
  * A hand-built board from a terrain map, for tests that need exact terrain.
@@ -45,7 +49,8 @@ export function openBoard(radius, except = {}, options = {}) {
 
 /**
  * A two-side state with exactly these buildings and units, for tests that
- * set up a position by hand.
+ * set up a position by hand. Buildings default to towers at 0,0, and units to
+ * fresh level 1 units named Test Unit; types that work start with none done.
  * @param {Array<Partial<import('../src/core/game.js').Building> & { id: string }>} buildings
  * @param {Array<Partial<import('../src/core/game.js').Unit> & { id: string }>} [units]
  * @param {number} [seed]
@@ -53,6 +58,18 @@ export function openBoard(radius, except = {}, options = {}) {
  */
 export function stateWith(buildings, units = [], seed = 1) {
   const ids = [...buildings, ...units].map((e) => Number(e.id.slice(1)));
+  const building = (/** @type {Partial<import('../src/core/game.js').Building>} */ b) => {
+    const type = BUILDING_TYPES[b.type ?? 'tower'];
+    return {
+      owner: 0, type: 'tower', grade: 1, q: 0, r: 0,
+      ...(type?.work !== undefined ? { work: 0 } : {}),
+      ...(type?.depth !== undefined ? { depth: 0 } : {}),
+      ...b,
+    };
+  };
+  const unit = (/** @type {Partial<import('../src/core/game.js').Unit>} */ u) => ({
+    owner: 0, name: 'Test Unit', level: 1, xp: 0, skills: skillsAt(0), practice: skillsAt(0), ...u,
+  });
   return {
     version: STATE_VERSION,
     seed,
@@ -60,8 +77,8 @@ export function stateWith(buildings, units = [], seed = 1) {
     rng: 1,
     nextId: Math.max(0, ...ids) + 1,
     players: [{ id: 0 }, { id: 1 }],
-    buildings: Object.fromEntries(buildings.map((b) => [b.id, { owner: 0, type: 'tower', grade: 1, q: 0, r: 0, ...b }])),
-    units: Object.fromEntries(units.map((u) => [u.id, { owner: 0, type: 'militia', ...u }])),
+    buildings: Object.fromEntries(buildings.map((b) => [b.id, building(b)])),
+    units: Object.fromEntries(units.map((u) => [u.id, unit(u)])),
   };
 }
 

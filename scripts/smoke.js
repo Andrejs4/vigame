@@ -115,7 +115,7 @@ const castleOf = async (page, owner) => (await buildings(page)).find((b) => b.ty
 /** How many units are inside a building, as the page sees it. */
 const insideOf = (page, id) => page.evaluate((id) => /** @type {any} */ (window).__vigame.occ?.inside.get(id)?.length ?? 0, id);
 
-const waitInside = (page, id, n, timeout = 15000) => page.waitForFunction(
+const waitInside = (page, id, n, timeout = 30000) => page.waitForFunction(
   ([id, n]) => (/** @type {any} */ (window).__vigame.occ?.inside.get(id)?.length ?? 0) >= n, [id, n], { timeout },
 );
 
@@ -158,12 +158,27 @@ async function selectBuilding(page, b, { touch = false } = {}) {
   await page.waitForFunction((id) => /** @type {any} */ (window).__vigame.selected === id, b.id);
 }
 
-/** Send units from one building to another: select the first, click the second. */
-async function sendUnits(page, from, to, { touch = false } = {}) {
-  await selectBuilding(page, from, { touch });
-  await clickHex(page, to.q, to.r, { touch });
+/**
+ * Confirm the crew dialog, after ticking `add` more units than it came with.
+ * @returns {Promise<string>} The dialog's count, such as "3 of 20", when it opened.
+ */
+async function confirmCrew(page, { add = 0, shot = '' } = {}) {
+  await page.waitForSelector('#crew[open]');
+  const count = await text(page, '#crew-count');
+  for (let i = 0; i < add; i++) await page.locator('#crew-list input:not(:checked):not(:disabled)').first().check();
+  if (shot) await page.screenshot({ path: join(OUT, shot) });
+  await page.click('#crew-ok');
+  await page.waitForSelector('#crew', { state: 'hidden' });
+  return count ?? '';
+}
+
+/** Give a building a crew of `n` units with the Crew button; they set off. */
+async function crewWith(page, b, n) {
+  await selectBuilding(page, b);
+  await page.click('#crew-button');
+  await confirmCrew(page, { add: n });
   await page.waitForFunction((id) => Object.values(/** @type {any} */ (window).__vigame.view.units)
-    .some((u) => u.to === id), to.id);
+    .some((u) => u.to === id || u.in === id), b.id);
 }
 
 /** RGB of the canvas pixel under page point (x, y). */
@@ -306,12 +321,11 @@ async function threeBrowsers(browser, url, { full, label }) {
   await waitText(b, '#seat', 'Bēla · Crimson');
   await waitMatch(a, '#time', /^0:0[1-9]$/);
 
-  // Ann builds and sends units; Bēla sees them march, and Ann's pick.
+  // Ann builds a tower and gives it a crew; Bēla sees them march, and Ann's pick.
   const blue = await castleOf(a, 0);
   const tower = await buildWith(a, 'tower');
   await b.waitForFunction((id) => /** @type {any} */ (window).__vigame.view.buildings[id], tower.id);
-  await waitInside(a, blue.id, 2);
-  await sendUnits(a, blue, tower);
+  await crewWith(a, tower, 2);
   await b.waitForFunction((id) => Object.values(/** @type {any} */ (window).__vigame.view.units)
     .some((u) => u.to === id && u.path?.length === 1), tower.id);
   await b.waitForFunction(({ q, r }) => /** @type {any} */ (window).__vigame.peers
@@ -365,12 +379,30 @@ async function threeBrowsers(browser, url, { full, label }) {
   assert.equal(await a.locator('#build-tower').getAttribute('aria-pressed'), 'true', 'still placing');
   await a.keyboard.press('Escape');
 
-  // Bēla builds a wagon, loads it, and drives it; its units ride along.
-  await waitInside(b, crimson.id, 1);
+  // Ann digs a pit. Its crew is chosen as it goes down, with the best at
+  // home ticked; they walk there and dig. Return sends them home.
+  const count = (await buildings(a)).length;
+  await a.click('#build-pit');
+  await a.waitForFunction(() => /** @type {any} */ (window).__vigame.highlights.length > 0);
+  const pitCells = await a.evaluate(() => /** @type {any} */ (window).__vigame.highlights);
+  const pitSpot = await openCell(a, pitCells.map((k) => k.split(',').map(Number)));
+  await clickHex(a, pitSpot.q, pitSpot.r);
+  assert.match(await confirmCrew(a, { shot: 'crew.png' }), /^(\d+) of \1$/, 'a full crew is ticked');
+  await a.waitForFunction((n) => Object.keys(/** @type {any} */ (window).__vigame.view.buildings).length === n, count + 1);
+  const pit = (await buildings(a)).find((x) => x.type === 'pit');
+  await a.waitForFunction((id) => /** @type {any} */ (window).__vigame.view.buildings[id].work > 0, pit.id, { timeout: 30000 });
+  await selectBuilding(a, pit);
+  await waitMatch(a, '#selection', /^Pit · crew \d+\/\d+ · depth 0\/\d+, \d+%$/);
+  await a.click('#return-button');
+  await a.waitForFunction((id) => !Object.values(/** @type {any} */ (window).__vigame.view.units)
+    .some((u) => u.to === id || u.in === id), pit.id);
+  await a.keyboard.press('Escape');
+
+  // Bēla builds a wagon, crews it, and drives it; its crew rides along.
   const wagon = await buildWith(b, 'wagon');
-  await sendUnits(b, crimson, wagon);
+  await crewWith(b, wagon, 3);
   await b.waitForFunction((id) => !Object.values(/** @type {any} */ (window).__vigame.view.units)
-    .some((u) => u.to === id), wagon.id, { timeout: 15000 });
+    .some((u) => u.to === id), wagon.id, { timeout: 30000 });
   const riders = await insideOf(b, wagon.id);
   assert.ok(riders >= 1, 'units got in');
   await b.keyboard.press('Escape');

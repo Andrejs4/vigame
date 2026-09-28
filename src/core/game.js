@@ -4,30 +4,42 @@
  * The state (GameState below) is plain JSON. It is saved, sent and simulated
  * as it is, with no conversion layer. Three things change it:
  *
- *   applyCommand   what a player does: send units, build, upgrade, move a wagon
- *   advance        one tick of time: production, marching, wagons rolling
+ *   applyCommand   what a player does: build, choose a building's crew,
+ *                  upgrade, move a wagon
+ *   advance        one tick of time: work, marching, wagons rolling
  *   newGame        the opening position
  *
  * Nothing here reads the clock, Math.random, the DOM or the network, so the
  * same seed and the same commands at the same ticks always give the same game:
- * on the page, on the game server, in a replay, and in a simulation run with
- * no players at all. Randomness, when the rules need it, comes from `random`,
- * whose seed is part of the state.
+ * on the game server, in a replay, and in a simulation run with no players at
+ * all. Randomness, when the rules need it, comes from `random`, whose seed is
+ * part of the state.
  *
  * Each fact is stored once. A building records its anchor cell (a castle's
  * centre); the cells it covers follow from its type. A unit records where it
- * is: inside a building, or on a cell. What stands on a cell and who is inside
- * a building are worked out from that (`occupancy`), never stored, so they
- * cannot disagree with it. A wagon carries its units because they record only
- * that they are inside it.
+ * is: inside a building, or on a cell, and the building it is heading for. A
+ * building's crew is the units inside it or heading for it. What stands on a
+ * cell, who is inside a building and who is its crew are worked out from that
+ * (`occupancy`, `crewOf`), never stored, so they cannot disagree with it. A
+ * wagon carries its units because they record only that they are inside it.
+ *
+ * Players direct buildings, not units: units walk only when they are given
+ * to a building's crew, or sent home to their castle. A castle is every
+ * unit's home; its units there raise new ones. A pit's crew digs it deeper.
+ * Work trains the skill it uses, and the unit's level with it.
  */
 
 import { distance, key, neighbors, parseKey } from './hex.js';
 import { tileAt } from './board.js';
-import { BUILDING_TYPES, BUILD_RANGE, DEPART_GAP, SIDES, UNIT_LIMIT, UNIT_TYPES, WAGON_PATIENCE } from './rules.js';
+import { unitName } from './names.js';
+import {
+  BUILDING_TYPES, BUILD_RANGE, DEPART_GAP, LEVEL_GROWTH, LEVEL_XP, MAX_LEVEL, SIDES, SKILLS, SKILL_XP,
+  START_UNITS, UNIT_LIMIT, WAGON_PATIENCE, WALK_TICKS, WORK_BASE,
+} from './rules.js';
 
 /** @typedef {import('./hex.js').Axial} Axial */
 /** @typedef {import('./board.js').Board} Board */
+/** @typedef {import('./rules.js').Skill} Skill */
 /** @typedef {[number, number]} Cell A cell as [q, r], the compact form paths use. */
 
 /**
@@ -38,6 +50,8 @@ import { BUILDING_TYPES, BUILD_RANGE, DEPART_GAP, SIDES, UNIT_LIMIT, UNIT_TYPES,
  * @property {number} grade From 1 to the type's `grades`.
  * @property {number} q Anchor cell: the building's cell, or a castle's centre.
  * @property {number} r
+ * @property {number} [work] Work done toward what it yields next, for types that work.
+ * @property {number} [depth] A pit's depth, in grades.
  * @property {Cell[]} [path] A moving building's route, next cell first.
  * @property {number} [since] While it rolls to path[0]: the tick it set off,
  * @property {number} [until] and the tick it gets there. It holds both cells meanwhile.
@@ -48,7 +62,12 @@ import { BUILDING_TYPES, BUILD_RANGE, DEPART_GAP, SIDES, UNIT_LIMIT, UNIT_TYPES,
  * @typedef {object} Unit
  * @property {string} id
  * @property {number} owner
- * @property {string} type A key of UNIT_TYPES.
+ * @property {string} name
+ * @property {number} level From 1 to MAX_LEVEL.
+ * @property {number} xp Experience toward the next level.
+ * @property {Record<Skill, number>} skills Each from 0 up to `level`.
+ * @property {Record<Skill, number>} practice Experience toward each skill's
+ *   next level, up to SKILL_XP.
  * @property {string} [in] The building it is inside. Otherwise it is on cell (q, r).
  * @property {number} [q]
  * @property {number} [r]
@@ -71,8 +90,8 @@ import { BUILDING_TYPES, BUILD_RANGE, DEPART_GAP, SIDES, UNIT_LIMIT, UNIT_TYPES,
  */
 
 /**
- * @typedef {{ type: 'send', from: string, to: string, count: number }
- *   | { type: 'build', kind: string, q: number, r: number }
+ * @typedef {{ type: 'build', kind: string, q: number, r: number, units?: string[] }
+ *   | { type: 'crew', building: string, units: string[] }
  *   | { type: 'upgrade', building: string }
  *   | { type: 'move', building: string, q: number, r: number }} Command
  * @typedef {{ ok: true } | { ok: false, reason: string }} Outcome
@@ -88,10 +107,28 @@ import { BUILDING_TYPES, BUILD_RANGE, DEPART_GAP, SIDES, UNIT_LIMIT, UNIT_TYPES,
  */
 
 /** Bump when GameState changes shape, and teach `checkState` the new one. */
-export const STATE_VERSION = 1;
+export const STATE_VERSION = 2;
+
+const SKILL_NAMES = /** @type {Skill[]} */ (Object.keys(SKILLS));
 
 /**
- * The opening position: one castle per side, on the board's start sites.
+ * Experience each level takes to leave, by level. Worked out once, by
+ * multiplication only, so it comes out the same on every machine.
+ */
+const LEVEL_TABLE = [0, LEVEL_XP];
+for (let level = 2; level < MAX_LEVEL; level++) LEVEL_TABLE.push(Math.round(LEVEL_TABLE[level - 1] * LEVEL_GROWTH));
+
+/**
+ * Experience a unit needs to go from this level to the next; Infinity at the top.
+ * @param {number} level
+ */
+export function levelXp(level) {
+  return LEVEL_TABLE[level] ?? Infinity;
+}
+
+/**
+ * The opening position: one castle per side, on the board's start sites, each
+ * with its first units.
  * @param {Board} board
  * @returns {GameState}
  */
@@ -110,7 +147,8 @@ export function newGame(board) {
   board.starts.slice(0, SIDES.length).forEach((start, owner) => {
     state.players.push({ id: owner });
     const id = newId(state, 'b');
-    state.buildings[id] = { id, owner, type: 'castle', grade: 1, q: start.q, r: start.r };
+    state.buildings[id] = { id, owner, type: 'castle', grade: 1, q: start.q, r: start.r, work: 0 };
+    for (let i = 0; i < START_UNITS; i++) newUnit(state, owner, id);
   });
   return state;
 }
@@ -133,6 +171,44 @@ export function random(state) {
  */
 function newId(state, prefix) {
   return `${prefix}${state.nextId++}`;
+}
+
+/** @returns {Record<Skill, number>} */
+function noSkills() {
+  return /** @type {Record<Skill, number>} */ (Object.fromEntries(SKILL_NAMES.map((s) => [s, 0])));
+}
+
+/**
+ * A new unit, at level 1 with no skills, inside a building.
+ * @param {GameState} state
+ * @param {number} owner
+ * @param {string} building
+ */
+function newUnit(state, owner, building) {
+  const id = newId(state, 'u');
+  const name = unitName(() => random(state));
+  state.units[id] = { id, owner, name, level: 1, xp: 0, skills: noSkills(), practice: noSkills(), in: building };
+  return id;
+}
+
+/**
+ * A tick of work with a skill: a point of experience for the unit, and one
+ * for the skill, which rises while it is below the unit's level.
+ * @param {Unit} u
+ * @param {Skill} skill
+ */
+function practise(u, skill) {
+  if (u.level < MAX_LEVEL && ++u.xp >= levelXp(u.level)) {
+    u.xp = 0;
+    u.level += 1;
+  }
+  const practice = Math.min(SKILL_XP, u.practice[skill] + 1);
+  if (practice >= SKILL_XP && u.skills[skill] < u.level) {
+    u.skills[skill] += 1;
+    u.practice[skill] = 0;
+  } else {
+    u.practice[skill] = practice;
+  }
 }
 
 /**
@@ -164,6 +240,26 @@ function heldCells(b) {
  */
 export function capacityOf(b) {
   return BUILDING_TYPES[b.type].capacity * b.grade;
+}
+
+/**
+ * A side's castle, home to its units.
+ * @param {Pick<GameState, 'buildings'>} state
+ * @param {number} owner
+ * @returns {Building | undefined}
+ */
+export function castleOf(state, owner) {
+  return Object.values(state.buildings).find((b) => b.owner === owner && b.type === 'castle');
+}
+
+/**
+ * A building's crew: the units inside it or heading for it, in id order.
+ * @param {Pick<GameState, 'units'>} state
+ * @param {string} building
+ * @returns {string[]}
+ */
+export function crewOf(state, building) {
+  return Object.values(state.units).filter((u) => u.in === building || u.to === building).map((u) => u.id);
 }
 
 /**
@@ -253,13 +349,24 @@ export function findPath(board, from, goal, blocked) {
 }
 
 /**
- * Ticks to enter a cell at a speed (ticks per cell on open ground).
+ * Ticks for a building to enter a cell at a speed (ticks per cell on open ground).
  * @param {Board} board
  * @param {number} speed
  * @param {Cell} cell
  */
 function stepTicks(board, speed, cell) {
   return speed * /** @type {import('./board.js').Tile} */ (tileAt(board, cell[0], cell[1])).moveCost;
+}
+
+/**
+ * Ticks for a unit to enter a cell: rough ground slows it, running skill
+ * speeds it up.
+ * @param {Board} board
+ * @param {Unit} u
+ * @param {Cell} cell
+ */
+function walkTicks(board, u, cell) {
+  return Math.ceil((stepTicks(board, WALK_TICKS, cell) * 100) / (100 + u.skills.running));
 }
 
 /**
@@ -297,7 +404,52 @@ function takenCells(occ, self) {
 function setOff(board, u, at) {
   const path = /** @type {Cell[]} */ (u.path);
   u.since = at;
-  u.until = at + stepTicks(board, UNIT_TYPES[u.type].speed, path[0]);
+  u.until = at + walkTicks(board, u, path[0]);
+}
+
+/**
+ * The way a unit would take to a building: from the building it is in, or
+ * from the end of the step it is taking, or from where it stands.
+ * @param {Board} board
+ * @param {GameState} state
+ * @param {Occupancy} occ
+ * @param {Unit} u
+ * @param {Building} target
+ * @returns {Cell[] | null}
+ */
+function routeFor(board, state, occ, u, target) {
+  const from = u.in !== undefined
+    ? state.buildings[u.in]
+    : u.path ? { q: u.path[0][0], r: u.path[0][1] } : { q: /** @type {number} */ (u.q), r: /** @type {number} */ (u.r) };
+  return findPath(board, from, target, hostileCells(state, occ, u.owner));
+}
+
+/**
+ * Send a unit to a building along a route from `routeFor`. A unit inside a
+ * building steps out onto its cell and sets off at `at`; one on the move
+ * finishes its step first.
+ * @param {Board} board
+ * @param {GameState} state
+ * @param {Unit} u
+ * @param {Building} target
+ * @param {Cell[]} route
+ * @param {number} at
+ */
+function dispatch(board, state, u, target, route, at) {
+  u.to = target.id;
+  if (u.in !== undefined) {
+    const from = state.buildings[u.in];
+    delete u.in;
+    u.q = from.q;
+    u.r = from.r;
+  } else if (u.path) {
+    u.path = [u.path[0], ...route];
+    return;
+  }
+  if (route.length) {
+    u.path = route;
+    setOff(board, u, at);
+  }
 }
 
 // --- commands ----------------------------------------------------------------
@@ -336,9 +488,9 @@ function commandCell(cmd) {
 
 /**
  * Apply one player's command, if it is allowed. Every change a player makes
- * goes through here, on the page and on the game server alike. The command is
- * checked field by field, since on the server it arrives straight off the
- * wire, and nothing changes unless it is allowed.
+ * goes through here. The command is checked field by field, since on the
+ * server it arrives straight off the wire, and nothing changes unless it is
+ * allowed.
  *
  * @param {Board} board
  * @param {GameState} state
@@ -352,8 +504,8 @@ export function applyCommand(board, state, player, command) {
   const cmd = /** @type {Record<string, unknown>} */ (command);
   const occ = occupancy(state);
   switch (cmd.type) {
-    case 'send': return sendUnits(board, state, occ, player, cmd);
     case 'build': return build(board, state, occ, player, cmd);
+    case 'crew': return crew(board, state, occ, player, cmd);
     case 'upgrade': return upgrade(state, player, cmd);
     case 'move': return moveBuilding(board, state, occ, player, cmd);
     default: return refuse('unknown command');
@@ -361,8 +513,53 @@ export function applyCommand(board, state, player, command) {
 }
 
 /**
- * Send up to `count` units from one of your buildings to another. They leave
- * one after another and march by the cheapest route.
+ * The units a command names for a crew: distinct units of the player's own.
+ * @param {GameState} state
+ * @param {number} player
+ * @param {unknown} list
+ * @returns {string[] | string} The unit ids, or why not.
+ */
+function unitList(state, player, list) {
+  if (!Array.isArray(list) || list.some((id) => typeof id !== 'string') || new Set(list).size !== list.length) return 'bad units';
+  if (list.some((id) => !Object.hasOwn(state.units, id) || state.units[id].owner !== player)) return 'not your unit';
+  return list;
+}
+
+/**
+ * Make these units a building's whole crew: those not on the list go home,
+ * and those on it come, from wherever they are. The units that leave one
+ * building go out a tick apart.
+ * @param {Board} board
+ * @param {GameState} state
+ * @param {Occupancy} occ
+ * @param {Building} b
+ * @param {string[]} ids
+ * @returns {Outcome}
+ */
+function setCrew(board, state, occ, b, ids) {
+  if (ids.length > capacityOf(b)) return refuse('too many units');
+  const home = castleOf(state, b.owner);
+  const wanted = new Set(ids);
+  const moves = [
+    ...crewOf(state, b.id).filter((id) => !wanted.has(id)).map((id) => ({ u: state.units[id], target: home })),
+    ...ids.filter((id) => state.units[id].in !== b.id && state.units[id].to !== b.id).map((id) => ({ u: state.units[id], target: b })),
+  ];
+  const routes = moves.map(({ u, target }) => (target ? routeFor(board, state, occ, u, target) : null));
+  if (routes.some((route) => !route)) return refuse('no way there');
+
+  /** @type {Map<string, number>} */
+  const leaving = new Map();
+  moves.forEach(({ u, target }, i) => {
+    const from = u.in ?? '';
+    const n = leaving.get(from) ?? 0;
+    leaving.set(from, n + 1);
+    dispatch(board, state, u, /** @type {Building} */ (target), /** @type {Cell[]} */ (routes[i]), state.tick + n * DEPART_GAP);
+  });
+  return { ok: true };
+}
+
+/**
+ * Choose a building's crew. An empty list sends them all home.
  * @param {Board} board
  * @param {GameState} state
  * @param {Occupancy} occ
@@ -370,31 +567,19 @@ export function applyCommand(board, state, player, command) {
  * @param {Record<string, unknown>} cmd
  * @returns {Outcome}
  */
-function sendUnits(board, state, occ, player, cmd) {
-  const from = ownBuilding(state, player, cmd.from);
-  const to = ownBuilding(state, player, cmd.to);
-  if (!from || !to) return refuse('not your building');
-  if (from.id === to.id) return refuse('same building');
-  if (!Number.isSafeInteger(cmd.count) || /** @type {number} */ (cmd.count) < 1) return refuse('bad count');
-  const ids = /** @type {string[]} */ (occ.inside.get(from.id));
-  if (!ids.length) return refuse('nobody inside');
-  const path = findPath(board, from, to, hostileCells(state, occ, player));
-  if (!path) return refuse('no way there');
-
-  ids.slice(0, /** @type {number} */ (cmd.count)).forEach((id, i) => {
-    const u = state.units[id];
-    delete u.in;
-    u.q = from.q;
-    u.r = from.r;
-    u.path = path.map(([q, r]) => [q, r]);
-    u.to = to.id;
-    setOff(board, u, state.tick + i * DEPART_GAP);
-  });
-  return { ok: true };
+function crew(board, state, occ, player, cmd) {
+  const b = ownBuilding(state, player, cmd.building);
+  if (!b) return refuse('not your building');
+  if (b.type === 'castle') return refuse('the castle is home to every unit');
+  if (isDugOut(b)) return refuse('dug out');
+  const ids = unitList(state, player, cmd.units);
+  if (typeof ids === 'string') return refuse(ids);
+  return setCrew(board, state, occ, b, ids);
 }
 
 /**
- * Build on open ground near one of your standing buildings.
+ * Build on open ground near one of your standing buildings, with a crew if
+ * the command names one.
  * @param {Board} board
  * @param {GameState} state
  * @param {Occupancy} occ
@@ -412,9 +597,21 @@ function build(board, state, occ, player, cmd) {
     if (occ.buildingAt.has(key(c.q, c.r))) return refuse('cell taken');
   }
   if (!nearStanding(state, player, at)) return refuse('too far from your buildings');
+  const ids = unitList(state, player, cmd.units ?? []);
+  if (typeof ids === 'string') return refuse(ids);
 
-  const id = newId(state, 'b');
-  state.buildings[id] = { id, owner: player, type: kind, grade: 1, q: at.q, r: at.r };
+  const type = BUILDING_TYPES[kind];
+  /** @type {Building} */
+  const b = { id: `b${state.nextId}`, owner: player, type: kind, grade: 1, q: at.q, r: at.r };
+  if (type.work !== undefined) b.work = 0;
+  if (type.depth !== undefined) b.depth = 0;
+  // Crew the new building before it exists, so a crew that can't get there
+  // leaves nothing behind.
+  const planned = /** @type {GameState} */ ({ ...state, buildings: { ...state.buildings, [b.id]: b } });
+  const staffed = setCrew(board, planned, occ, b, ids);
+  if (!staffed.ok) return staffed;
+  state.buildings[b.id] = b;
+  state.nextId += 1;
   return { ok: true };
 }
 
@@ -485,28 +682,86 @@ function moveBuilding(board, state, occ, player, cmd) {
 export function advance(board, state) {
   state.tick += 1;
   const occ = occupancy(state);
-  produce(state, occ);
+  work(board, state, occ);
   rollWagons(board, state, occ);
   marchUnits(board, state, occ);
 }
 
 /**
- * Buildings that make units add one when their time comes, while they have
- * room and their side is under the unit limit.
+ * Whether a building is a pit dug as deep as it goes.
+ * @param {Building} b
+ */
+function isDugOut(b) {
+  const { depth } = BUILDING_TYPES[b.type];
+  return depth !== undefined && /** @type {number} */ (b.depth) >= depth;
+}
+
+/**
+ * Buildings where units work get a tick of it from each unit inside: more
+ * units, and more skilled ones, get there sooner. The work trains them. A
+ * castle's units raise a new unit while it has room and its side is under
+ * the unit limit; a pit's crew digs it a grade deeper, and goes home once it
+ * is dug out.
+ * @param {Board} board
  * @param {GameState} state
  * @param {Occupancy} occ
  */
-function produce(state, occ) {
+function work(board, state, occ) {
   for (const b of Object.values(state.buildings)) {
     const type = BUILDING_TYPES[b.type];
-    if (!type.produces || !type.every || state.tick % type.every !== 0) continue;
+    if (type.work === undefined) continue;
     const inside = /** @type {string[]} */ (occ.inside.get(b.id));
-    if (inside.length >= capacityOf(b) || occ.unitCount[b.owner] >= UNIT_LIMIT) continue;
-    const id = newId(state, 'u');
-    state.units[id] = { id, owner: b.owner, type: type.produces, in: b.id };
-    inside.push(id);
-    occ.unitCount[b.owner] += 1;
+    if (!inside.length || isDugOut(b)) continue;
+    if (type.yields === 'unit' && (inside.length >= capacityOf(b) || occ.unitCount[b.owner] >= UNIT_LIMIT)) continue;
+
+    let done = /** @type {number} */ (b.work);
+    for (const id of inside) {
+      const u = state.units[id];
+      done += WORK_BASE + u.skills[type.skill];
+      practise(u, type.skill);
+    }
+    if (done < type.work) {
+      b.work = done;
+      continue;
+    }
+    b.work = Math.min(done - type.work, type.work - 1);
+
+    if (type.yields === 'unit') {
+      inside.push(newUnit(state, b.owner, b.id));
+      occ.unitCount[b.owner] += 1;
+    } else {
+      b.depth = /** @type {number} */ (b.depth) + 1;
+      if (isDugOut(b)) {
+        b.work = 0;
+        sendHome(board, state, occ, b);
+      }
+    }
   }
+}
+
+/**
+ * A building's crew goes home, a tick apart. One that has no way home steps
+ * out and stays where it is.
+ * @param {Board} board
+ * @param {GameState} state
+ * @param {Occupancy} occ
+ * @param {Building} b
+ */
+function sendHome(board, state, occ, b) {
+  const home = castleOf(state, b.owner);
+  crewOf(state, b.id).forEach((id, i) => {
+    const u = state.units[id];
+    const route = home ? routeFor(board, state, occ, u, home) : null;
+    if (home && route) {
+      dispatch(board, state, u, home, route, state.tick + i * DEPART_GAP);
+      return;
+    }
+    delete u.to;
+    if (u.in === undefined) return;
+    delete u.in;
+    u.q = b.q;
+    u.r = b.r;
+  });
 }
 
 /**
@@ -560,9 +815,10 @@ function rollWagons(board, state, occ) {
 }
 
 /**
- * Units step from cell to cell, and go inside when they reach the building
- * they were sent to. If it is full they wait at the door; if it has moved
- * they follow it; if it is gone they stay where they are.
+ * Units step from cell to cell, which trains their running, and go inside
+ * when they reach the building they are heading for. If it is full they
+ * wait at the door; if it has moved they follow it; if it is gone they stay
+ * where they are.
  * @param {Board} board
  * @param {GameState} state
  * @param {Occupancy} occ
@@ -571,11 +827,13 @@ function marchUnits(board, state, occ) {
   for (const u of Object.values(state.units)) {
     if (u.in !== undefined) continue;
     if (u.path?.length) {
+      if (state.tick <= /** @type {number} */ (u.since)) continue;
+      practise(u, 'running');
       if (state.tick < /** @type {number} */ (u.until)) continue;
       [u.q, u.r] = /** @type {Cell} */ (u.path.shift());
       if (u.path.length) {
         u.since = u.until;
-        u.until = /** @type {number} */ (u.since) + stepTicks(board, UNIT_TYPES[u.type].speed, u.path[0]);
+        u.until = /** @type {number} */ (u.since) + walkTicks(board, u, u.path[0]);
         continue;
       }
       delete u.path;
@@ -655,6 +913,7 @@ export function checkState(board, raw) {
     && Boolean(tileAt(board, c[0], c[1])?.passable);
   const isTiming = (/** @type {Building | Unit} */ e) => (e.since === undefined && e.until === undefined)
     || (Number.isSafeInteger(e.since) && Number.isSafeInteger(e.until) && Number(e.until) > Number(e.since));
+  const isCount = (/** @type {unknown} */ n, /** @type {number} */ below) => Number.isSafeInteger(n) && Number(n) >= 0 && Number(n) < below;
 
   /** @type {Map<string, string>} */
   const held = new Map();
@@ -666,6 +925,8 @@ export function checkState(board, raw) {
     if (!isOwner(b.owner)) { fail(`building ${id}: bad owner`); continue; }
     if (!Number.isInteger(b.grade) || b.grade < 1 || b.grade > type.grades) fail(`building ${id}: bad grade`);
     if (b.type === 'castle') castles[b.owner] += 1;
+    if (type.work === undefined ? b.work !== undefined : !isCount(b.work, type.work)) fail(`building ${id}: bad work`);
+    if (type.depth === undefined ? b.depth !== undefined : !isCount(b.depth, type.depth + 1)) fail(`building ${id}: bad depth`);
     if (!Number.isSafeInteger(b.q) || !Number.isSafeInteger(b.r)) { fail(`building ${id}: bad cell`); continue; }
 
     for (const c of footprint(b.type, b.q, b.r)) {
@@ -686,12 +947,24 @@ export function checkState(board, raw) {
   castles.forEach((n, owner) => { if (n > 1) fail(`side ${owner} has ${n} castles`); });
 
   const inside = new Map(Object.keys(state.buildings).map((id) => [id, 0]));
+  const crews = new Map(Object.keys(state.buildings).map((id) => [id, 0]));
   const counts = state.players.map(() => 0);
+  const isSkillSet = (/** @type {unknown} */ v, /** @type {number} */ below) => isRecord(v)
+    && Object.keys(/** @type {object} */ (v)).length === SKILL_NAMES.length
+    && SKILL_NAMES.every((s) => isCount(/** @type {Record<string, unknown>} */ (v)[s], below));
   for (const [id, u] of Object.entries(state.units)) {
     if (!u || u.id !== id || !issued(id, 'u')) { fail(`unit ${id}: bad id`); continue; }
-    if (typeof u.type !== 'string' || !Object.hasOwn(UNIT_TYPES, u.type)) fail(`unit ${id}: unknown type`);
     if (!isOwner(u.owner)) { fail(`unit ${id}: bad owner`); continue; }
     counts[u.owner] += 1;
+    if (typeof u.name !== 'string' || !u.name || u.name.length > 40) fail(`unit ${id}: bad name`);
+    if (!Number.isInteger(u.level) || u.level < 1 || u.level > MAX_LEVEL) {
+      fail(`unit ${id}: bad level`);
+    } else {
+      if (!isCount(u.xp, u.level === MAX_LEVEL ? 1 : levelXp(u.level))) fail(`unit ${id}: bad xp`);
+      if (!isSkillSet(u.skills, u.level + 1)) fail(`unit ${id}: bad skills`);
+      if (!isSkillSet(u.practice, SKILL_XP + 1)) fail(`unit ${id}: bad practice`);
+    }
+    for (const b of [u.in, u.to]) if (typeof b === 'string' && crews.has(b)) crews.set(b, /** @type {number} */ (crews.get(b)) + 1);
 
     if (u.in !== undefined) {
       const home = typeof u.in === 'string' && Object.hasOwn(state.buildings, u.in) ? state.buildings[u.in] : null;
@@ -710,6 +983,10 @@ export function checkState(board, raw) {
     const b = state.buildings[id];
     if (!Object.hasOwn(BUILDING_TYPES, b?.type) || !Number.isInteger(b.grade)) continue; // reported above
     if (n > capacityOf(b)) fail(`building ${id}: ${n} inside, more than it holds`);
+    const crewSize = /** @type {number} */ (crews.get(id));
+    // Everyone comes home to the castle, so only other buildings' crews are limited.
+    if (b.type !== 'castle' && crewSize > capacityOf(b)) fail(`building ${id}: a crew of ${crewSize}, more than it holds`);
+    if (crewSize && isDugOut(b)) fail(`building ${id}: dug out, but still has a crew`);
   }
   counts.forEach((n, owner) => { if (n > UNIT_LIMIT) fail(`side ${owner} has ${n} units`); });
   return problems;
@@ -721,27 +998,28 @@ function isRecord(v) {
 }
 
 /**
- * What players are shown of a state: all of it, except the random seed and id
- * counter, with each route cut to its next cell. That is all a screen needs
- * to draw movement, and it keeps a unit's update small as it marches. Hidden
- * information, such as fog of war, would be filtered here, per side.
+ * What players are shown of a state: all of it, except the random seed, the
+ * id counter and units' experience points, with each route cut to its next
+ * cell. That is all a screen needs to draw movement and levels, and it keeps
+ * updates small: a unit's record changes once per cell it crosses and per
+ * level, not every tick it works. Hidden information, such as fog of war,
+ * would be filtered here, per side.
  * @param {GameState} state
  */
 export function publicView(state) {
   /**
    * @template {Building | Unit} E
-   * @param {Record<string, E>} entities
-   * @returns {Record<string, E>}
+   * @param {E} e
+   * @returns {E}
    */
-  const cut = (entities) => Object.fromEntries(Object.entries(entities).map(([id, e]) => (
-    [id, e.path ? { ...e, path: e.path.slice(0, 1) } : e]
-  )));
+  const cut = (e) => (e.path ? { ...e, path: e.path.slice(0, 1) } : e);
+  const units = Object.values(state.units).map(({ xp: _xp, practice: _practice, ...shown }) => cut(shown));
   return {
     version: state.version,
     seed: state.seed,
     tick: state.tick,
     players: state.players,
-    buildings: cut(state.buildings),
-    units: cut(state.units),
+    buildings: Object.fromEntries(Object.entries(state.buildings).map(([id, b]) => [id, cut(b)])),
+    units: Object.fromEntries(units.map((u) => [u.id, u])),
   };
 }

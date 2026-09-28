@@ -72,9 +72,11 @@
     <div class="group-label">Build</div>
     <button id="build-tower" data-kind="tower" aria-pressed="false">Tower</button>
     <button id="build-wagon" data-kind="wagon" aria-pressed="false">Wagon</button>
+    <button id="build-pit" data-kind="pit" aria-pressed="false">Pit</button>
     <div class="group-label">Selected</div>
     <button id="upgrade" disabled>Upgrade</button>
-    <button id="send-amount">Send half</button>
+    <button id="crew-button" disabled>Crew…</button>
+    <button id="return-button" disabled>Return</button>
     <div class="group-label">View</div>
     <button id="recenter">Recenter</button>
     <div class="zoom-row">
@@ -87,18 +89,33 @@
   </div>
 
   <div class="hud" id="legend">
-    <div><span class="swatch" style="background:hsl(104,32%,40%)"></span>Grass &mdash; build, 1 s a cell</div>
-    <div><span class="swatch" style="background:hsl(88,38%,48%)"></span>Meadow &mdash; build, 1 s a cell</div>
-    <div><span class="swatch" style="background:hsl(74,24%,34%)"></span>Scrub &mdash; no building, 2 s a cell</div>
+    <div><span class="swatch" style="background:hsl(104,32%,40%)"></span>Grass &mdash; build, 2 s a cell on foot</div>
+    <div><span class="swatch" style="background:hsl(88,38%,48%)"></span>Meadow &mdash; build, 2 s a cell on foot</div>
+    <div><span class="swatch" style="background:hsl(74,24%,34%)"></span>Scrub &mdash; no building, 4 s a cell on foot</div>
     <div><span class="swatch" style="background:hsl(203,44%,40%)"></span>Water &mdash; neither</div>
     <div class="legend-note">
-      Your castle makes a unit every two seconds. Click one of your buildings,
-      then another, to send units there. Build near your standing buildings.
-      Select a wagon, then click a cell, to drive it; wagons carry the units
-      inside and can't pass other buildings. Drag to pan, wheel to zoom.
+      The units at home in your castle raise new ones: the more of them, and
+      the better they breed, the sooner. Build near your standing buildings.
+      Select a building and press Crew to choose who works there; Return
+      sends them home. A pit's crew digs it deeper. Select a wagon, then
+      click a cell, to drive it; it carries its crew and can't pass other
+      buildings. Drag to pan, wheel to zoom.
     </div>
   </div>
 </div>
+
+<dialog id="crew" aria-labelledby="crew-title">
+  <form method="dialog">
+    <h2 id="crew-title">Crew</h2>
+    <p class="hint" id="crew-hint"></p>
+    <ul class="crew-list" id="crew-list"></ul>
+    <div class="crew-foot">
+      <span id="crew-count"></span>
+      <button id="crew-cancel" value="cancel">Cancel</button>
+      <button id="crew-ok" value="ok" class="primary">Send</button>
+    </div>
+  </form>
+</dialog>
 
 </body>
 </html>

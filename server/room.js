@@ -105,19 +105,25 @@ function fields(message) {
     : {};
 }
 
+/** The longest list a command may carry, such as a crew's unit ids. */
+const LIST_MAX = 64;
+
 /**
  * A command as it will be logged, or null. The room doesn't know what
  * commands exist (the core does), only that they are small, flat objects of
- * short strings and numbers, so nothing large or nested reaches the log.
+ * short strings, numbers and short lists of short strings, so nothing large
+ * or nested reaches the log.
  * @param {unknown} message
- * @returns {Record<string, string | number> | null}
+ * @returns {Record<string, string | number | string[]> | null}
  */
 function flatCommand(message) {
   const entries = Object.entries(fields(message));
   if (!entries.length || entries.length > 8) return null;
+  const short = (/** @type {unknown} */ v) => typeof v === 'string' && v.length <= 64;
   const small = entries.every(([k, v]) => k.length <= 32
-    && ((typeof v === 'string' && v.length <= 64) || (typeof v === 'number' && Number.isFinite(v))));
-  return small ? /** @type {Record<string, string | number>} */ (Object.fromEntries(entries)) : null;
+    && (short(v) || (typeof v === 'number' && Number.isFinite(v))
+      || (Array.isArray(v) && v.length <= LIST_MAX && v.every(short))));
+  return small ? /** @type {Record<string, string | number | string[]>} */ (Object.fromEntries(entries)) : null;
 }
 
 /**

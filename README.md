@@ -1,9 +1,11 @@
 # Vigame
 
-A real-time hex strategy prototype. Each side has a castle that makes units
-over time; players build towers and wagons, send units between their
-buildings, and drive wagons across the map with units inside. There is no
-combat yet: the structure is in place, and the rules are placeholders.
+A real-time hex strategy prototype. Players direct buildings, not units.
+Each side has a castle, home to its units, who raise new ones. Players
+build towers, wagons and pits and choose each one's crew from their named
+units, who walk there and get better at the work. There is no combat and
+there are no resources yet: the structure is in place, and the rules and
+numbers are placeholders.
 
 The game core is plain data and pure functions (`src/core/`), with no
 screen, network or clock of its own. The game server runs it, and tests play
@@ -25,19 +27,35 @@ Run `npm start` and open http://127.0.0.1:2567.
   watch. **Release seat** frees a seat for a spectator to take.
 - **The game clock** runs only while both players are here. (`npm run dev`
   runs it with one, for trying things alone.)
-- **Your castle** covers seven cells and makes a unit every two seconds, up
-  to what it holds. It is its side's life (nothing can attack it yet).
-- **Send units**: click one of your buildings, then another of yours. Half of
-  those inside go (**Send half** switches to all). They leave one after
-  another and march a cell a second on open ground, two on scrub; water is
-  impassable. Units heading for a full building wait at its door.
-- **Build**: pick **Tower** or **Wagon**, then a highlighted cell: open,
-  buildable ground within three cells of one of your standing buildings.
-  Scrub can be crossed but not built on; water is neither. One building per
-  cell.
+- **Your castle** covers seven cells and is its side's life (nothing can
+  attack it yet). It is every unit's home, and starts with 12. The units at
+  home raise new ones, up to what the castle holds: the more of them, and
+  the better they breed, the sooner.
+- **Units** each have a medieval name, a level from 1 to 100, and six
+  skills: breeding, ranged attack, close combat, building (which covers
+  repairing and digging), farming and running. Work trains the skill it
+  uses, and the unit's level with it. A skill can't pass the unit's level;
+  it climbs faster than the level, then waits for it. Each level takes 1.1
+  times the work of the one before, so the last ones are all but out of
+  reach. Only breeding, building and running do anything yet.
+- **Crews**: units walk only when they're given to a building's crew or sent
+  home. Select one of your buildings and press **Crew…** for a list of your
+  units: tick up to what it holds. Those you untick go home; those you tick
+  come from wherever they are, one after another, two seconds a cell on open
+  ground and four on scrub, less the better they run. Water is impassable.
+  **Return** sends the whole crew home. Units heading for a full castle wait
+  at its door.
+- **Build**: pick **Tower**, **Wagon** or **Pit**, then a highlighted cell:
+  open, buildable ground within three cells of one of your standing
+  buildings. Scrub can be crossed but not built on; water is neither. One
+  building per cell.
+- **Pits**: placing one asks for its crew first, up to 8, with the best
+  diggers at home ticked. They walk there and dig it a grade deeper at a
+  time, faster the more of them and the better they build. At depth 5 it is
+  dug out and the crew goes home. (Stone isn't counted yet.)
 - **Upgrade** the selected building: each grade holds as many units again.
 - **Wagons** are buildings that move. Select one, then click a cell to drive
-  it there, two seconds a cell; the units inside ride along. Wagons can't
+  it there, two seconds a cell; its crew rides along inside. Wagons can't
   pass through other buildings, each other included: a blocked wagon waits,
   then looks for another way, and stops if there is none.
 - Drag to pan, and use the wheel or the − / + buttons to zoom.
@@ -78,7 +96,8 @@ have one, install it with `npx playwright install chromium`.
 | `src/core/` | Pure modules, shared by the server and the page, with no DOM, network or clock. |
 | `src/core/hex.js` | Pointy-top axial hex math: neighbours, distance, lines, pixel conversion, board shapes. |
 | `src/core/board.js` | Seeded terrain, with what each terrain allows, and the castle sites; same seed, same map everywhere. |
-| `src/core/rules.js` | The numbers: tick rate, sides, building and unit types. |
+| `src/core/rules.js` | The numbers: tick rate, sides, skills and experience, building types. |
+| `src/core/names.js` | Medieval names for units. |
 | `src/core/game.js` | The game core: the state as plain JSON, `applyCommand`, `advance` (one tick), `occupancy`, `checkState`, `publicView`. Deterministic. |
 | `src/core/player.js` | Player-name rules, checked on the page and on the server. |
 | `src/client/` | The page, served as it is. |
@@ -134,14 +153,21 @@ http://127.0.0.1:2567;` with the same headers.
   version: 1, seed: 1337, tick: 420, rng: 123456789, nextId: 58,
   players: [{ id: 0 }, { id: 1 }],
   buildings: {
-    b1: { id: 'b1', owner: 0, type: 'castle', grade: 1, q: 2, r: 5 },
-    b9: { id: 'b9', owner: 0, type: 'wagon', grade: 1, q: 6, r: 4,
-          path: [[7, 4], [8, 4]], since: 410, until: 430 },   // rolling to 7,4
+    b1: { id: 'b1', owner: 0, type: 'castle', grade: 1, q: 2, r: 5,
+          work: 5200 },                                      // toward the next unit
+    b30: { id: 'b30', owner: 0, type: 'pit', grade: 1, q: 5, r: 3,
+           work: 12000, depth: 2 },                          // toward the next grade
+    b31: { id: 'b31', owner: 0, type: 'wagon', grade: 1, q: 6, r: 4,
+           path: [[7, 4], [8, 4]], since: 410, until: 430 }, // rolling to 7,4
   },
   units: {
-    u3: { id: 'u3', owner: 0, type: 'militia', in: 'b1' },    // inside the castle
-    u4: { id: 'u4', owner: 0, type: 'militia', q: 3, r: 5,    // marching to b9
-          path: [[4, 5], [5, 4]], to: 'b9', since: 418, until: 428 },
+    u3: { id: 'u3', owner: 0, name: 'Hawise Reeve', level: 4, xp: 120,
+          skills: { breeding: 4, ranged: 0, melee: 0, build: 1, farming: 0, running: 2 },
+          practice: { breeding: 0, ranged: 0, melee: 0, build: 35, farming: 0, running: 150 },
+          in: 'b1' },                                        // at home in the castle
+    u4: { id: 'u4', owner: 0, name: 'Odo Mason', /* level, xp, skills, practice */
+          q: 3, r: 5, path: [[4, 5], [5, 4]], to: 'b30',     // walking to the pit
+          since: 418, until: 438 },
   },
 }
 ```
@@ -151,18 +177,26 @@ http://127.0.0.1:2567;` with the same headers.
   and arrives at its next cell, so a unit's record changes once per cell,
   not every tick, and a screen draws it between cells by the clock.
 - Each fact is stored once. What is on a cell and who is inside a building
-  come from `occupancy(state)`.
-- `applyCommand(board, state, side, command)` applies `send`, `build`,
-  `upgrade` or `move`, or refuses with a reason and changes nothing.
-  `advance(board, state)` runs one tick.
+  come from `occupancy(state)`; a building's crew (the units inside it or
+  heading for it) from `crewOf(state, id)`.
+- `applyCommand(board, state, side, command)` applies one of these, or
+  refuses with a reason and changes nothing:
+  - `{ type: 'build', kind, q, r, units? }`: a tower, wagon or pit, with a crew if `units` lists one;
+  - `{ type: 'crew', building, units }`: that building's whole crew (`[]` sends them all home);
+  - `{ type: 'upgrade', building }`;
+  - `{ type: 'move', building, q, r }`: a wagon.
+- `advance(board, state)` runs one tick: work in castles and pits, wagons,
+  walking.
 - The core never reads the clock or `Math.random`; dice come from `rng`. The
   same commands at the same ticks always give the same game, which the
   server's saves and a future simulation harness rely on.
 - `checkState` lists everything wrong with a state. The tests play long
   games of random commands and check every tick.
 
-The numbers (speeds, capacities, production, build range, the unit limit)
-are placeholders in `src/core/rules.js`.
+The numbers (speeds, capacities, work, experience, build range, the unit
+limit) are placeholders in `src/core/rules.js`. Players are shown
+`publicView(state)`: the state without the dice, the id counter and units'
+experience points, which change every tick a unit works.
 
 ## The game server
 
@@ -173,7 +207,7 @@ only when it changes. The page sends commands, never state:
 
 | Message | Payload | Answer |
 | --- | --- | --- |
-| `command` | a core command, such as `{ type: 'send', from, to, count }` | the command's number, or the core's refusal, `not seated`, or `the game is paused` |
+| `command` | a core command, such as `{ type: 'crew', building, units: ['u3', 'u9'] }` | the command's number, or the core's refusal, `not seated`, or `the game is paused` |
 | `claimSeat` | none | the seat, or `no free seat` |
 | `releaseSeat` | none | |
 | `select` | `{ q, r }` or `null` | none; shows your picked hex to everyone |
@@ -215,8 +249,12 @@ opening position.
 [docs/architecture.md](docs/architecture.md) covers the design and what
 comes next.
 
-- No combat, capture or win condition: units only move between buildings.
-- Building and upgrading cost nothing yet; there are no resources.
+- No combat, capture or win condition: units only work and walk.
+- No resources: building and upgrading cost nothing, and pits yield no
+  stone, only depth. No farms yet.
+- Of the six skills, only breeding, building (digging) and running do
+  anything; ranged attack, close combat and farming wait for combat and
+  farms. Towers and wagons hold crews but give them nothing to do.
 - A simulation harness: the core can already play games with no players (the
   tests do), but there are no bots or reports yet.
 - Game server:
@@ -231,8 +269,8 @@ comes next.
   - Backups are not set up. The architecture doc suggests Litestream.
   - `npm audit` reports advisories in `@colyseus/auth`, which Colyseus
     installs alongside its core; this server switches it off (`auth: false`).
-  - Upgrading the database to this version drops games saved by the earlier
-    turn-based version; players keep their names.
+  - Upgrading the database to this version drops games saved by earlier
+    versions, whose rules differ; players keep their names.
 - A seat is held until its player releases it, however long they are away,
   and the game waits for them.
 - The lobby lists only the 50 most recently active games.
