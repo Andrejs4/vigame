@@ -30,8 +30,9 @@ Run `npm start` and open http://127.0.0.1:2567.
   runs it with one, for trying things alone.)
 - **Your castle** covers seven cells and is its side's life (nothing can
   attack it yet). It is every unit's home, and starts with 12. The units at
-  home raise new ones, up to what the castle holds: the more of them, and
-  the better they breed, the sooner.
+  home raise new ones: the more of them, and the better they breed, the
+  sooner. It takes in all its units, however many, but stops breeding
+  while it holds more than its room.
 - **Units** each have a medieval name, a level from 1 to 100, and six
   skills: breeding, ranged attack, close combat, building (which covers
   repairing and digging), farming and running. Work trains the skill it
@@ -47,8 +48,8 @@ Run `npm start` and open http://127.0.0.1:2567.
   units: tick up to what it holds. Those you untick go home; those you tick
   come from wherever they are, one after another, two seconds a cell on open
   ground and four on scrub, less the better they run. Water is impassable.
-  **Return** sends the whole crew home. Units heading for a full castle wait
-  at its door.
+  **Return** sends the whole crew home. A unit left with nowhere to go (its
+  building collapsed, say) goes home by itself.
 - **Stone and food** go straight into your side's stock (the HUD shows
   it); nothing carries them. Each side starts with 200 stone.
 - **Build**: pick **Tower** (60 stone), **Wagon**, **Pit** or **Farm** (30
@@ -59,9 +60,16 @@ Run `npm start` and open http://127.0.0.1:2567.
   diggers at home ticked. They walk there and dig stone, faster the more of
   them and the better they build; every 20 stone the pit is a grade deeper.
   At depth 5 it is dug out and the crew goes home.
-- **Food**: every minute the castle yields enough for half the units it can
-  hold, and each farm a little even with nobody working it. A farm's crew
-  (up to 6) grows more, faster the better they farm. Nobody eats yet.
+- **Food**: a unit eats 10 a minute. Every minute the castle yields enough
+  for half the units it can hold, and each farm a little (20) even with
+  nobody working it; a farm's crew (up to 6) grows more, faster the better
+  they farm. A side stores at most 10 minutes' food for its castle's full
+  house (6000 at grade 1); the rest spoils.
+- **Hunger**: one number per side, 0 to 100%. At each meal, if there isn't
+  enough, the food is shared evenly and what doesn't divide waits for the
+  next meal. A share under 5 raises hunger by the shortfall; over 5 lowers
+  it by the excess. At 100%, every unit may starve at each meal: about 5%
+  at level 1, 0.6% at level 50, never at 100.
 - **Upgrade** the selected building, for stone: the castle 200 × its grade,
   a tower 60 × its grade. Each grade holds as many units again and takes as
   many hits again.
@@ -72,6 +80,10 @@ Run `npm start` and open http://127.0.0.1:2567.
   it there, two seconds a cell; its crew rides along inside. Wagons can't
   pass through other buildings, each other included: a blocked wagon waits,
   then looks for another way, and stops if there is none.
+- **Bands** are groups of up to 30 units that move like wagons, for free.
+  Placing one asks who goes. A band holds no cell, so it passes anything of
+  yours and blocks nothing; it has no hit points and gives no cover, and it
+  breaks up as soon as it has nobody (its last unit left or died).
 - Drag to pan, and use the wheel or the − / + buttons to zoom.
   **Coordinates** shows axial `q,r` labels. Escape cancels building and
   clears the selection.
@@ -165,7 +177,7 @@ http://127.0.0.1:2567;` with the same headers.
 ```js
 {
   version: 1, seed: 1337, tick: 420, rng: 123456789, nextId: 58,
-  players: [{ id: 0, stone: 140, food: 62 }, { id: 1, stone: 200, food: 30 }],
+  players: [{ id: 0, stone: 140, food: 620, hunger: 0 }, { id: 1, stone: 200, food: 300, hunger: 5 }],
   buildings: {
     b1: { id: 'b1', owner: 0, type: 'castle', grade: 1, q: 2, r: 5, hp: 2000,
           work: 5200 },                                      // toward the next unit
@@ -195,12 +207,13 @@ http://127.0.0.1:2567;` with the same headers.
   heading for it) from `crewOf(state, id)`.
 - `applyCommand(board, state, side, command)` applies one of these, or
   refuses with a reason and changes nothing:
-  - `{ type: 'build', kind, q, r, units? }`: a tower, wagon, pit or farm, with a crew if `units` lists one;
+  - `{ type: 'build', kind, q, r, units? }`: a tower, wagon, pit, farm or band, with a crew if `units` lists one;
   - `{ type: 'crew', building, units }`: that building's whole crew (`[]` sends them all home);
   - `{ type: 'upgrade', building }`;
   - `{ type: 'move', building, q, r }`: a wagon.
-- `advance(board, state)` runs one tick: collapses, food, work in castles,
-  pits and farms, wagons, walking.
+- `advance(board, state)` runs one tick: collapses, every minute food and a
+  meal, empty bands breaking up, work in castles, pits and farms, wagons
+  and bands, walking.
 - The core never reads the clock or `Math.random`; dice come from `rng`. The
   same commands at the same ticks always give the same game, which the
   server's saves and a future simulation harness rely on.
@@ -267,7 +280,7 @@ comes next.
   nothing damages buildings. A castle can collapse, but losing it doesn't
   end the game yet. Units will get a dice-based way of taking hits instead
   of hit points.
-- Nobody eats yet (hunger comes later), and there is no dark metal.
+- There is no dark metal yet.
 - Of the six skills, ranged attack and close combat do nothing yet; towers
   and wagons hold crews but give them nothing to do. Towers don't repair.
 - A simulation harness: the core can already play games with no players (the

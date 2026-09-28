@@ -4,9 +4,10 @@ import assert from 'node:assert/strict';
 import { BOARD_OPTIONS, createBoard } from '../src/core/board.js';
 import {
   advance, applyCommand, capacityOf, checkState, crewOf, footprint, levelXp, newGame, occupancy, publicView, random,
+  starveChance,
 } from '../src/core/game.js';
 import {
-  BUILDING_TYPES, FOOD_PERIOD, LEVEL_RATE, LEVEL_XP, MAX_LEVEL, SKILL_XP, START_UNITS, UNIT_LIMIT, WAGON_PATIENCE,
+  BUILDING_TYPES, FOOD_PER_UNIT, FOOD_PERIOD, LEVEL_RATE, LEVEL_XP, MAX_LEVEL, SKILL_XP, START_UNITS, UNIT_LIMIT, WAGON_PATIENCE,
   WALK_TICKS, WORK_BASE,
 } from '../src/core/rules.js';
 import { boardFrom, openBoard, run, runUntil, skillsAt, stateWith, unitsIn } from './helpers.js';
@@ -169,7 +170,7 @@ test('rough ground slows a unit, and running speeds it up, to a second a cell at
   assert.equal(walk(MAX_LEVEL), 2 * WALK_TICKS);
 });
 
-test('units wait at the door of a full castle, and follow a wagon that moved on', () => {
+test('a full castle still takes its units in, and stops breeding; units follow a wagon that moved on', () => {
   const board = openBoard(4);
   const { capacity } = BUILDING_TYPES.castle;
   const full = stateWith(
@@ -177,12 +178,10 @@ test('units wait at the door of a full castle, and follow a wagon that moved on'
     [...unitsIn('b1', capacity, 100), ...unitsIn('b2', 2, 10)],
   );
   assert.deepEqual(applyCommand(board, full, 0, { type: 'crew', building: 'b2', units: [] }), OK);
-  run(board, full, 3 * WALK_TICKS + 20);
-  assert.deepEqual([full.units.u10.q, full.units.u10.r, full.units.u10.to], [0, 0, 'b1'], 'waiting outside');
-  assert.deepEqual(applyCommand(board, full, 0, { type: 'crew', building: 'b2', units: ['u100'] }), OK);
-  run(board, full, 1);
-  assert.equal(full.units.u10.in, 'b1', 'in as soon as there is room');
-  assert.equal(full.units.u11.in, undefined);
+  runUntil(board, full, () => full.units.u10.in === 'b1' && full.units.u11.in === 'b1');
+  run(board, full, 100);
+  assert.equal(occupancy(full).inside.get('b1')?.length, capacity + 2);
+  assert.equal(Object.keys(full.units).length, capacity + 2, 'no one was born');
 
   const chase = stateWith([{ id: 'b1', q: -2, r: 0 }, { id: 'b2', type: 'wagon', q: 2, r: 0 }], unitsIn('b1', 1, 10));
   assert.deepEqual(applyCommand(board, chase, 0, { type: 'crew', building: 'b2', units: ['u10'] }), OK);
@@ -293,13 +292,71 @@ test('castles and farms grow food every minute, farms more with a crew', () => {
   const board = openBoard(5);
   const state = stateWith([{ id: 'b1', type: 'castle' }, { id: 'b2', type: 'farm', q: 3, r: 0 }]);
   run(board, state, FOOD_PERIOD);
-  const idle = BUILDING_TYPES.castle.capacity / 2 + /** @type {number} */ (BUILDING_TYPES.farm.base);
-  assert.equal(state.players[0].food, idle, 'half of what the castle can hold eats, plus the farm\'s base');
+  const idle = (BUILDING_TYPES.castle.capacity / 2) * FOOD_PER_UNIT + /** @type {number} */ (BUILDING_TYPES.farm.base);
+  assert.equal(state.players[0].food, idle, 'what half of those the castle can hold eat, plus the farm\'s base');
 
-  const worked = stateWith([{ id: 'b2', type: 'farm', q: 3, r: 0 }], unitsIn('b2', 1, 10));
+  const worked = stateWith([{ id: 'b1', type: 'castle' }, { id: 'b2', type: 'farm', q: 3, r: 0 }], unitsIn('b2', 1, 10));
   run(board, worked, FOOD_PERIOD);
-  assert.ok(worked.players[0].food > /** @type {number} */ (BUILDING_TYPES.farm.base));
+  assert.ok(worked.players[0].food > idle - FOOD_PER_UNIT, 'more, less what the farmer ate');
   assert.ok(worked.units.u10.practice.farming > 0);
+});
+
+test('a side eats every minute; short shares make it hungry, full ones less so', () => {
+  const board = openBoard(4);
+  const crowd = stateWith([{ id: 'b1', type: 'castle' }], unitsIn('b1', 100, 1000));
+  crowd.players[0].food = 7;
+  run(board, crowd, FOOD_PERIOD);
+  // 7 + 300 from the castle, shared by 100: 3 each, 7 left over.
+  assert.deepEqual([crowd.players[0].food, crowd.players[0].hunger], [7, 2]);
+
+  // In a tower, so nobody is born meanwhile.
+  const fed = stateWith([{ id: 'b1', type: 'castle' }, { id: 'b2', q: 3, r: 0 }], unitsIn('b2', 10, 1000));
+  fed.players[0].hunger = 20;
+  run(board, fed, FOOD_PERIOD);
+  assert.deepEqual([fed.players[0].food, fed.players[0].hunger], [300 - 10 * FOOD_PER_UNIT, 15]);
+});
+
+test('at full hunger units may starve, the more likely the lower their level', () => {
+  assert.equal(starveChance(1), 0.05);
+  assert.ok(starveChance(50) < 0.01);
+  assert.equal(starveChance(100), 0);
+
+  const board = openBoard(4);
+  const state = stateWith(
+    [{ id: 'b1', grade: 3 }, { id: 'b2', q: 3, r: 0 }],
+    [...unitsIn('b1', 60, 100), { id: 'u10', in: 'b2', level: 100, skills: skillsAt(0) }],
+  );
+  state.players[0].hunger = 99; // no castle, so no food: hunger reaches 100 at the meal
+  run(board, state, FOOD_PERIOD);
+  const left = Object.keys(state.units).length;
+  assert.ok(left > 1 && left < 61, `${left} left`);
+  assert.ok(state.units.u10, 'a level 100 unit never starves');
+});
+
+test('a unit with nowhere to go goes home', () => {
+  const board = openBoard(4);
+  const state = stateWith([{ id: 'b1', type: 'castle' }], [{ id: 'u10', q: 3, r: 0 }]);
+  runUntil(board, state, () => state.units.u10.in === 'b1');
+});
+
+test('a band is free and needs units; it moves them, gives no cover, and breaks up once empty', () => {
+  const board = openBoard(5);
+  const state = stateWith([{ id: 'b1', type: 'castle' }], unitsIn('b1', 3, 10));
+  state.players[0].stone = 0;
+  assert.deepEqual(applyCommand(board, state, 0, { type: 'build', kind: 'band', q: 3, r: 0 }), { ok: false, reason: 'a band needs units' });
+  assert.deepEqual(applyCommand(board, state, 0, { type: 'build', kind: 'band', q: 3, r: 0, units: ['u10', 'u11'] }), OK);
+  assert.equal(state.buildings.b13.hp, undefined);
+  assert.equal(occupancy(state).buildingAt.has('3,0'), false, 'it holds no cell');
+  runUntil(board, state, () => occupancy(state).inside.get('b13')?.length === 2);
+
+  assert.deepEqual(applyCommand(board, state, 0, { type: 'move', building: 'b13', q: 3, r: -3 }), OK);
+  runUntil(board, state, () => !state.buildings.b13.path);
+  assert.deepEqual(occupancy(state).inside.get('b13'), ['u10', 'u11'], 'they went along');
+
+  assert.deepEqual(applyCommand(board, state, 0, { type: 'crew', building: 'b13', units: [] }), OK);
+  run(board, state, 1);
+  assert.equal(state.buildings.b13, undefined, 'gone once nobody is in it');
+  runUntil(board, state, () => state.units.u10.in === 'b1');
 });
 
 test('a building with no hit points left collapses, and leaves its units standing', () => {
@@ -425,7 +482,7 @@ function randomGame(seed, ticks, midway) {
         const own = Object.values(state.buildings).filter((b) => b.owner === player);
         const cell = pick(board.list);
         const command = pick([
-          { type: 'build', kind: pick(['tower', 'wagon', 'pit', 'farm']), q: cell.q, r: cell.r, units: some(player, Math.floor(roll() * 5)) },
+          { type: 'build', kind: pick(['tower', 'wagon', 'pit', 'farm', 'band']), q: cell.q, r: cell.r, units: some(player, Math.floor(roll() * 5)) },
           { type: 'crew', building: pick(own).id, units: some(player, Math.floor(roll() * 9)) },
           { type: 'upgrade', building: pick(own).id },
           { type: 'move', building: pick(own).id, q: cell.q, r: cell.r },

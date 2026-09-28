@@ -27,16 +27,20 @@
  * to a building's crew, or sent home to their castle. A castle is every
  * unit's home; its units there raise new ones. A pit's crew digs stone, and
  * a farm's grows food, straight into their side's stock. Stone pays for
- * towers, farms and upgrades. Work trains the skill it uses, and the unit's
- * level with it. A building with no hit points left collapses.
+ * towers, farms and upgrades. Every minute the side eats, and goes hungry
+ * if it runs short. Work trains the skill it uses, and the unit's level with
+ * it. A building with no hit points left collapses. A unit with nowhere to
+ * go goes home. A band is a group of units that moves like a wagon, gives
+ * no cover, and breaks up once it has nobody.
  */
 
 import { distance, key, neighbors, parseKey } from './hex.js';
 import { tileAt } from './board.js';
 import { unitName } from './names.js';
 import {
-  BUILDING_TYPES, BUILD_RANGE, DEPART_GAP, FOOD_PERIOD, LEVEL_GROWTH, LEVEL_RATE, LEVEL_XP, MAX_LEVEL, SIDES,
-  SKILLS, SKILL_XP, START_STONE, START_UNITS, UNIT_LIMIT, WAGON_PATIENCE, WALK_TICKS, WORK_BASE,
+  BUILDING_TYPES, BUILD_RANGE, DEPART_GAP, FOOD_PER_UNIT, FOOD_PERIOD, FOOD_STORE, HUNGER_LINE, LEVEL_GROWTH,
+  LEVEL_RATE, LEVEL_XP, MAX_HUNGER, MAX_LEVEL, SIDES, SKILLS, SKILL_XP, START_STONE, START_UNITS, STARVE_CHANCE,
+  UNIT_LIMIT, WAGON_PATIENCE, WALK_TICKS, WORK_BASE,
 } from './rules.js';
 
 /** @typedef {import('./hex.js').Axial} Axial */
@@ -52,7 +56,7 @@ import {
  * @property {number} grade From 1 to the type's `grades`.
  * @property {number} q Anchor cell: the building's cell, or a castle's centre.
  * @property {number} r
- * @property {number} hp Hit points left.
+ * @property {number} [hp] Hit points left. Bands have none.
  * @property {number} [work] Work done toward what it yields next, for types that work.
  * @property {number} [dug] Stone dug from a pit so far; its depth follows from it.
  * @property {Cell[]} [path] A moving building's route, next cell first.
@@ -97,6 +101,7 @@ import {
  * @property {number} id
  * @property {number} stone
  * @property {number} food
+ * @property {number} hunger From 0 to MAX_HUNGER.
  */
 
 /**
@@ -117,7 +122,7 @@ import {
  */
 
 /** Bump when GameState changes shape, and teach `checkState` the new one. */
-export const STATE_VERSION = 3;
+export const STATE_VERSION = 4;
 
 const SKILL_NAMES = /** @type {Skill[]} */ (Object.keys(SKILLS));
 
@@ -155,7 +160,7 @@ export function newGame(board) {
     units: {},
   };
   board.starts.slice(0, SIDES.length).forEach((start, owner) => {
-    state.players.push({ id: owner, stone: START_STONE, food: 0 });
+    state.players.push({ id: owner, stone: START_STONE, food: 0, hunger: 0 });
     const id = newId(state, 'b');
     const hp = BUILDING_TYPES.castle.hp;
     state.buildings[id] = { id, owner, type: 'castle', grade: 1, q: start.q, r: start.r, hp, work: 0 };
@@ -245,6 +250,7 @@ export function footprint(type, q, r) {
  * @returns {Axial[]}
  */
 function heldCells(b) {
+  if (BUILDING_TYPES[b.type].band) return [];
   const cells = footprint(b.type, b.q, b.r);
   if (b.until !== undefined && b.path?.length) cells.push({ q: b.path[0][0], r: b.path[0][1] });
   return cells;
@@ -272,6 +278,25 @@ export function maxHp(b) {
  */
 export function depthOf(b) {
   return Math.floor((b.dug ?? 0) / (BUILDING_TYPES[b.type].perDepth ?? 1));
+}
+
+/**
+ * The most food a side can keep: FOOD_STORE meals for its castle's full house.
+ * @param {Pick<GameState, 'buildings'>} state
+ * @param {number} owner
+ */
+export function foodStore(state, owner) {
+  const castle = castleOf(state, owner);
+  return castle ? FOOD_STORE * FOOD_PER_UNIT * capacityOf(castle) : 0;
+}
+
+/**
+ * The chance a unit starves at a meal while its side is as hungry as it gets.
+ * @param {number} level
+ */
+export function starveChance(level) {
+  const x = (MAX_LEVEL - level) / (MAX_LEVEL - 1);
+  return STARVE_CHANCE * x * x * x;
 }
 
 /**
@@ -425,6 +450,17 @@ function takenCells(occ, self) {
     const id = occ.buildingAt.get(k);
     return id !== undefined && id !== self;
   };
+}
+
+/**
+ * The cells a moving building may not enter: a wagon, any other building's;
+ * a band, only the other side's.
+ * @param {GameState} state
+ * @param {Occupancy} occ
+ * @param {Building} b
+ */
+function wayFor(state, occ, b) {
+  return BUILDING_TYPES[b.type].band ? hostileCells(state, occ, b.owner) : takenCells(occ, b.id);
 }
 
 /**
@@ -624,19 +660,22 @@ function build(board, state, occ, player, cmd) {
   if (!kind || !BUILDING_TYPES[kind].build) return refuse('cannot build that');
   const at = commandCell(cmd);
   if (!at) return refuse('bad cell');
+  const type = BUILDING_TYPES[kind];
   for (const c of footprint(kind, at.q, at.r)) {
-    if (!tileAt(board, c.q, c.r)?.buildable) return refuse('cannot build there');
+    const tile = tileAt(board, c.q, c.r);
+    if (!(type.band ? tile?.passable : tile?.buildable)) return refuse('cannot build there');
     if (occ.buildingAt.has(key(c.q, c.r))) return refuse('cell taken');
   }
   if (!nearStanding(state, player, at)) return refuse('too far from your buildings');
   const ids = unitList(state, player, cmd.units ?? []);
   if (typeof ids === 'string') return refuse(ids);
-  const type = BUILDING_TYPES[kind];
+  if (type.band && !ids.length) return refuse('a band needs units');
   const stock = state.players[player];
   if (stock.stone < type.cost) return refuse('not enough stone');
 
   /** @type {Building} */
-  const b = { id: `b${state.nextId}`, owner: player, type: kind, grade: 1, q: at.q, r: at.r, hp: type.hp };
+  const b = { id: `b${state.nextId}`, owner: player, type: kind, grade: 1, q: at.q, r: at.r };
+  if (type.hp) b.hp = type.hp;
   if (type.work !== undefined) b.work = 0;
   if (type.depth !== undefined) b.dug = 0;
   // Crew the new building before it exists, so a crew that can't get there
@@ -689,7 +728,7 @@ function upgrade(state, player, cmd) {
   if (stock.stone < cost) return refuse('not enough stone');
   stock.stone -= cost;
   b.grade += 1;
-  b.hp += type.hp;
+  if (b.hp !== undefined) b.hp += type.hp;
   return { ok: true };
 }
 
@@ -712,7 +751,7 @@ function moveBuilding(board, state, occ, player, cmd) {
 
   const rolling = b.until !== undefined && b.path?.length ? b.path[0] : null;
   const from = rolling ? { q: rolling[0], r: rolling[1] } : { q: b.q, r: b.r };
-  const route = findPath(board, from, goal, takenCells(occ, b.id));
+  const route = findPath(board, from, goal, wayFor(state, occ, b));
   if (!route) return refuse('no way there');
 
   const path = rolling ? [rolling, ...route] : route;
@@ -731,9 +770,15 @@ function moveBuilding(board, state, occ, player, cmd) {
  */
 export function advance(board, state) {
   state.tick += 1;
-  for (const b of Object.values(state.buildings)) if (b.hp <= 0) collapse(state, b);
+  for (const b of Object.values(state.buildings)) if (/** @type {number} */ (b.hp) <= 0) collapse(state, b);
+  if (state.tick % FOOD_PERIOD === 0) {
+    harvest(state);
+    for (const p of state.players) eat(state, p);
+  }
+  for (const b of Object.values(state.buildings)) {
+    if (BUILDING_TYPES[b.type].band && !crewOf(state, b.id).length) delete state.buildings[b.id];
+  }
   const occ = occupancy(state);
-  if (state.tick % FOOD_PERIOD === 0) harvest(state);
   work(board, state, occ);
   rollWagons(board, state, occ);
   marchUnits(board, state, occ);
@@ -762,10 +807,38 @@ function collapse(state, b) {
  */
 function harvest(state) {
   for (const b of Object.values(state.buildings)) {
-    const stock = state.players[b.owner];
-    if (b.type === 'castle') stock.food += Math.floor(capacityOf(b) / 2);
-    else stock.food += BUILDING_TYPES[b.type].base ?? 0;
+    if (b.type === 'castle') addFood(state, b.owner, Math.floor(capacityOf(b) / 2) * FOOD_PER_UNIT);
+    else addFood(state, b.owner, BUILDING_TYPES[b.type].base ?? 0);
   }
+}
+
+/**
+ * Put food in a side's store; what doesn't fit spoils.
+ * @param {GameState} state
+ * @param {number} owner
+ * @param {number} food
+ */
+function addFood(state, owner, food) {
+  const stock = state.players[owner];
+  stock.food = Math.max(stock.food, Math.min(stock.food + food, foodStore(state, owner)));
+}
+
+/**
+ * A side's meal: each unit eats FOOD_PER_UNIT, or an even share of what
+ * there is, and what doesn't share evenly waits for the next meal. A share
+ * under HUNGER_LINE makes the side hungrier, one over it less so. At
+ * MAX_HUNGER, units may starve, the weak more likely than the seasoned.
+ * @param {GameState} state
+ * @param {Player} p
+ */
+function eat(state, p) {
+  const units = Object.values(state.units).filter((u) => u.owner === p.id);
+  if (!units.length) return;
+  const share = Math.min(FOOD_PER_UNIT, Math.floor(p.food / units.length));
+  p.food -= share * units.length;
+  p.hunger = Math.max(0, Math.min(MAX_HUNGER, p.hunger + HUNGER_LINE - share));
+  if (p.hunger < MAX_HUNGER) return;
+  for (const u of units) if (random(state) < starveChance(u.level)) delete state.units[u.id];
 }
 
 /**
@@ -812,7 +885,7 @@ function work(board, state, occ) {
       inside.push(newUnit(state, b.owner, b.id));
       occ.unitCount[b.owner] += 1;
     } else if (type.yields === 'food') {
-      stock.food += 1;
+      addFood(state, b.owner, 1);
     } else {
       stock.stone += 1;
       b.dug = /** @type {number} */ (b.dug) + 1;
@@ -863,9 +936,10 @@ function rollWagons(board, state, occ) {
     const speed = BUILDING_TYPES[b.type].speed;
     if (!speed || !b.path) continue;
 
+    const { band } = BUILDING_TYPES[b.type];
     if (b.until !== undefined) {
       if (state.tick < b.until) continue;
-      occ.buildingAt.delete(key(b.q, b.r));
+      if (!band) occ.buildingAt.delete(key(b.q, b.r));
       [b.q, b.r] = /** @type {Cell} */ (b.path.shift());
       delete b.since;
       delete b.until;
@@ -877,8 +951,8 @@ function rollWagons(board, state, occ) {
 
     const next = b.path[0];
     const nk = key(next[0], next[1]);
-    if (!occ.buildingAt.has(nk)) {
-      occ.buildingAt.set(nk, b.id);
+    if (band || !occ.buildingAt.has(nk)) {
+      if (!band) occ.buildingAt.set(nk, b.id);
       b.since = state.tick;
       b.until = state.tick + stepTicks(board, speed, next);
       delete b.waiting;
@@ -926,6 +1000,25 @@ function marchUnits(board, state, occ) {
       delete u.until;
     }
     if (u.to !== undefined) arrive(board, state, occ, u);
+    else goHome(board, state, occ, u);
+  }
+}
+
+/**
+ * A unit out with nowhere to go sets off for its castle, if there is a way.
+ * @param {Board} board
+ * @param {GameState} state
+ * @param {Occupancy} occ
+ * @param {Unit} u
+ */
+function goHome(board, state, occ, u) {
+  const home = castleOf(state, u.owner);
+  const route = home ? routeFor(board, state, occ, u, home) : null;
+  if (!home || !route) return;
+  u.to = home.id;
+  if (route.length) {
+    u.path = route;
+    setOff(board, u, state.tick);
   }
 }
 
@@ -945,7 +1038,9 @@ function arrive(board, state, occ, u) {
   const here = { q: /** @type {number} */ (u.q), r: /** @type {number} */ (u.r) };
   if (footprint(target.type, target.q, target.r).some((c) => c.q === here.q && c.r === here.r)) {
     const inside = /** @type {string[]} */ (occ.inside.get(target.id));
-    if (inside.length >= capacityOf(target)) return;
+    // A castle takes in all its side's units, however many; elsewhere, a
+    // unit waits at the door until there is room.
+    if (target.type !== 'castle' && inside.length >= capacityOf(target)) return;
     delete u.q;
     delete u.r;
     delete u.to;
@@ -990,6 +1085,7 @@ export function checkState(board, raw) {
   }
   state.players.forEach((p, i) => {
     if (!isCount(p.stone, Infinity) || !isCount(p.food, Infinity)) fail(`side ${i}: bad stock`);
+    if (!isCount(p.hunger, MAX_HUNGER + 1)) fail(`side ${i}: bad hunger`);
   });
   if (!isRecord(state.buildings) || !isRecord(state.units)) return [...problems, 'bad buildings or units'];
 
@@ -1016,7 +1112,9 @@ export function checkState(board, raw) {
     if (type.work === undefined ? b.work !== undefined : !isCount(b.work, type.work)) fail(`building ${id}: bad work`);
     const deepest = /** @type {number} */ (type.depth) * /** @type {number} */ (type.perDepth);
     if (type.depth === undefined ? b.dug !== undefined : !isCount(b.dug, deepest + 1)) fail(`building ${id}: bad dug`);
-    if (!Number.isSafeInteger(b.hp) || b.hp < 1 || b.hp > type.hp * b.grade) fail(`building ${id}: bad hp`);
+    if (type.hp ? !(Number.isSafeInteger(b.hp) && b.hp >= 1 && b.hp <= type.hp * b.grade) : b.hp !== undefined) {
+      fail(`building ${id}: bad hp`);
+    }
     if (!Number.isSafeInteger(b.q) || !Number.isSafeInteger(b.r)) { fail(`building ${id}: bad cell`); continue; }
 
     for (const c of footprint(b.type, b.q, b.r)) {
@@ -1072,7 +1170,7 @@ export function checkState(board, raw) {
   for (const [id, n] of inside) {
     const b = state.buildings[id];
     if (!Object.hasOwn(BUILDING_TYPES, b?.type) || !Number.isInteger(b.grade)) continue; // reported above
-    if (n > capacityOf(b)) fail(`building ${id}: ${n} inside, more than it holds`);
+    if (b.type !== 'castle' && n > capacityOf(b)) fail(`building ${id}: ${n} inside, more than it holds`);
     const crewSize = /** @type {number} */ (crews.get(id));
     // Everyone comes home to the castle, so only other buildings' crews are limited.
     if (b.type !== 'castle' && crewSize > capacityOf(b)) fail(`building ${id}: a crew of ${crewSize}, more than it holds`);

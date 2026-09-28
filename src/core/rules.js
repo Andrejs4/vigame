@@ -85,21 +85,39 @@ export const WORK_BASE = 20;
 export const START_STONE = 200;
 
 /**
- * Food. A unit will eat one a minute (hunger comes later). Every minute a
- * castle yields enough for half the units it can hold, and a farm yields its
- * `base` even with nobody working it.
+ * Food and hunger. Every FOOD_PERIOD a castle yields enough food for half the
+ * units it can hold, and a farm yields its `base` even with nobody working
+ * it; then the side eats. Each unit eats FOOD_PER_UNIT if there is enough,
+ * or an even share if not, and what can't be shared evenly waits for the
+ * next meal. A side stores at most FOOD_STORE periods' food for its castle's
+ * full house; the rest spoils.
+ *
+ * A side's hunger, from 0 to MAX_HUNGER, rises by however far the share
+ * fell short of HUNGER_LINE, and falls by however far it went over. At
+ * MAX_HUNGER each unit may starve at each meal: a level 1 unit with a
+ * STARVE_CHANCE chance, less the higher its level, down to none at 100.
  */
 export const FOOD_PERIOD = 60 * TICKS_PER_SECOND;
+export const FOOD_PER_UNIT = 10;
+export const FOOD_STORE = 10;
+export const HUNGER_LINE = 5;
+export const MAX_HUNGER = 100;
+export const STARVE_CHANCE = 0.05;
 
 /**
  * @typedef {object} BuildingType
  * @property {string} name
  * @property {1 | 7} size Cells covered: 1, or 7 (a cell and its six neighbours).
  * @property {number} capacity Units it holds at grade 1; each grade adds as much again.
+ *   A castle takes in all its side's units, and stops breeding while it
+ *   holds this many or more.
  * @property {number} grades Highest grade.
  * @property {number} hp Hit points at grade 1; each grade adds as many again.
  *   At none left, the building collapses at once, and whoever was inside is
- *   left standing on its cell.
+ *   left standing on its cell. A band has none: it protects nobody.
+ * @property {boolean} [band] A band: a group of units, free, that moves like
+ *   a wagon but holds no cell, so it blocks nothing, and breaks up once it
+ *   has nobody.
  * @property {boolean} build Whether players may build it.
  * @property {number} cost Stone to build it.
  * @property {number} [upgrade] Stone to upgrade it, times its grade before.
@@ -131,6 +149,10 @@ export const BUILDING_TYPES = {
   },
   farm: {
     name: 'Farm', size: 1, capacity: 6, grades: 1, hp: 200, build: true, cost: 30,
-    skill: 'farming', work: 3000, yields: 'food', base: 2,
+    skill: 'farming', work: 300, yields: 'food', base: 20,
+  },
+  band: {
+    name: 'Band', size: 1, capacity: 30, grades: 1, hp: 0, build: true, cost: 0,
+    skill: 'melee', speed: WALK_TICKS, band: true,
   },
 };

@@ -63,7 +63,7 @@ export function stateWith(buildings, units = [], seed = 1) {
     const type = BUILDING_TYPES[b.type ?? 'tower'];
     return {
       owner: 0, type: 'tower', grade: 1, q: 0, r: 0,
-      hp: (type?.hp ?? 1) * (b.grade ?? 1),
+      ...(type?.hp ? { hp: type.hp * (b.grade ?? 1) } : {}),
       ...(type?.work !== undefined ? { work: 0 } : {}),
       ...(type?.depth !== undefined ? { dug: 0 } : {}),
       ...b,
@@ -78,7 +78,7 @@ export function stateWith(buildings, units = [], seed = 1) {
     tick: 0,
     rng: 1,
     nextId: Math.max(0, ...ids) + 1,
-    players: [{ id: 0, stone: 1000, food: 0 }, { id: 1, stone: 1000, food: 0 }],
+    players: [{ id: 0, stone: 1000, food: 0, hunger: 0 }, { id: 1, stone: 1000, food: 0, hunger: 0 }],
     buildings: Object.fromEntries(buildings.map((b) => [b.id, building(b)])),
     units: Object.fromEntries(units.map((u) => [u.id, unit(u)])),
   };

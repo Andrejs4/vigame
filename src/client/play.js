@@ -7,7 +7,7 @@
 import { bounds, key, pixelToAxial } from '../core/hex.js';
 import { BOARD_OPTIONS, TERRAIN, createBoard, tileAt } from '../core/board.js';
 import {
-  capacityOf, castleOf, crewOf, depthOf, isDugOut, maxHp, nearStanding, occupancy, upgradeCost,
+  capacityOf, castleOf, crewOf, depthOf, foodStore, isDugOut, maxHp, nearStanding, occupancy, upgradeCost,
 } from '../core/game.js';
 import { BUILDING_TYPES, SIDES, SKILLS, TICKS_PER_SECOND, UNIT_LIMIT } from '../core/rules.js';
 import { serverBase } from './api.js';
@@ -36,6 +36,7 @@ export async function startGame(net, me) {
     units: document.getElementById('units'),
     stone: document.getElementById('stone'),
     food: document.getElementById('food'),
+    hunger: document.getElementById('hunger'),
     selection: document.getElementById('selection'),
     tile: document.getElementById('tile'),
     viewers: document.getElementById('viewers'),
@@ -131,9 +132,11 @@ export async function startGame(net, me) {
     const seat = net.seat();
     highlights = new Set();
     if (placing && view && occ && seat !== null) {
+      const { band } = BUILDING_TYPES[placing];
       for (const t of board.list) {
         const k = key(t.q, t.r);
-        if (t.buildable && !occ.buildingAt.has(k) && nearStanding(/** @type {any} */ (view), seat, t)) highlights.add(k);
+        const ground = band ? t.passable : t.buildable;
+        if (ground && !occ.buildingAt.has(k) && nearStanding(/** @type {any} */ (view), seat, t)) highlights.add(k);
       }
     }
     needsDraw = true;
@@ -156,7 +159,8 @@ export async function startGame(net, me) {
     }
     const stock = seat !== null ? view?.players[seat] : null;
     if (hud.stone) hud.stone.textContent = stock ? String(stock.stone) : '—';
-    if (hud.food) hud.food.textContent = stock ? String(stock.food) : '—';
+    if (hud.food) hud.food.textContent = stock && view && seat !== null ? `${stock.food} / ${foodStore(view, seat)}` : '—';
+    if (hud.hunger) hud.hunger.textContent = stock ? `${stock.hunger}%` : '—';
     if (hud.selection) {
       const b = selected ? view?.buildings[selected] : null;
       if (b) {
@@ -210,7 +214,7 @@ export async function startGame(net, me) {
     }
     if (type.depth !== undefined) parts.push(isDugOut(b) ? 'dug out' : `depth ${depthOf(b)}/${type.depth}, ${b.dug} stone`);
     if (type.yields === 'food') parts.push(`next food ${done}`);
-    parts.push(`HP ${b.hp}/${maxHp(b)}`);
+    if (b.hp !== undefined) parts.push(`HP ${b.hp}/${maxHp(b)}`);
     return parts.join(' · ');
   }
 
@@ -326,8 +330,8 @@ export async function startGame(net, me) {
   /**
    * The player clicked or tapped a cell.
    *
-   * - In build mode: build there. A building that needs a crew to work (a
-   *   pit) gets one chosen first.
+   * - In build mode: build there. A building that needs a crew (a pit,
+   *   farm or band) gets one chosen first.
    * - On any building: select it, or unselect it.
    * - With one of your wagons selected, anywhere else: drive it there.
    * - Anywhere else: unselect.
@@ -342,10 +346,12 @@ export async function startGame(net, me) {
       /** @type {string[]} */
       let units = [];
       // Only for a cell it can go on: anywhere else, the server says why not.
-      if (type.work !== undefined && highlights.has(key(at.q, at.r))) {
+      if ((type.work !== undefined || type.band) && highlights.has(key(at.q, at.r))) {
         const chosen = await chooseCrew({
           title: `New ${type.name.toLowerCase()}`,
-          hint: `Choose its crew, up to ${type.capacity}. The best at home for the work are ticked.`,
+          hint: type.band
+            ? `Choose who goes, up to ${type.capacity}. The best fighters at home are ticked.`
+            : `Choose its crew, up to ${type.capacity}. The best at home for the work are ticked.`,
           action: 'Build',
           kind,
           limit: type.capacity,

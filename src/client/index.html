@@ -63,6 +63,7 @@
       <div class="row"><dt>Units</dt><dd id="units">&mdash;</dd></div>
       <div class="row"><dt>Stone</dt><dd id="stone">&mdash;</dd></div>
       <div class="row"><dt>Food</dt><dd id="food">&mdash;</dd></div>
+      <div class="row"><dt>Hunger</dt><dd id="hunger">&mdash;</dd></div>
       <div class="row"><dt>Selected</dt><dd id="selection">none</dd></div>
       <div class="row"><dt>Tile</dt><dd id="tile">&mdash;</dd></div>
       <div class="row"><dt>Viewers</dt><dd id="viewers">1</dd></div>
@@ -76,6 +77,7 @@
     <button id="build-wagon" data-kind="wagon" aria-pressed="false">Wagon</button>
     <button id="build-pit" data-kind="pit" aria-pressed="false">Pit</button>
     <button id="build-farm" data-kind="farm" aria-pressed="false">Farm</button>
+    <button id="build-band" data-kind="band" aria-pressed="false">Band</button>
     <div class="group-label">Selected</div>
     <button id="upgrade" disabled>Upgrade</button>
     <button id="crew-button" disabled>Crew…</button>
@@ -101,9 +103,12 @@
       the better they breed, the sooner. Build near your standing buildings.
       Select a building and press Crew to choose who works there; Return
       sends them home. A pit's crew digs stone, which pays for towers, farms
-      and upgrades; farms grow food. Select a wagon, then
-      click a cell, to drive it; it carries its crew and can't pass other
-      buildings. Drag to pan, wheel to zoom.
+      and upgrades; farms grow food. Every minute your units eat; short
+      meals make them hungry, and at full hunger they may starve. Select a
+      wagon or band, then click a cell, to move it; it carries its crew. A
+      wagon can't pass other buildings; a band passes anything of yours,
+      gives no cover, and breaks up when it has nobody. Drag to pan, wheel
+      to zoom.
     </div>
   </div>
 </div>
