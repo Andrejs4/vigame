@@ -7,7 +7,9 @@ obvious from the code.
 ## Commands
 
 - `npm test`: unit tests (node:test). Fast; run after every change.
-- `npm run build`: writes `dist/vigame.html`. `dist/` is gitignored; never commit it.
+- `npm run build`: writes `dist/vigame.html` (standalone) and `dist/artifact.html`
+  (the same page without the document skeleton, for publishing). `dist/` is
+  gitignored; never commit it.
 - `npm run smoke`: Playwright/Chromium check of the built page, including a
   three-browser online game. Run it before publishing or pushing UI or net
   changes. In Claude Code cloud sessions, Chromium is preinstalled and found
@@ -37,8 +39,9 @@ To republish:
 1. `npm test && npm run smoke`.
 2. `Artifact` `read` the live artifact first. The tool requires this, and it
    shows whether someone changed the page outside the repo.
-3. Publish `dist/vigame.html` with that artifact's `url`, omitting
-   `capabilities` so the stored declaration carries over.
+3. Publish `dist/artifact.html` with that artifact's `url`, omitting
+   `capabilities` so the stored declaration carries over. Then read it back:
+   there should be exactly one `<!doctype`.
 
 The db holds live games. Keep `game/state` and `game/seats` backward
 compatible, or migrate them deliberately; `sanitizeState` is the place to

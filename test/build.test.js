@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { build } from '../scripts/build.js';
+import { artifactBody, build } from '../scripts/build.js';
 
 test('the bundle inlines every module, dependencies first, as one script', () => {
   const html = build();
@@ -20,4 +20,11 @@ test('the bundled script has no module syntax left and parses', () => {
   assert.doesNotMatch(script, /^\s*(import|export)\b/m);
   // Parse without running: a syntax error throws here.
   assert.doesNotThrow(() => new Function(script));
+});
+
+test('the artifact body is the page without its document skeleton', () => {
+  const body = artifactBody(build());
+  assert.match(body, /^<title>Vigame Hex Board<\/title>\n/);
+  assert.doesNotMatch(body, /<!doctype|<html|<head|<body|<\/body>|<\/html>/i);
+  assert.match(body, /<\/script>\n$/);
 });

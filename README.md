@@ -33,7 +33,7 @@ Node 20.11 or newer.
 npm install        # dev dependency only: Playwright, for the smoke check
 npm start          # http://127.0.0.1:8080, serving index.html and src/ as ES modules
 npm test           # unit tests (node:test, no browser)
-npm run build      # dist/vigame.html, one self-contained file; opens from file:// too
+npm run build      # dist/vigame.html (self-contained; opens from file:// too) and dist/artifact.html
 npm run smoke      # headless Chromium check of the built page; screenshots in smoke-output/
 ```
 
@@ -79,11 +79,11 @@ break every page.
 
 ### Publishing
 
-Run `npm run build`, then publish `dist/vigame.html` as a claude.ai Artifact
-with the capabilities `{ db: {}, room: {}, user: {} }`. The output uses the
-same document skeleton the Artifact tool publishes, so republishing replaces
-the page in place. Game state lives in the artifact's db, so it survives
-republishing as long as the shape of `game/state` stays compatible.
+Run `npm run build`, then publish `dist/artifact.html` as a claude.ai
+Artifact with the capabilities `{ db: {}, room: {}, user: {} }`. That file is
+the page without its document skeleton, which the Artifact tool adds itself.
+Game state lives in the artifact's db, so it survives republishing as long as
+the shape of `game/state` stays compatible.
 
 ## Not done yet
 
