@@ -4,12 +4,13 @@ import assert from 'node:assert/strict';
 import { BOARD_OPTIONS, createBoard } from '../src/core/board.js';
 import {
   advance, applyCommand, capacityOf, checkState, crewOf, footprint, levelXp, newGame, occupancy, publicView, random,
-  starveChance,
+  killChance, starveChance,
 } from '../src/core/game.js';
 import {
   BUILDING_TYPES, COMBAT_PERIOD, FOOD_PER_UNIT, FOOD_PERIOD, KILL_XP, LEVEL_RATE, RANGED_DAMAGE, LEVEL_XP, MAX_LEVEL, SKILL_XP, START_UNITS, UNIT_LIMIT, WAGON_PATIENCE,
   WALK_TICKS, WORK_BASE,
 } from '../src/core/rules.js';
+import { distance } from '../src/core/hex.js';
 import { boardFrom, openBoard, run, runUntil, skillsAt, stateWith, unitsIn } from './helpers.js';
 
 const OK = { ok: true };
@@ -393,6 +394,43 @@ test('a strike that brings a building down earns a killing blow; its units are l
   assert.equal(state.buildings.b2, undefined);
   assert.ok(state.units.u10.xp >= KILL_XP, 'a killing blow');
   assert.deepEqual([state.units.u20.q, state.units.u20.r, state.units.u20.in], [1, 0, undefined], 'left standing');
+});
+
+test('a kill is likelier the more the striker outclasses the target, 50% at most', () => {
+  assert.equal(killChance(20, 20), 10);
+  assert.ok(killChance(100, 1) > 45 && killChance(100, 1) < 50);
+  assert.ok(killChance(0, 51) < 1);
+});
+
+test('some strikes on a farm or pit get through to its crew; a tower shelters its own', () => {
+  const board = openBoard(4);
+  const attackers = unitsIn('b1', 20, 100, 1);
+  const farm = stateWith([{ id: 'b1', owner: 1, q: 0, r: 0 }, { id: 'b2', type: 'farm', q: 1, r: 0 }], [...attackers, ...unitsIn('b2', 6, 10)]);
+  const tower = stateWith([{ id: 'b1', owner: 1, q: 0, r: 0 }, { id: 'b2', q: 1, r: 0, hp: 5000 }], [...attackers, ...unitsIn('b2', 6, 10)]);
+  tower.buildings.b2.hp = BUILDING_TYPES.tower.hp; // stands long enough to tell
+  run(board, farm, 5 * COMBAT_PERIOD);
+  run(board, tower, 5 * COMBAT_PERIOD);
+  const crew = (/** @type {any} */ s) => Object.values(s.units).filter((u) => u.owner === 0).length;
+  assert.ok(crew(farm) < 6, 'the farm\'s crew took hits');
+  assert.equal(crew(tower), 6, 'the tower\'s did not');
+});
+
+test('a target: a tower strikes it in reach, else the nearest; a band goes after it', () => {
+  const board = openBoard(7);
+  const state = stateWith([
+    { id: 'b1', q: 0, r: 0 }, { id: 'b2', owner: 1, q: 2, r: 0 }, { id: 'b3', owner: 1, q: -5, r: 0 },
+    { id: 'b4', owner: 1, q: 0, r: 7, type: 'farm' }, { id: 'b5', type: 'band', q: 0, r: -3 },
+  ], [...unitsIn('b1', 1, 10), ...unitsIn('b5', 1, 20)]);
+  assert.deepEqual(applyCommand(board, state, 1, { type: 'target', building: 'b1', target: 'b3' }), { ok: false, reason: 'not your building' });
+  assert.deepEqual(applyCommand(board, state, 0, { type: 'target', building: 'b1', target: 'b5' }), { ok: false, reason: 'not an enemy' });
+  assert.deepEqual(applyCommand(board, state, 0, { type: 'target', building: 'b1', target: 'b3' }), OK);
+  assert.deepEqual(applyCommand(board, state, 0, { type: 'target', building: 'b5', target: 'b4' }), OK);
+  run(board, state, COMBAT_PERIOD);
+  assert.ok(state.buildings.b3.hp < BUILDING_TYPES.tower.hp, 'its target, 5 away, in a tower\'s reach');
+  assert.equal(state.buildings.b2.hp, BUILDING_TYPES.tower.hp, 'not the nearer one');
+  runUntil(board, state, () => distance(state.buildings.b5, state.buildings.b4) <= 1, 1000);
+  run(board, state, COMBAT_PERIOD);
+  assert.ok(!state.buildings.b4 || state.buildings.b4.hp < BUILDING_TYPES.farm.hp, 'and strikes it');
 });
 
 test('the side whose castle falls has lost, and gives no more commands', () => {

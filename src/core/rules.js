@@ -109,19 +109,28 @@ export const STARVE_CHANCE = 0.05;
  * strikes the nearest enemy in reach: close combat at MELEE_RANGE if there
  * is one, else ranged at RANGED_RANGE plus the building's `reach`. A strike
  * on a building takes its base damage plus the skill used off its hit
- * points. Units inside a building are safe while it stands; one out in the
- * open or in a band is killed by a strike with a chance of HIT_CHANCE plus a
- * point per skill level of the striker, less a point per level of the
- * target (a stand-in for the dice to come). The strike that brings down a
- * building or kills a unit earns KILL_XP.
+ * points, except that a building's `through` share of strikes passes to a
+ * unit inside, picked at random. A unit out in the open or in a band is
+ * always open to strikes. A strike on a unit kills it with a chance that
+ * depends on the striker's skill less the target's level: KILL_EVEN percent
+ * when they match, rising toward KILL_MAX, and falling below 1% once the
+ * target is 50 levels ahead (a stand-in for the dice to come). The strike
+ * that brings down a building or kills a unit earns KILL_XP.
+ *
+ * A building may be given a target, an enemy building. One that can't move
+ * strikes it while it is in reach, and the nearest enemy otherwise; a wagon
+ * or band goes after it until it is close enough for close combat.
  */
 export const COMBAT_PERIOD = TICKS_PER_SECOND;
 export const MELEE_RANGE = 1;
 export const RANGED_RANGE = 3;
 export const MELEE_DAMAGE = 6;
 export const RANGED_DAMAGE = 3;
-/** Percent. */
-export const HIT_CHANCE = 10;
+/** Percents. */
+export const KILL_EVEN = 10;
+export const KILL_MAX = 50;
+/** How much each level of difference multiplies the odds of a kill. */
+export const KILL_STEP = 1.06;
 
 /**
  * Repair: while a building is damaged, the units inside mend it instead of
@@ -158,6 +167,8 @@ export const REPAIR_WORK = 100;
  * @property {number} [speed] Ticks per cell on open ground. Only moving buildings have one;
  *   a band goes at its slowest member's walking pace instead.
  * @property {number} [reach] Cells it adds to its units' ranged reach.
+ * @property {number} [through] The share of strikes on it that reach a unit
+ *   inside instead: none for a castle, tower or wagon.
  */
 
 /** @type {Record<string, BuildingType>} */
@@ -175,11 +186,11 @@ export const BUILDING_TYPES = {
   },
   pit: {
     name: 'Pit', size: 1, capacity: 8, grades: 1, hp: 800, build: true, cost: 0,
-    skill: 'build', work: 2400, yields: 'stone', perDepth: 20, depth: 5,
+    skill: 'build', work: 2400, yields: 'stone', perDepth: 20, depth: 5, through: 0.25,
   },
   farm: {
     name: 'Farm', size: 1, capacity: 6, grades: 1, hp: 200, build: true, cost: 30,
-    skill: 'farming', work: 300, yields: 'food', base: 20,
+    skill: 'farming', work: 300, yields: 'food', base: 20, through: 0.5,
   },
   band: {
     name: 'Band', size: 1, capacity: 30, grades: 1, hp: 0, build: true, cost: 0,

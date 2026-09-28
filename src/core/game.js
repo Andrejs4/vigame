@@ -38,7 +38,7 @@ import { distance, key, neighbors, parseKey } from './hex.js';
 import { tileAt } from './board.js';
 import { unitName } from './names.js';
 import {
-  BUILDING_TYPES, BUILD_RANGE, COMBAT_PERIOD, DEPART_GAP, FOOD_PER_UNIT, HIT_CHANCE, KILL_XP, MELEE_DAMAGE, MELEE_RANGE,
+  BUILDING_TYPES, BUILD_RANGE, COMBAT_PERIOD, DEPART_GAP, FOOD_PER_UNIT, KILL_EVEN, KILL_MAX, KILL_STEP, KILL_XP, MELEE_DAMAGE, MELEE_RANGE,
   RANGED_DAMAGE, RANGED_RANGE, REPAIR_WORK, FOOD_PERIOD, FOOD_STORE, HUNGER_LINE, LEVEL_GROWTH,
   LEVEL_RATE, LEVEL_XP, MAX_HUNGER, MAX_LEVEL, SIDES, SKILLS, SKILL_XP, START_STONE, START_UNITS, STARVE_CHANCE,
   UNIT_LIMIT, WAGON_PATIENCE, WALK_TICKS, WORK_BASE,
@@ -60,6 +60,7 @@ import {
  * @property {number} [hp] Hit points left. Bands have none.
  * @property {number} [work] Work done toward what it yields next, for types that work.
  * @property {number} [mend] Repair work done toward the next hit point.
+ * @property {string} [target] The enemy building its units go for.
  * @property {number} [dug] Stone dug from a pit so far; its depth follows from it.
  * @property {Cell[]} [path] A moving building's route, next cell first.
  * @property {number} [since] While it rolls to path[0]: the tick it set off,
@@ -110,6 +111,7 @@ import {
 /**
  * @typedef {{ type: 'build', kind: string, q: number, r: number, units?: string[] }
  *   | { type: 'crew', building: string, units: string[] }
+ *   | { type: 'target', building: string, target: string }
  *   | { type: 'upgrade', building: string }
  *   | { type: 'move', building: string, q: number, r: number }} Command
  * @typedef {{ ok: true } | { ok: false, reason: string }} Outcome
@@ -307,6 +309,24 @@ export function foodStore(state, owner) {
 export function starveChance(level) {
   const x = (MAX_LEVEL - level) / (MAX_LEVEL - 1);
   return STARVE_CHANCE * x * x * x;
+}
+
+/** Odds of a kill, by the striker's skill less the target's level (+100). */
+const KILL_ODDS = new Array(201);
+KILL_ODDS[100] = KILL_EVEN / (KILL_MAX - KILL_EVEN);
+for (let x = 1; x <= 100; x++) {
+  KILL_ODDS[100 + x] = KILL_ODDS[99 + x] * KILL_STEP;
+  KILL_ODDS[100 - x] = KILL_ODDS[101 - x] / KILL_STEP;
+}
+
+/**
+ * The chance, in percent, that a strike kills a unit.
+ * @param {number} skill The striker's skill in use.
+ * @param {number} level The target's level.
+ */
+export function killChance(skill, level) {
+  const odds = KILL_ODDS[100 + Math.max(-100, Math.min(100, skill - level))];
+  return (KILL_MAX * odds) / (1 + odds);
 }
 
 /**
@@ -589,6 +609,7 @@ export function applyCommand(board, state, player, command) {
   switch (cmd.type) {
     case 'build': return build(board, state, occ, player, cmd);
     case 'crew': return crew(board, state, occ, player, cmd);
+    case 'target': return aim(state, player, cmd);
     case 'upgrade': return upgrade(state, player, cmd);
     case 'move': return moveBuilding(board, state, occ, player, cmd);
     default: return refuse('unknown command');
@@ -658,6 +679,27 @@ function crew(board, state, occ, player, cmd) {
   const ids = unitList(state, player, cmd.units);
   if (typeof ids === 'string') return refuse(ids);
   return setCrew(board, state, occ, b, ids);
+}
+
+/**
+ * Give a building a target: an enemy building. An empty target clears it.
+ * @param {GameState} state
+ * @param {number} player
+ * @param {Record<string, unknown>} cmd
+ * @returns {Outcome}
+ */
+function aim(state, player, cmd) {
+  const b = ownBuilding(state, player, cmd.building);
+  if (!b) return refuse('not your building');
+  if (cmd.target === '') {
+    delete b.target;
+    return { ok: true };
+  }
+  const t = typeof cmd.target === 'string' && Object.hasOwn(state.buildings, cmd.target) ? state.buildings[cmd.target] : null;
+  if (!t || t.owner === player) return refuse('not an enemy');
+  b.target = t.id;
+  if (BUILDING_TYPES[b.type].speed) delete b.path; // it sets off after the target at the next strike
+  return { ok: true };
 }
 
 /**
@@ -773,6 +815,7 @@ function moveBuilding(board, state, occ, player, cmd) {
   if (path.length) b.path = path;
   else delete b.path;
   delete b.waiting;
+  delete b.target; // driven by hand now
   return { ok: true };
 }
 
@@ -785,7 +828,7 @@ function moveBuilding(board, state, occ, player, cmd) {
  */
 export function advance(board, state) {
   state.tick += 1;
-  if (state.tick % COMBAT_PERIOD === 0) fight(state, occupancy(state));
+  if (state.tick % COMBAT_PERIOD === 0) fight(board, state, occupancy(state));
   for (const b of Object.values(state.buildings)) if (/** @type {number} */ (b.hp) <= 0) collapse(state, b);
   if (state.tick % FOOD_PERIOD === 0) {
     harvest(state);
@@ -824,7 +867,7 @@ function collapse(state, b) {
  * @param {GameState} state
  * @param {Occupancy} occ
  */
-function fight(state, occ) {
+function fight(board, state, occ) {
   /** @type {Array<{ cells: Axial[], owner: number, building?: Building, unit?: Unit }>} */
   const targets = [];
   const bandOf = (/** @type {Unit} */ u) => (u.in !== undefined && BUILDING_TYPES[state.buildings[u.in].type].band ? state.buildings[u.in] : null);
@@ -838,16 +881,18 @@ function fight(state, occ) {
   }
 
   for (const b of Object.values(state.buildings)) {
+    if (b.target !== undefined && state.buildings[b.target]?.owner === undefined) delete b.target;
+    if (BUILDING_TYPES[b.type].speed && b.target !== undefined) chase(board, state, occ, b);
     const inside = /** @type {string[]} */ (occ.inside.get(b.id));
     if (!inside.length) continue;
     const from = footprint(b.type, b.q, b.r);
     const reach = RANGED_RANGE + (BUILDING_TYPES[b.type].reach ?? 0);
-    // Enemies in reach, nearest first; the list order breaks ties.
+    // Enemies in reach: its target first, then the nearest; the list order breaks ties.
     const near = targets
       .filter((t) => t.owner !== b.owner)
       .map((t) => ({ t, d: Math.min(...t.cells.flatMap((c) => from.map((f) => distance(c, f)))) }))
       .filter(({ d }) => d <= reach)
-      .sort((x, y) => x.d - y.d);
+      .sort((x, y) => Number(y.t.building?.id === b.target) - Number(x.t.building?.id === b.target) || x.d - y.d);
     for (const id of inside) {
       const u = state.units[id];
       if (!u) continue; // killed this very round
@@ -856,19 +901,44 @@ function fight(state, occ) {
       const melee = target.d <= MELEE_RANGE;
       const skill = melee ? 'melee' : 'ranged';
       let killed = false;
-      if (target.t.building) {
-        const hit = target.t.building;
+      const hit = target.t.building;
+      // Some strikes on a building get through to a unit inside.
+      const sheltered = hit ? /** @type {string[]} */ (occ.inside.get(hit.id)).filter((x) => state.units[x]) : [];
+      const through = hit && sheltered.length && random(state) < (BUILDING_TYPES[hit.type].through ?? 0);
+      if (hit && !through) {
         hit.hp = Math.max(0, /** @type {number} */ (hit.hp) - (melee ? MELEE_DAMAGE : RANGED_DAMAGE) - u.skills[skill]);
         killed = hit.hp === 0;
       } else {
-        const foe = /** @type {Unit} */ (target.t.unit);
-        const chance = HIT_CHANCE + u.skills[skill] - foe.level;
-        killed = random(state) * 100 < chance;
+        const foe = hit ? state.units[sheltered[Math.floor(random(state) * sheltered.length)]] : /** @type {Unit} */ (target.t.unit);
+        killed = random(state) * 100 < killChance(u.skills[skill], foe.level);
         if (killed) delete state.units[foe.id];
       }
       practise(u, skill, killed ? KILL_XP : 0);
     }
   }
+}
+
+/**
+ * A wagon or band with a target and nowhere to go heads for it, and stops
+ * once it is close enough for close combat.
+ * @param {Board} board
+ * @param {GameState} state
+ * @param {Occupancy} occ
+ * @param {Building} b
+ */
+function chase(board, state, occ, b) {
+  if (b.path) return;
+  const t = state.buildings[/** @type {string} */ (b.target)];
+  const cells = footprint(t.type, t.q, t.r);
+  const near = (/** @type {Axial} */ c) => cells.some((x) => distance(x, c) <= MELEE_RANGE);
+  if (near(b)) return;
+  const goals = new Set(cells.map((c) => key(c.q, c.r)));
+  const blocked = wayFor(state, occ, b);
+  const route = findPath(board, b, t, (k) => !goals.has(k) && blocked(k));
+  if (!route) return;
+  const stop = route.findIndex(([q, r]) => near({ q, r }));
+  const path = route.slice(0, stop + 1);
+  if (path.length) b.path = path;
 }
 
 /**
@@ -1227,6 +1297,7 @@ export function checkState(board, raw) {
       fail(`building ${id}: bad hp`);
     }
     if (b.mend !== undefined && !(type.hp && isCount(b.mend, REPAIR_WORK))) fail(`building ${id}: bad mend`);
+    if (b.target !== undefined && typeof b.target !== 'string') fail(`building ${id}: bad target`);
     if (!Number.isSafeInteger(b.q) || !Number.isSafeInteger(b.r)) { fail(`building ${id}: bad cell`); continue; }
 
     for (const c of footprint(b.type, b.q, b.r)) {

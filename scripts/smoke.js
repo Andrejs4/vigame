@@ -17,6 +17,7 @@ import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
 
 import { startGameServer } from '../server/app.js';
+import { distance } from '../src/core/hex.js';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const OUT = join(ROOT, 'smoke-output');
@@ -385,7 +386,9 @@ async function threeBrowsers(browser, url, { full, label }) {
   await a.click('#build-pit');
   await a.waitForFunction(() => /** @type {any} */ (window).__vigame.highlights.length > 0);
   const pitCells = await a.evaluate(() => /** @type {any} */ (window).__vigame.highlights);
-  const pitSpot = await openCell(a, pitCells.map((k) => k.split(',').map(Number)));
+  // Nearest the castle first: the crew walks two seconds a cell, four on scrub.
+  const pitSpot = await openCell(a, pitCells.map((k) => k.split(',').map(Number))
+    .sort(([q1, r1], [q2, r2]) => distance({ q: q1, r: r1 }, blue) - distance({ q: q2, r: r2 }, blue)));
   await clickHex(a, pitSpot.q, pitSpot.r);
   assert.match(await confirmCrew(a, { shot: 'crew.png' }), /^(\d+) of \1$/, 'a full crew is ticked');
   await a.waitForFunction((n) => Object.keys(/** @type {any} */ (window).__vigame.view.buildings).length === n, count + 1);

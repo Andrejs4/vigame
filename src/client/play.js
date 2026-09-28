@@ -45,6 +45,7 @@ export async function startGame(net, me) {
   const upgradeButton = /** @type {HTMLButtonElement} */ (document.getElementById('upgrade'));
   const crewButton = /** @type {HTMLButtonElement} */ (document.getElementById('crew-button'));
   const returnButton = /** @type {HTMLButtonElement} */ (document.getElementById('return-button'));
+  const attackButton = /** @type {HTMLButtonElement} */ (document.getElementById('attack-button'));
   const crewDialog = /** @type {HTMLDialogElement} */ (document.getElementById('crew'));
   const crewParts = {
     title: /** @type {HTMLElement} */ (document.getElementById('crew-title')),
@@ -81,6 +82,9 @@ export async function startGame(net, me) {
   /** The kind of building being placed, while in build mode. */
   /** @type {string | null} */
   let placing = null;
+  /** The building whose target is being chosen, after pressing Attack. */
+  /** @type {string | null} */
+  let aiming = null;
   /** @type {Set<string>} */
   let highlights = new Set();
   let showCoords = false;
@@ -201,6 +205,8 @@ export async function startGame(net, me) {
     const crewed = Boolean(mine && b && b.type !== 'castle' && !isDugOut(b));
     crewButton.disabled = !crewed;
     returnButton.disabled = !(crewed && view && b && crewOf(view, b.id).length > 0);
+    attackButton.disabled = !mine;
+    attackButton.setAttribute('aria-pressed', String(aiming !== null && aiming === selected));
   }
 
   /**
@@ -219,6 +225,8 @@ export async function startGame(net, me) {
     if (type.depth !== undefined) parts.push(isDugOut(b) ? 'dug out' : `depth ${depthOf(b)}/${type.depth}, ${b.dug} stone`);
     if (type.yields === 'food') parts.push(`next food ${done}`);
     if (b.hp !== undefined) parts.push(`HP ${b.hp}/${maxHp(b)}`);
+    const target = b.target ? view?.buildings[b.target] : null;
+    if (target) parts.push(`attacking the ${BUILDING_TYPES[target.type].name.toLowerCase()}`);
     return parts.join(' · ');
   }
 
@@ -371,6 +379,17 @@ export async function startGame(net, me) {
     }
 
     const here = occ.buildingAt.get(key(at.q, at.r)) ?? null;
+    if (aiming) {
+      // After Attack: an enemy building becomes the target; anywhere else clears it.
+      const from = aiming;
+      aiming = null;
+      const enemy = here !== null && !isMine(here);
+      if (canCommand() && (enemy || view.buildings[from]?.target)) {
+        await give({ type: 'target', building: from, target: enemy ? here : '' }, 'attack that');
+      }
+      updateHud();
+      return;
+    }
     if (here) {
       selected = here === selected ? null : here;
     } else if (selected && isMine(selected) && BUILDING_TYPES[view.buildings[selected].type].speed && canCommand()) {
@@ -484,7 +503,8 @@ export async function startGame(net, me) {
 
   addEventListener('keydown', (e) => {
     // Escape in the crew chooser closes just the chooser.
-    if (e.key !== 'Escape' || crewDialog.open || (!placing && !selected)) return;
+    if (e.key !== 'Escape' || crewDialog.open || (!placing && !selected && !aiming)) return;
+    aiming = null;
     placing = null;
     selected = null;
     refreshHighlights();
@@ -520,6 +540,12 @@ export async function startGame(net, me) {
       target: b.id,
     });
     if (units) give({ type: 'crew', building: b.id, units }, 'send that crew');
+  });
+
+  attackButton.addEventListener('click', () => {
+    aiming = aiming ? null : selected;
+    if (aiming) flash('Click an enemy building to attack; anywhere else clears the target.');
+    updateHud();
   });
 
   returnButton.addEventListener('click', () => {
@@ -586,6 +612,7 @@ export async function startGame(net, me) {
       get occ() { return occ; },
       get selected() { return selected; },
       get placing() { return placing; },
+      get aiming() { return aiming; },
       get highlights() { return [...highlights]; },
       get peers() { return peers; },
       net,

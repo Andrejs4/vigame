@@ -81,9 +81,17 @@ Run `npm start` and open http://127.0.0.1:2567.
   strikes the nearest enemy in reach: close combat at 1 cell if it can,
   else ranged at 3 cells, 4 from a castle, 5 from a tower. A strike takes 6
   (close) or 3 (ranged) plus the skill used off a building's hit points.
-  Units inside a building are safe while it stands; units out in the open
-  or in a band die to a strike with a 10% chance, plus the striker's skill,
-  less their own level (a stand-in until units get their dice). The strike
+  Some strikes on a building get through to a unit inside: half on a farm,
+  a quarter on a pit, none on a castle, tower or wagon. Units out in the
+  open or in a band take every strike. A strike kills a unit with a chance
+  set by the striker's skill against the unit's level: 10% when they
+  match, up to 50% at most, and under 1% once the unit is 50 levels ahead
+  (a stand-in until units get their dice).
+- **Targets**: select one of your buildings, press **Attack…**, then click
+  an enemy building. A building that can't move strikes its target while it
+  is in reach, and the nearest enemy otherwise; a wagon or band goes after
+  it until it's close enough for close combat. Driving a wagon or band by
+  hand drops its target. The strike
   that brings a building down or kills a unit is a killing blow, worth 600
   experience.
 - **Losing**: a side whose castle falls has lost, and can give no more
@@ -291,9 +299,8 @@ opening position.
 [docs/architecture.md](docs/architecture.md) covers the design and what
 comes next.
 
-- Combat is a first cut: units fight from wherever they are placed, with
-  no orders to attack, and a unit dies to a single lucky strike until units
-  get their dice. A fallen castle loses the game, but the other side's
+- Combat is a first cut: a unit dies to a single lucky strike until units
+  get their dice, and only buildings can be picked as targets. A fallen castle loses the game, but the other side's
   buildings and units stay on the map.
 - There is no dark metal yet.
 - Of the six skills, ranged attack and close combat do nothing yet; towers
