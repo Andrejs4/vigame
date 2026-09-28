@@ -14,7 +14,7 @@ import { Client } from '@colyseus/sdk';
 import { startGameServer } from '../server/app.js';
 import { playerId, replay, restoreGame } from '../server/room.js';
 import { BOARD_OPTIONS, createBoard } from '../src/core/board.js';
-import { advance, nearStanding, occupancy, publicView } from '../src/core/game.js';
+import { advance, castleOf, nearStanding, occupancy, publicView } from '../src/core/game.js';
 import { key } from '../src/core/hex.js';
 import { createServerNet } from '../src/client/net.js';
 import { TICKS_PER_SECOND } from '../src/core/rules.js';
@@ -350,12 +350,14 @@ test('the server refuses commands from spectators, while paused, and that the ru
   const c = await join(id, TOKENS.c);
   await until(() => seen(a).running);
   assert.equal(await refusal(give(c, { type: 'upgrade', building: 'b1' })), 'not seated');
-  assert.equal(await refusal(give(a, { type: 'upgrade', building: 'b2' })), 'not your building');
-  assert.equal(await refusal(give(a, { type: 'send', from: 'b1', to: 'b1', count: 1 })), 'same building');
+  assert.equal(await refusal(give(a, { type: 'upgrade', building: castleOf(seen(a), 1)?.id })), 'not your building');
+  assert.equal(await refusal(give(a, { type: 'crew', building: 'b1', units: [] })), 'the castle is home to every unit');
   assert.equal(await refusal(give(a, { type: 'launch' })), 'unknown command');
   assert.equal(await refusal(give(a, 'north')), 'not a command');
   assert.equal(await refusal(give(a, { type: 'build', kind: 'tower', q: { deep: 1 }, r: 0 })), 'not a command');
   assert.equal(await refusal(give(a, { type: 'upgrade', building: 'b'.repeat(100) })), 'not a command');
+  assert.equal(await refusal(give(a, { type: 'crew', building: 'b1', units: [{ id: 'u3' }] })), 'not a command');
+  assert.equal(await refusal(give(a, { type: 'crew', building: 'b1', units: Array(65).fill('u3') })), 'not a command');
 
   assert.deepEqual(server.storage.listCommands(id), []);
   assert.equal(seen(a).buildings.b1.grade, 1);
@@ -400,20 +402,22 @@ test('a command whose write fails is refused and leaves the game as it was', asy
   await leaveAll(a, b);
 });
 
-test('units sent out march through the server, one cell of their route at a time', async () => {
+test('a crew marches through the server, one cell of its route at a time', async () => {
   const { a, b } = await twoPlayers();
-  await until(() => (occupancy(seen(a)).inside.get('b1')?.length ?? 0) >= 4);
   const spot = buildSpot(seen(a));
   assert.equal(typeof await give(a, { type: 'build', kind: 'tower', ...spot }), 'number');
   await until(() => Object.values(seen(b).buildings).some((x) => x.type === 'tower'));
   const tower = /** @type {any} */ (Object.values(seen(b).buildings).find((x) => x.type === 'tower'));
 
-  await give(a, { type: 'send', from: 'b1', to: tower.id, count: 4 });
+  const crew = /** @type {string[]} */ (occupancy(seen(a)).inside.get('b1')).slice(0, 4);
+  await give(a, { type: 'crew', building: tower.id, units: crew });
   await until(() => Object.values(seen(b).units).some((u) => u.to === tower.id));
   for (const u of Object.values(seen(b).units).filter((x) => x.to === tower.id && x.path)) {
     assert.equal(u.path.length, 1, 'players see only the next cell of a route');
   }
-  await until(() => (occupancy(seen(b)).inside.get(tower.id)?.length ?? 0) === 4);
+  // Up to five cells at two seconds each (four on scrub), on a clock that
+  // falls behind when the machine is busy.
+  await until(() => (occupancy(seen(b)).inside.get(tower.id)?.length ?? 0) === 4, 15000);
   await leaveAll(a, b);
 });
 
@@ -421,13 +425,12 @@ test('units sent out march through the server, one cell of their route at a time
 
 test('a game outlives its room: its snapshot comes back exactly, and its log rebuilds it', async () => {
   const { id, a, b } = await twoPlayers();
-  await until(() => (occupancy(seen(a)).inside.get('b1')?.length ?? 0) >= 3);
   await give(a, { type: 'upgrade', building: 'b1' });
   await give(a, { type: 'build', kind: 'wagon', ...buildSpot(seen(a)) });
   await until(() => Object.keys(seen(a).buildings).length === 3);
   const wagon = /** @type {any} */ (Object.values(seen(a).buildings).find((x) => x.type === 'wagon'));
-  await give(a, { type: 'send', from: 'b1', to: wagon.id, count: 3 });
-  await give(b, { type: 'upgrade', building: 'b2' });
+  await give(a, { type: 'crew', building: wagon.id, units: /** @type {string[]} */ (occupancy(seen(a)).inside.get('b1')).slice(0, 3) });
+  await give(b, { type: 'upgrade', building: castleOf(seen(b), 1)?.id });
   await sleep(100);
   const firstRoom = a.roomId;
   await leaveAll(a, b);
@@ -538,7 +541,7 @@ test('the page transport plays through the server and follows it', async () => {
   const crimsonSaw = [];
   crimson.onState((view) => crimsonSaw.push(view));
   assert.equal(crimsonSaw.length, 1, 'a late subscriber gets the current game');
-  assert.deepEqual(Object.keys(crimsonSaw[0].buildings), ['b1', 'b2']);
+  assert.deepEqual(Object.values(crimsonSaw[0].buildings).map((x) => [x.owner, x.type]), [[0, 'castle'], [1, 'castle']]);
   await until(() => crimsonSaw.at(-1).tick > crimsonSaw[0].tick);
   const now = crimson.clock();
   assert.ok(now >= crimsonSaw.at(-1).tick && now <= crimsonSaw.at(-1).tick + 1, 'the clock runs between ticks');

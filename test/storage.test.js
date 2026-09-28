@@ -139,8 +139,32 @@ test('an older database is upgraded: turn-based games are dropped, players kept'
     storage.close();
 
     const check = new Database(file, { readonly: true });
-    assert.equal(check.pragma('user_version', { simple: true }), 3);
+    assert.equal(check.pragma('user_version', { simple: true }), 7);
     check.close();
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('a version 3 database drops its games, whose commands these rules no longer have', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'vigame-'));
+  try {
+    const file = join(dir, 'vigame.db');
+    const storage = openStorage(file);
+    storage.savePlayer('p1', 'Ann');
+    storage.createGame({ id: 'g1', seed: 1, state: STATE, seats: ['p1', null] });
+    storage.recordCommand('g1', { tick: 0, player: 0, command: { type: 'send', from: 'b1', to: 'b2', count: 1 } });
+    storage.close();
+    // The tables are the same as version 3's; only the version number differs.
+    const old = new Database(file);
+    old.pragma('user_version = 3');
+    old.close();
+
+    const upgraded = openStorage(file);
+    assert.equal(upgraded.loadGame('g1'), null);
+    assert.deepEqual(upgraded.listCommands('g1'), []);
+    assert.equal(upgraded.loadPlayer('p1')?.name, 'Ann');
+    upgraded.close();
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

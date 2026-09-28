@@ -1,9 +1,12 @@
 # Vigame
 
-A real-time hex strategy prototype. Each side has a castle that makes units
-over time; players build towers and wagons, send units between their
-buildings, and drive wagons across the map with units inside. There is no
-combat yet: the structure is in place, and the rules are placeholders.
+A real-time hex strategy prototype. Players direct buildings, not units.
+Each side has a castle, home to its units, who raise new ones. Players
+build towers, wagons, pits and farms and choose each one's crew from their
+named units, who walk there and get better at the work. Pits dig stone,
+which pays for towers, farms and upgrades; castles and farms grow food.
+There is no combat yet: the structure is in place, and the rules and
+numbers are placeholders.
 
 The game core is plain data and pure functions (`src/core/`), with no
 screen, network or clock of its own. The game server runs it, and tests play
@@ -25,21 +28,85 @@ Run `npm start` and open http://127.0.0.1:2567.
   watch. **Release seat** frees a seat for a spectator to take.
 - **The game clock** runs only while both players are here. (`npm run dev`
   runs it with one, for trying things alone.)
-- **Your castle** covers seven cells and makes a unit every two seconds, up
-  to what it holds. It is its side's life (nothing can attack it yet).
-- **Send units**: click one of your buildings, then another of yours. Half of
-  those inside go (**Send half** switches to all). They leave one after
-  another and march a cell a second on open ground, two on scrub; water is
-  impassable. Units heading for a full building wait at its door.
-- **Build**: pick **Tower** or **Wagon**, then a highlighted cell: open,
-  buildable ground within three cells of one of your standing buildings.
-  Scrub can be crossed but not built on; water is neither. One building per
-  cell.
-- **Upgrade** the selected building: each grade holds as many units again.
+- **Your castle** covers seven cells and is its side's life (nothing can
+  attack it yet). It is every unit's home, and starts with 12. The units at
+  home raise new ones: the more of them, and the better they breed, the
+  sooner. It takes in all its units, however many, but stops breeding
+  while it holds more than its room.
+- **Units** each have a medieval name, a level from 1 to 100, and six
+  skills: breeding, ranged attack, close combat, building (which covers
+  repairing and digging), farming and running. Work trains the skill it
+  uses, and the unit's level with it: every skill at the same pace, the
+  level faster the fiercer the work (breeding least, then running, farming,
+  building, ranged and close combat, and a killing blow most). A skill
+  can't pass the unit's level; it climbs faster than the level, then waits
+  for it. Each level takes 1.1 times the work of the one before, so the
+  last ones are all but out of reach. Only breeding, building, farming and
+  running do anything yet.
+- **Crews**: units walk only when they're given to a building's crew or sent
+  home. Select one of your buildings and press **Crew…** for a list of your
+  units: tick up to what it holds. Those you untick go home; those you tick
+  come from wherever they are, one after another, two seconds a cell on open
+  ground and four on scrub, less the better they run. Water is impassable.
+  **Return** sends the whole crew home. A unit left with nowhere to go (its
+  building collapsed, say) goes home by itself.
+- **Stone and food** go straight into your side's stock (the HUD shows
+  it); nothing carries them. Each side starts with 200 stone.
+- **Build**: pick **Tower** (60 stone), **Wagon**, **Pit** or **Farm** (30
+  stone), then a highlighted cell: open, buildable ground within three
+  cells of one of your standing buildings. Scrub can be crossed but not
+  built on; water is neither. One building per cell.
+- **Pits**: placing one asks for its crew first, up to 8, with the best
+  diggers at home ticked. They walk there and dig stone, faster the more of
+  them and the better they build; every 20 stone the pit is a grade deeper.
+  At depth 5 it is dug out and the crew goes home.
+- **Food**: a unit eats 10 a minute. Every minute the castle yields enough
+  for half the units it can hold, and each farm a little (20) even with
+  nobody working it; a farm's crew (up to 6) grows more, faster the better
+  they farm. A side stores at most 10 minutes' food for its castle's full
+  house (6000 at grade 1); the rest spoils.
+- **Hunger**: one number per side, 0 to 100%. At each meal, if there isn't
+  enough, the food is shared evenly and what doesn't divide waits for the
+  next meal. A share under 5 raises hunger by the shortfall; over 5 lowers
+  it by the excess. At 100%, every unit may starve at each meal: about 5%
+  at level 1, 0.6% at level 50, never at 100.
+- **Upgrade** the selected building, for stone: the castle 200 × its grade,
+  a tower 60 × its grade. Each grade holds as many units again and takes as
+  many hits again.
+- **Hit points**: every building has them, a castle 2000 and a pit 800. At
+  none left it collapses at once, and whoever was inside is left standing
+  there. While a building is damaged, the units inside mend it instead of
+  their usual work, faster the better they build.
+- **Fighting**: once a second, every unit inside a building or a band
+  strikes the nearest enemy in reach: close combat at 1 cell if it can,
+  else ranged at 3 cells, 4 from a castle, 5 from a tower. A strike takes 6
+  (close) or 3 (ranged) plus the skill used off a building's hit points.
+  Some strikes on a building get through to a unit inside: half on a farm,
+  a quarter on a pit, none on a castle, tower or wagon. Units out in the
+  open or in a band take every strike. A strike kills a unit with a chance
+  set by the striker's skill against the unit's level: 10% when they
+  match, up to 50% at most, and under 1% once the unit is 50 levels ahead
+  (a stand-in until units get their dice).
+- **Targets**: select one of your buildings, press **Attack…**, then click
+  an enemy building. A building that can't move strikes its target while it
+  is in reach, and the nearest enemy otherwise; a wagon or band goes after
+  it until it's close enough for close combat. Driving a wagon or band by
+  hand drops its target. The strike
+  that brings a building down or kills a unit is a killing blow, worth 600
+  experience.
+- **Losing**: a side whose castle falls has lost, and can give no more
+  commands.
 - **Wagons** are buildings that move. Select one, then click a cell to drive
-  it there, two seconds a cell; the units inside ride along. Wagons can't
+  it there, two seconds a cell; its crew rides along inside. Wagons can't
   pass through other buildings, each other included: a blocked wagon waits,
   then looks for another way, and stops if there is none.
+- **Bands** are groups of up to 30 units that move like wagons, for free.
+  Placing one asks who goes. A band holds no cell, so it passes anything of
+  yours and blocks nothing; it has no hit points and gives no cover, and it
+  breaks up as soon as it has nobody (its last unit left or died). It goes
+  at the pace of its slowest walker.
+- **Pits** don't stop units or bands: they cross any pit, yours or the
+  enemy's. Wagons can't enter a pit and go around it.
 - Drag to pan, and use the wheel or the − / + buttons to zoom.
   **Coordinates** shows axial `q,r` labels. Escape cancels building and
   clears the selection.
@@ -78,7 +145,8 @@ have one, install it with `npx playwright install chromium`.
 | `src/core/` | Pure modules, shared by the server and the page, with no DOM, network or clock. |
 | `src/core/hex.js` | Pointy-top axial hex math: neighbours, distance, lines, pixel conversion, board shapes. |
 | `src/core/board.js` | Seeded terrain, with what each terrain allows, and the castle sites; same seed, same map everywhere. |
-| `src/core/rules.js` | The numbers: tick rate, sides, building and unit types. |
+| `src/core/rules.js` | The numbers: tick rate, sides, skills and experience, building types. |
+| `src/core/names.js` | Medieval names for units. |
 | `src/core/game.js` | The game core: the state as plain JSON, `applyCommand`, `advance` (one tick), `occupancy`, `checkState`, `publicView`. Deterministic. |
 | `src/core/player.js` | Player-name rules, checked on the page and on the server. |
 | `src/client/` | The page, served as it is. |
@@ -132,16 +200,23 @@ http://127.0.0.1:2567;` with the same headers.
 ```js
 {
   version: 1, seed: 1337, tick: 420, rng: 123456789, nextId: 58,
-  players: [{ id: 0 }, { id: 1 }],
+  players: [{ id: 0, stone: 140, food: 620, hunger: 0 }, { id: 1, stone: 200, food: 300, hunger: 5 }],
   buildings: {
-    b1: { id: 'b1', owner: 0, type: 'castle', grade: 1, q: 2, r: 5 },
-    b9: { id: 'b9', owner: 0, type: 'wagon', grade: 1, q: 6, r: 4,
-          path: [[7, 4], [8, 4]], since: 410, until: 430 },   // rolling to 7,4
+    b1: { id: 'b1', owner: 0, type: 'castle', grade: 1, q: 2, r: 5, hp: 2000,
+          work: 5200 },                                      // toward the next unit
+    b30: { id: 'b30', owner: 0, type: 'pit', grade: 1, q: 5, r: 3, hp: 800,
+           work: 1200, dug: 47 },                            // 47 stone so far: depth 2
+    b31: { id: 'b31', owner: 0, type: 'wagon', grade: 1, q: 6, r: 4, hp: 300,
+           path: [[7, 4], [8, 4]], since: 410, until: 430 }, // rolling to 7,4
   },
   units: {
-    u3: { id: 'u3', owner: 0, type: 'militia', in: 'b1' },    // inside the castle
-    u4: { id: 'u4', owner: 0, type: 'militia', q: 3, r: 5,    // marching to b9
-          path: [[4, 5], [5, 4]], to: 'b9', since: 418, until: 428 },
+    u3: { id: 'u3', owner: 0, name: 'Hawise Reeve', level: 4, xp: 120,
+          skills: { breeding: 4, ranged: 0, melee: 0, build: 1, farming: 0, running: 2 },
+          practice: { breeding: 0, ranged: 0, melee: 0, build: 35, farming: 0, running: 150 },
+          in: 'b1' },                                        // at home in the castle
+    u4: { id: 'u4', owner: 0, name: 'Odo Mason', /* level, xp, skills, practice */
+          q: 3, r: 5, path: [[4, 5], [5, 4]], to: 'b30',     // walking to the pit
+          since: 418, until: 438 },
   },
 }
 ```
@@ -151,18 +226,27 @@ http://127.0.0.1:2567;` with the same headers.
   and arrives at its next cell, so a unit's record changes once per cell,
   not every tick, and a screen draws it between cells by the clock.
 - Each fact is stored once. What is on a cell and who is inside a building
-  come from `occupancy(state)`.
-- `applyCommand(board, state, side, command)` applies `send`, `build`,
-  `upgrade` or `move`, or refuses with a reason and changes nothing.
-  `advance(board, state)` runs one tick.
+  come from `occupancy(state)`; a building's crew (the units inside it or
+  heading for it) from `crewOf(state, id)`.
+- `applyCommand(board, state, side, command)` applies one of these, or
+  refuses with a reason and changes nothing:
+  - `{ type: 'build', kind, q, r, units? }`: a tower, wagon, pit, farm or band, with a crew if `units` lists one;
+  - `{ type: 'crew', building, units }`: that building's whole crew (`[]` sends them all home);
+  - `{ type: 'upgrade', building }`;
+  - `{ type: 'move', building, q, r }`: a wagon.
+- `advance(board, state)` runs one tick: collapses, every minute food and a
+  meal, empty bands breaking up, work in castles, pits and farms, wagons
+  and bands, walking.
 - The core never reads the clock or `Math.random`; dice come from `rng`. The
   same commands at the same ticks always give the same game, which the
   server's saves and a future simulation harness rely on.
 - `checkState` lists everything wrong with a state. The tests play long
   games of random commands and check every tick.
 
-The numbers (speeds, capacities, production, build range, the unit limit)
-are placeholders in `src/core/rules.js`.
+The numbers (speeds, capacities, work, experience, build range, the unit
+limit) are placeholders in `src/core/rules.js`. Players are shown
+`publicView(state)`: the state without the dice, the id counter and units'
+experience points, which change every tick a unit works.
 
 ## The game server
 
@@ -173,7 +257,7 @@ only when it changes. The page sends commands, never state:
 
 | Message | Payload | Answer |
 | --- | --- | --- |
-| `command` | a core command, such as `{ type: 'send', from, to, count }` | the command's number, or the core's refusal, `not seated`, or `the game is paused` |
+| `command` | a core command, such as `{ type: 'crew', building, units: ['u3', 'u9'] }` | the command's number, or the core's refusal, `not seated`, or `the game is paused` |
 | `claimSeat` | none | the seat, or `no free seat` |
 | `releaseSeat` | none | |
 | `select` | `{ q, r }` or `null` | none; shows your picked hex to everyone |
@@ -215,8 +299,12 @@ opening position.
 [docs/architecture.md](docs/architecture.md) covers the design and what
 comes next.
 
-- No combat, capture or win condition: units only move between buildings.
-- Building and upgrading cost nothing yet; there are no resources.
+- Combat is a first cut: a unit dies to a single lucky strike until units
+  get their dice, and only buildings can be picked as targets. A fallen castle loses the game, but the other side's
+  buildings and units stay on the map.
+- There is no dark metal yet.
+- Of the six skills, ranged attack and close combat do nothing yet; towers
+  and wagons hold crews but give them nothing to do. Towers don't repair.
 - A simulation harness: the core can already play games with no players (the
   tests do), but there are no bots or reports yet.
 - Game server:
@@ -231,8 +319,8 @@ comes next.
   - Backups are not set up. The architecture doc suggests Litestream.
   - `npm audit` reports advisories in `@colyseus/auth`, which Colyseus
     installs alongside its core; this server switches it off (`auth: false`).
-  - Upgrading the database to this version drops games saved by the earlier
-    turn-based version; players keep their names.
+  - Upgrading the database to this version drops games saved by earlier
+    versions, whose rules differ; players keep their names.
 - A seat is held until its player releases it, however long they are away,
   and the game waits for them.
 - The lobby lists only the 50 most recently active games.

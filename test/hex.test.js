@@ -74,6 +74,7 @@ test('rectangle yields width x height unique hexes laid out as a rectangle', () 
   const hexes = rectangle(18, 12);
   assert.equal(hexes.length, 18 * 12);
   assert.equal(new Set(hexes.map((h) => key(h.q, h.r))).size, hexes.length);
+  assert.deepEqual(JSON.parse(JSON.stringify(hexes)), hexes, 'no -0, which JSON would turn into 0');
   // Every row spans the same horizontal extent (to within the odd-row offset).
   const rows = new Map();
   for (const h of hexes) {

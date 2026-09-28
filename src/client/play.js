@@ -6,8 +6,10 @@
 
 import { bounds, key, pixelToAxial } from '../core/hex.js';
 import { BOARD_OPTIONS, TERRAIN, createBoard, tileAt } from '../core/board.js';
-import { capacityOf, nearStanding, occupancy } from '../core/game.js';
-import { BUILDING_TYPES, SIDES, TICKS_PER_SECOND, UNIT_LIMIT } from '../core/rules.js';
+import {
+  capacityOf, castleOf, crewOf, depthOf, foodStore, isDugOut, maxHp, nearStanding, occupancy, upgradeCost,
+} from '../core/game.js';
+import { BUILDING_TYPES, SIDES, SKILLS, TICKS_PER_SECOND, UNIT_LIMIT } from '../core/rules.js';
 import { serverBase } from './api.js';
 import { Camera } from './camera.js';
 import { BoardRenderer } from './render.js';
@@ -17,6 +19,8 @@ function formatTime(tick) {
   const s = Math.floor(tick / TICKS_PER_SECOND);
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 }
+
+/** @typedef {import('../core/game.js').Building} Building */
 
 /**
  * Show the game and play it.
@@ -30,13 +34,26 @@ export async function startGame(net, me) {
     time: document.getElementById('time'),
     seat: document.getElementById('seat'),
     units: document.getElementById('units'),
+    stone: document.getElementById('stone'),
+    food: document.getElementById('food'),
+    hunger: document.getElementById('hunger'),
     selection: document.getElementById('selection'),
     tile: document.getElementById('tile'),
     viewers: document.getElementById('viewers'),
   };
   const seatButton = /** @type {HTMLButtonElement} */ (document.getElementById('seat-button'));
   const upgradeButton = /** @type {HTMLButtonElement} */ (document.getElementById('upgrade'));
-  const sendAmountButton = /** @type {HTMLButtonElement} */ (document.getElementById('send-amount'));
+  const crewButton = /** @type {HTMLButtonElement} */ (document.getElementById('crew-button'));
+  const returnButton = /** @type {HTMLButtonElement} */ (document.getElementById('return-button'));
+  const attackButton = /** @type {HTMLButtonElement} */ (document.getElementById('attack-button'));
+  const crewDialog = /** @type {HTMLDialogElement} */ (document.getElementById('crew'));
+  const crewParts = {
+    title: /** @type {HTMLElement} */ (document.getElementById('crew-title')),
+    hint: /** @type {HTMLElement} */ (document.getElementById('crew-hint')),
+    list: /** @type {HTMLElement} */ (document.getElementById('crew-list')),
+    count: /** @type {HTMLElement} */ (document.getElementById('crew-count')),
+    ok: /** @type {HTMLButtonElement} */ (document.getElementById('crew-ok')),
+  };
   const buildButtons = /** @type {HTMLButtonElement[]} */ ([...document.querySelectorAll('button[data-kind]')]);
   const message = /** @type {HTMLElement} */ (document.getElementById('message'));
   /** @type {HTMLAnchorElement} */ (document.getElementById('to-lobby')).href = serverBase().pathname;
@@ -65,8 +82,9 @@ export async function startGame(net, me) {
   /** The kind of building being placed, while in build mode. */
   /** @type {string | null} */
   let placing = null;
-  /** Whether a send takes every unit inside, or half. */
-  let sendAll = false;
+  /** The building whose target is being chosen, after pressing Attack. */
+  /** @type {string | null} */
+  let aiming = null;
   /** @type {Set<string>} */
   let highlights = new Set();
   let showCoords = false;
@@ -118,9 +136,11 @@ export async function startGame(net, me) {
     const seat = net.seat();
     highlights = new Set();
     if (placing && view && occ && seat !== null) {
+      const { band } = BUILDING_TYPES[placing];
       for (const t of board.list) {
         const k = key(t.q, t.r);
-        if (t.buildable && !occ.buildingAt.has(k) && nearStanding(/** @type {any} */ (view), seat, t)) highlights.add(k);
+        const ground = band ? t.passable : t.buildable;
+        if (ground && !occ.buildingAt.has(k) && nearStanding(/** @type {any} */ (view), seat, t)) highlights.add(k);
       }
     }
     needsDraw = true;
@@ -131,7 +151,11 @@ export async function startGame(net, me) {
     const paused = !net.running();
 
     if (hud.time) {
-      hud.time.textContent = `${formatTime(view?.tick ?? 0)}${paused ? ' · paused' : ''}`;
+      const fallen = view?.players.find((p) => p.lost !== undefined);
+      const outcome = !fallen ? '' : seat === null
+        ? ` · ${SIDES[1 - fallen.id]?.name ?? ''} won`
+        : fallen.id === seat ? ' · you lost' : ' · you won';
+      hud.time.textContent = `${formatTime(view?.tick ?? 0)}${paused ? ' · paused' : ''}${outcome}`;
       hud.time.title = paused ? 'The game waits until both players are here' : '';
     }
     if (hud.seat) {
@@ -141,11 +165,14 @@ export async function startGame(net, me) {
     if (hud.units) {
       hud.units.textContent = seat !== null && occ ? `${occ.unitCount[seat] ?? 0} / ${UNIT_LIMIT}` : '—';
     }
+    const stock = seat !== null ? view?.players[seat] : null;
+    if (hud.stone) hud.stone.textContent = stock ? String(stock.stone) : '—';
+    if (hud.food) hud.food.textContent = stock && view && seat !== null ? `${stock.food} / ${foodStore(view, seat)}` : '—';
+    if (hud.hunger) hud.hunger.textContent = stock ? `${stock.hunger}%` : '—';
     if (hud.selection) {
       const b = selected ? view?.buildings[selected] : null;
-      if (b && occ) {
-        const inside = occ.inside.get(b.id)?.length ?? 0;
-        hud.selection.textContent = `${BUILDING_TYPES[b.type].name} (grade ${b.grade}) · ${inside}/${capacityOf(b)}`;
+      if (b) {
+        hud.selection.textContent = describe(b);
         hud.selection.style.color = SIDES[b.owner]?.accent ?? '';
       } else {
         hud.selection.textContent = 'none';
@@ -171,8 +198,120 @@ export async function startGame(net, me) {
       button.setAttribute('aria-pressed', String(placing === button.dataset.kind));
     }
     const b = selected ? view?.buildings[selected] : null;
-    upgradeButton.disabled = !(can && b && isMine(selected) && b.grade < BUILDING_TYPES[b.type].grades);
-    sendAmountButton.textContent = sendAll ? 'Send all' : 'Send half';
+    const mine = Boolean(can && b && isMine(selected));
+    const upgradable = Boolean(mine && b && b.grade < BUILDING_TYPES[b.type].grades);
+    upgradeButton.disabled = !upgradable;
+    upgradeButton.textContent = upgradable && b && upgradeCost(b) ? `Upgrade · ${upgradeCost(b)}` : 'Upgrade';
+    const crewed = Boolean(mine && b && b.type !== 'castle' && !isDugOut(b));
+    crewButton.disabled = !crewed;
+    returnButton.disabled = !(crewed && view && b && crewOf(view, b.id).length > 0);
+    attackButton.disabled = !mine;
+    attackButton.setAttribute('aria-pressed', String(aiming !== null && aiming === selected));
+  }
+
+  /**
+   * A building, as the HUD describes it: its units, and how its work is going.
+   * @param {Building} b
+   */
+  function describe(b) {
+    const type = BUILDING_TYPES[b.type];
+    const parts = [type.grades > 1 ? `${type.name} (grade ${b.grade})` : type.name];
+    const done = `${Math.floor((100 * (b.work ?? 0)) / (type.work ?? 1))}%`;
+    if (b.type === 'castle') {
+      parts.push(`${occ?.inside.get(b.id)?.length ?? 0}/${capacityOf(b)} at home`, `next unit ${done}`);
+    } else {
+      parts.push(`crew ${view ? crewOf(view, b.id).length : 0}/${capacityOf(b)}`);
+    }
+    if (type.depth !== undefined) parts.push(isDugOut(b) ? 'dug out' : `depth ${depthOf(b)}/${type.depth}, ${b.dug} stone`);
+    if (type.yields === 'food') parts.push(`next food ${done}`);
+    if (b.hp !== undefined) parts.push(`HP ${b.hp}/${maxHp(b)}`);
+    const target = b.target ? view?.buildings[b.target] : null;
+    if (target) parts.push(`attacking the ${BUILDING_TYPES[target.type].name.toLowerCase()}`);
+    return parts.join(' · ');
+  }
+
+  /**
+   * Where a unit is, for the crew list.
+   * @param {import('./net.js').GameView['units'][string]} u
+   * @param {string | null} target The building whose crew is being chosen.
+   */
+  function whereIs(u, target) {
+    const id = u.in ?? u.to;
+    const b = id && view ? view.buildings[id] : null;
+    if (!b) return 'outside';
+    if (id === target) return u.in ? 'here' : 'on the way here';
+    if (b.type === 'castle') return u.in ? 'at home' : 'going home';
+    const name = BUILDING_TYPES[b.type].name.toLowerCase();
+    return u.in ? `in a ${name}` : `going to a ${name}`;
+  }
+
+  /**
+   * Let the player choose a crew: a list of their units, with the current
+   * crew ticked, or for a new building the ones at home best at its work.
+   * @param {object} options
+   * @param {string} options.title
+   * @param {string} options.hint
+   * @param {string} options.action The confirm button's label.
+   * @param {string} options.kind The building's type, whose skill ranks the units.
+   * @param {number} options.limit How many it takes.
+   * @param {string | null} options.target The building, or null for a new one.
+   * @returns {Promise<string[] | null>} The chosen unit ids, or null if cancelled.
+   */
+  function chooseCrew({ title, hint, action, kind, limit, target }) {
+    const seat = net.seat();
+    if (!view || seat === null) return Promise.resolve(null);
+    const { skill } = BUILDING_TYPES[kind];
+    const home = castleOf(view, seat)?.id;
+    const units = Object.values(view.units).filter((u) => u.owner === seat);
+    /** @param {typeof units[number]} a @param {typeof units[number]} b */
+    const better = (a, b) => b.skills[skill] - a.skills[skill] || b.level - a.level || a.name.localeCompare(b.name);
+    const chosen = new Set(target
+      ? crewOf(view, target)
+      : units.filter((u) => u.in === home).sort(better).slice(0, limit).map((u) => u.id));
+    const rank = (/** @type {typeof units[number]} */ u) => (chosen.has(u.id) ? 0 : u.in === home ? 1 : 2);
+    units.sort((a, b) => rank(a) - rank(b) || better(a, b));
+
+    crewParts.title.textContent = title;
+    crewParts.hint.textContent = hint;
+    crewParts.ok.textContent = action;
+    crewParts.list.replaceChildren(...units.map((u) => {
+      const box = document.createElement('input');
+      box.type = 'checkbox';
+      box.value = u.id;
+      box.checked = chosen.has(u.id);
+      const name = document.createElement('span');
+      name.textContent = u.name;
+      const stats = document.createElement('span');
+      stats.className = 'stats';
+      stats.textContent = `Lv ${u.level} · ${SKILLS[skill]} ${u.skills[skill]}`;
+      const where = document.createElement('span');
+      where.className = 'where';
+      where.textContent = whereIs(u, target);
+      const label = document.createElement('label');
+      label.append(box, name, stats, where);
+      const li = document.createElement('li');
+      li.append(label);
+      return li;
+    }));
+    const sync = () => {
+      crewParts.count.textContent = `${chosen.size} of ${limit}`;
+      for (const box of crewParts.list.querySelectorAll('input')) box.disabled = !box.checked && chosen.size >= limit;
+    };
+    crewParts.list.onchange = (e) => {
+      const box = /** @type {HTMLInputElement} */ (e.target);
+      if (box.checked) chosen.add(box.value);
+      else chosen.delete(box.value);
+      sync();
+    };
+    sync();
+
+    crewDialog.returnValue = '';
+    crewDialog.showModal();
+    return new Promise((resolve) => {
+      crewDialog.addEventListener('close', () => {
+        resolve(crewDialog.returnValue === 'ok' ? units.filter((u) => chosen.has(u.id)).map((u) => u.id) : null);
+      }, { once: true });
+    });
   }
 
   /** @type {ReturnType<typeof setTimeout> | undefined} */
@@ -203,9 +342,8 @@ export async function startGame(net, me) {
   /**
    * The player clicked or tapped a cell.
    *
-   * - In build mode: build there.
-   * - With one of your buildings selected, on another of yours: send units
-   *   there (half of those inside, or all).
+   * - In build mode: build there. A building that needs a crew (a pit,
+   *   farm or band) gets one chosen first.
    * - On any building: select it, or unselect it.
    * - With one of your wagons selected, anywhere else: drive it there.
    * - Anywhere else: unselect.
@@ -215,16 +353,41 @@ export async function startGame(net, me) {
     if (!view || !occ) return;
     if (placing) {
       if (!canCommand()) return;
-      if (await give({ type: 'build', kind: placing, q: at.q, r: at.r }, 'build there')) placing = null;
+      const kind = placing;
+      const type = BUILDING_TYPES[kind];
+      /** @type {string[]} */
+      let units = [];
+      // Only for a cell it can go on: anywhere else, the server says why not.
+      if ((type.work !== undefined || type.band) && highlights.has(key(at.q, at.r))) {
+        const chosen = await chooseCrew({
+          title: `New ${type.name.toLowerCase()}`,
+          hint: type.band
+            ? `Choose who goes, up to ${type.capacity}. The best fighters at home are ticked.`
+            : `Choose its crew, up to ${type.capacity}. The best at home for the work are ticked.`,
+          action: 'Build',
+          kind,
+          limit: type.capacity,
+          target: null,
+        });
+        if (!chosen) return;
+        units = chosen;
+      }
+      if (await give({ type: 'build', kind, q: at.q, r: at.r, ...(units.length ? { units } : {}) }, 'build there')) placing = null;
       refreshHighlights();
       updateHud();
       return;
     }
 
     const here = occ.buildingAt.get(key(at.q, at.r)) ?? null;
-    if (selected && here && here !== selected && isMine(selected) && isMine(here) && canCommand()) {
-      const inside = occ.inside.get(selected)?.length ?? 0;
-      await give({ type: 'send', from: selected, to: here, count: Math.max(1, sendAll ? inside : Math.ceil(inside / 2)) }, 'send units');
+    if (aiming) {
+      // After Attack: an enemy building becomes the target; anywhere else clears it.
+      const from = aiming;
+      aiming = null;
+      const enemy = here !== null && !isMine(here);
+      if (canCommand() && (enemy || view.buildings[from]?.target)) {
+        await give({ type: 'target', building: from, target: enemy ? here : '' }, 'attack that');
+      }
+      updateHud();
       return;
     }
     if (here) {
@@ -339,7 +502,9 @@ export async function startGame(net, me) {
   }, { passive: false });
 
   addEventListener('keydown', (e) => {
-    if (e.key !== 'Escape' || (!placing && !selected)) return;
+    // Escape in the crew chooser closes just the chooser.
+    if (e.key !== 'Escape' || crewDialog.open || (!placing && !selected && !aiming)) return;
+    aiming = null;
     placing = null;
     selected = null;
     refreshHighlights();
@@ -347,6 +512,9 @@ export async function startGame(net, me) {
   });
 
   for (const button of buildButtons) {
+    const { name, cost } = BUILDING_TYPES[button.dataset.kind ?? ''];
+    button.textContent = cost ? `${name} · ${cost}` : name;
+    button.title = cost ? `${cost} stone` : 'Free';
     button.addEventListener('click', () => {
       const kind = button.dataset.kind ?? null;
       placing = placing === kind ? null : kind;
@@ -359,9 +527,29 @@ export async function startGame(net, me) {
     if (selected) give({ type: 'upgrade', building: selected }, 'upgrade');
   });
 
-  sendAmountButton.addEventListener('click', () => {
-    sendAll = !sendAll;
+  crewButton.addEventListener('click', async () => {
+    const b = selected ? view?.buildings[selected] : null;
+    if (!b) return;
+    const type = BUILDING_TYPES[b.type];
+    const units = await chooseCrew({
+      title: `${type.name} crew`,
+      hint: `Up to ${capacityOf(b)}. Those you untick go home; those you tick come from wherever they are.`,
+      action: 'Send',
+      kind: b.type,
+      limit: capacityOf(b),
+      target: b.id,
+    });
+    if (units) give({ type: 'crew', building: b.id, units }, 'send that crew');
+  });
+
+  attackButton.addEventListener('click', () => {
+    aiming = aiming ? null : selected;
+    if (aiming) flash('Click an enemy building to attack; anywhere else clears the target.');
     updateHud();
+  });
+
+  returnButton.addEventListener('click', () => {
+    if (selected) give({ type: 'crew', building: selected, units: [] }, 'send them home');
   });
 
   seatButton.addEventListener('click', () => {
@@ -424,6 +612,7 @@ export async function startGame(net, me) {
       get occ() { return occ; },
       get selected() { return selected; },
       get placing() { return placing; },
+      get aiming() { return aiming; },
       get highlights() { return [...highlights]; },
       get peers() { return peers; },
       net,

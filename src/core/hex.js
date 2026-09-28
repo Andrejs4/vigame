@@ -177,7 +177,9 @@ export function rectangle(width, height) {
   const out = [];
   for (let r = 0; r < height; r++) {
     const rowOffset = Math.floor(r / 2);
-    for (let q = -rowOffset; q < width - rowOffset; q++) {
+    // 0 - offset, not -offset: the first row would start at -0, which a JSON
+    // round trip turns into 0, so a saved game would differ from the live one.
+    for (let q = 0 - rowOffset; q < width - rowOffset; q++) {
       out.push({ q, r });
     }
   }

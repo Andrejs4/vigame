@@ -22,7 +22,7 @@
 import Database from 'better-sqlite3';
 
 /** Bump when the tables change, and add the upgrade step to `migrate`. */
-const SCHEMA_VERSION = 3;
+const SCHEMA_VERSION = 7;
 
 /**
  * @typedef {{ id: string, seed: number, state: unknown, seq: number, seats: Array<string | null>,
@@ -241,6 +241,40 @@ function migrate(db) {
         PRIMARY KEY (game_id, seq)
       );
       PRAGMA user_version = 3;
+    `))();
+  }
+  if (version < 4) {
+    // Named units with skills, crews and pits. Earlier games' commands
+    // (sending units) don't exist in these rules, so those games are dropped.
+    db.transaction(() => db.exec(`
+      DELETE FROM commands;
+      DELETE FROM games;
+      PRAGMA user_version = 4;
+    `))();
+  }
+  if (version < 5) {
+    // Stone, food and hit points: building now costs stone, so earlier
+    // games' logs don't replay either.
+    db.transaction(() => db.exec(`
+      DELETE FROM commands;
+      DELETE FROM games;
+      PRAGMA user_version = 5;
+    `))();
+  }
+  if (version < 6) {
+    // Hunger, and food ten times as fine: earlier snapshots don't fit.
+    db.transaction(() => db.exec(`
+      DELETE FROM commands;
+      DELETE FROM games;
+      PRAGMA user_version = 6;
+    `))();
+  }
+  if (version < 7) {
+    // Combat, repair and a fallen castle's loss: earlier snapshots don't fit.
+    db.transaction(() => db.exec(`
+      DELETE FROM commands;
+      DELETE FROM games;
+      PRAGMA user_version = 7;
     `))();
   }
 }

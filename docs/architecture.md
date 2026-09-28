@@ -10,11 +10,13 @@ The core is `src/core/game.js`, with its numbers in `src/core/rules.js` and the 
 `src/core/board.js`. It is the whole game as one plain JSON object, plus the
 functions that change it:
 
-- `newGame(board)`: the opening position, a castle per side.
-- `applyCommand(board, state, side, command)`: what a player does. It checks
-  everything first and either changes the state or refuses with a reason.
-- `advance(board, state)`: one tick of time (production, marching, wagons).
-- `occupancy(state)`: what is where, worked out from the state.
+- `newGame(board)`: the opening position, a castle per side with its first units.
+- `applyCommand(board, state, side, command)`: what a player does (build,
+  choose a building's crew, upgrade, move a wagon). It checks everything
+  first and either changes the state or refuses with a reason.
+- `advance(board, state)`: one tick of time (work, wagons, walking).
+- `occupancy(state)`, `crewOf(state, id)`: what is where, and who works
+  where, worked out from the state.
 - `checkState(board, state)`: every broken invariant, if any.
 - `publicView(state)`: what players are shown.
 
@@ -48,6 +50,19 @@ functions that change it:
   tick it left its cell and the tick it reaches the next. Its record changes
   once per cell, not every tick, so a few hundred marching units cost little
   to send, and a screen draws each one between cells from the clock.
+- **Players direct buildings, units follow.** A unit walks only when it is
+  given to a building's crew or sent home to its castle. A crew is not a
+  list the building keeps: it is the units inside the building or heading
+  for it, so a unit is in one crew at most, by construction.
+- **Units as individuals.** Each has a name, a level and six skills. Work
+  adds to the building's progress (a unit's base work plus its skill) and
+  earns the unit a point of experience a tick, for its level and for the
+  skill it used. The level table is built by multiplication alone, and names
+  come from the game's own dice, so replays match.
+- **Experience stays out of the view.** It changes every tick a unit works,
+  and the sync resends a whole unit when any of its fields changes, so
+  `publicView` leaves it out: players see levels and skills, which change a
+  few times a minute at most.
 - **Wagons hold two cells while rolling**, the one they leave and the one
   they enter, and only roll into a cell no building holds. So no two
   buildings ever share a cell, and wagons can't pass each other.
@@ -62,7 +77,7 @@ A harness needs nothing new from the core: create a board and a state, then
 call `applyCommand` and `advance` in a loop. `test/game.test.js` already does
 this with random commands. What's missing is the harness itself: bots
 (functions from a state to a command), a way to list a side's sensible
-commands, and reports (win rates, game length, balance per unit type).
+commands, and reports (win rates, game length, balance per building and skill).
 
 ## The page
 
