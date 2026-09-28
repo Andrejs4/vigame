@@ -707,7 +707,9 @@ export function checkState(board, raw) {
   }
 
   for (const [id, n] of inside) {
-    if (n > capacityOf(state.buildings[id])) fail(`building ${id}: ${n} inside, more than it holds`);
+    const b = state.buildings[id];
+    if (!Object.hasOwn(BUILDING_TYPES, b?.type) || !Number.isInteger(b.grade)) continue; // reported above
+    if (n > capacityOf(b)) fail(`building ${id}: ${n} inside, more than it holds`);
   }
   counts.forEach((n, owner) => { if (n > UNIT_LIMIT) fail(`side ${owner} has ${n} units`); });
   return problems;

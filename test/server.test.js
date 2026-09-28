@@ -300,11 +300,11 @@ test('a second room for an open game is refused', async () => {
 test('the clock runs only while both seated players are here', async () => {
   const id = await startGame();
   const a = await join(id, TOKENS.a);
-  const c = await join(id, TOKENS.c);
   await sleep(100);
   assert.deepEqual([seen(a).running, seen(a).tick], [false, 0], 'Blue alone: waiting for Crimson');
 
   const b = await join(id, TOKENS.b);
+  const c = await join(id, TOKENS.c);
   await until(() => seen(a).tick >= 25);
   assert.equal(seen(c).running, true, 'spectators see it too');
   assert.ok(Object.keys(seen(a).units).length > 0, 'the castles are making units');

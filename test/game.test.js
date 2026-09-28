@@ -80,7 +80,8 @@ test('sent units leave one per tick, cross a cell a second, and go inside', () =
   assert.deepEqual(occupancy(state).inside.get('b2'), ['u10']);
   run(board, state, 2);
   assert.deepEqual(occupancy(state).inside.get('b2'), ['u10', 'u11', 'u12']);
-  assert.equal(occupancy(state).inside.get('b1')?.length, 2);
+  const made = Math.floor(state.tick / /** @type {number} */ (BUILDING_TYPES.castle.every));
+  assert.equal(occupancy(state).inside.get('b1')?.length, 2 + made, 'two stayed, plus what the castle made meanwhile');
 });
 
 test('rough ground takes longer to cross', () => {
@@ -164,7 +165,7 @@ test('building needs open, buildable ground near one of your standing buildings'
     [tower(2, -2), 'cannot build there'],
     [tower(-2, 2), 'cannot build there'],
     [tower(40, 40), 'cannot build there'],
-    [tower(5, 0), 'too far from your buildings'],
+    [tower(-5, 0), 'too far from your buildings'],
     [{ type: 'build', kind: 'castle', q: 3, r: -3 }, 'cannot build that'],
     [{ type: 'build', kind: 'constructor', q: 3, r: -3 }, 'cannot build that'],
     [{ type: 'build', kind: 'tower', q: '3', r: -3 }, 'bad cell'],

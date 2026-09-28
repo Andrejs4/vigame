@@ -238,8 +238,10 @@ async function localDesktop(browser) {
   await waitInside(page, crimson.id, 1);
   const wagon = await buildWith(page, 'wagon');
   await sendUnits(page, crimson, wagon);
-  await waitInside(page, wagon.id, 1);
+  await page.waitForFunction((id) => !Object.values(/** @type {any} */ (window).__vigame.view.units)
+    .some((u) => u.to === id), wagon.id, { timeout: 15000 });
   const riders = await insideOf(page, wagon.id);
+  assert.ok(riders >= 1, 'units got in');
   await page.keyboard.press('Escape');
   await selectBuilding(page, wagon);
   const goal = await page.evaluate(({ id }) => {
