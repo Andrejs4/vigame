@@ -3,7 +3,8 @@
  * login, lobby, and games between three browsers, directly and under a
  * subfolder behind a proxy, plus the game on a phone.
  *
- * Usage: node scripts/smoke.js   (screenshots land in smoke-output/)
+ * Usage: node scripts/smoke.js [word]   (screenshots land in smoke-output/)
+ * With a word, only the scenarios whose names contain it run.
  */
 
 import assert from 'node:assert/strict';
@@ -24,6 +25,10 @@ const PHONE = { viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isM
 /** @type {string[]} */
 const problems = [];
 
+/** Pages still open, by label, for the report when a scenario fails. */
+/** @type {Map<string, import('playwright').Page>} */
+const openPages = new Map();
+
 // --- page helpers ------------------------------------------------------------
 
 /**
@@ -37,6 +42,8 @@ const problems = [];
 async function openPage(browser, label, options = { viewport: { width: 1280, height: 800 } }, expectedError) {
   const context = await browser.newContext(options);
   const page = await context.newPage();
+  openPages.set(label, page);
+  page.on('close', () => openPages.delete(label));
   await page.route(/fonts\.(googleapis|gstatic)\.com/, (route) => (
     route.fulfill({ status: 200, contentType: 'text/css', body: '' })
   ));
@@ -168,6 +175,31 @@ const pixelAt = (page, x, y) => page.evaluate(([x, y]) => {
   return [d[0], d[1], d[2]];
 }, [x, y]);
 
+/**
+ * What each open page shows, with a screenshot of it, so a failure on CI
+ * says what the scenario was waiting for.
+ */
+async function report() {
+  const lines = [];
+  for (const [label, page] of openPages) {
+    await page.screenshot({ path: join(OUT, `failed-${label}.png`) }).catch(() => {});
+    const seen = await page.evaluate(() => {
+      const v = /** @type {any} */ (window).__vigame;
+      const text = (/** @type {string} */ id) => document.getElementById(id)?.textContent ?? '';
+      return {
+        time: text('time'),
+        seat: text('seat'),
+        viewers: text('viewers'),
+        connected: v?.net?.connected(),
+        tick: v?.view?.tick,
+        marching: Object.values(v?.view?.units ?? {}).filter((u) => u.in === undefined),
+      };
+    }).catch((e) => String(e));
+    lines.push(`${label} ${page.url()}\n    ${JSON.stringify(seen)}`);
+  }
+  return lines.join('\n');
+}
+
 /** Wait until the page shows a game. */
 const inGame = (page) => page.waitForFunction(() => /** @type {any} */ (window).__vigame?.view, null, { timeout: 10000 });
 
@@ -245,13 +277,12 @@ async function threeBrowsers(browser, url, { full, label }) {
   await a.fill('#login-answer', '1');
   await a.click('#login-submit');
   await a.waitForFunction(() => /letters or digits/.test(document.getElementById('login-error')?.textContent ?? ''));
-  const first = await text(a, '#login-question');
   await a.fill('#login-name', 'Ann');
   await a.fill('#login-answer', '99');
   await a.click('#login-submit');
+  // The page swaps the used sum for "Loading…" as it says "not it", so the
+  // next sum on screen is the new one, even when it reads the same.
   await a.waitForFunction(() => /not it/.test(document.getElementById('login-error')?.textContent ?? ''));
-  await a.waitForFunction((q) => /What is/.test(document.getElementById('login-question')?.textContent ?? '')
-    && document.getElementById('login-question')?.textContent !== q, first);
   await logIn(a, 'Ann');
 
   // The lobby: nothing of Ann's yet. She starts a game, which opens it, and
@@ -488,11 +519,12 @@ mkdirSync(OUT, { recursive: true });
 const games = await startGameServer({ port: 0 });
 const proxied = /** @type {{ url: string, close: () => Promise<unknown> }} */ (await startPrefixProxy(games.url, '/vigame'));
 const browser = await chromium.launch();
-const scenarios = [
+const only = process.argv[2] ?? '';
+const scenarios = /** @type {Array<[string, () => Promise<void>]>} */ ([
   ['login, lobby and a game, three browsers', () => threeBrowsers(browser, games.url, { full: true, label: 'direct' })],
   ['the same under a subfolder, behind a proxy', () => threeBrowsers(browser, proxied.url, { full: false, label: 'proxied' })],
   ['on a phone', () => phone(browser, games.url)],
-];
+]).filter(([name]) => name.includes(only));
 
 let failed = 0;
 try {
@@ -505,6 +537,8 @@ try {
     } catch (e) {
       failed++;
       console.log(`not ok - ${name}\n  ${String(e?.stack ?? e).split('\n').join('\n  ')}`);
+      console.log(`  ${(await report()).split('\n').join('\n  ')}`);
+      for (const page of [...openPages.values()]) await page.context().close();
     }
   }
 } finally {
