@@ -13,11 +13,11 @@ import { Client } from '@colyseus/sdk';
 
 import { startGameServer } from '../server/app.js';
 import { playerId, replay, restoreGame } from '../server/room.js';
-import { BOARD_OPTIONS, createBoard } from '../src/board.js';
-import { advance, nearStanding, occupancy, publicView } from '../src/game.js';
-import { key } from '../src/hex.js';
-import { createServerNet } from '../src/net.js';
-import { TICKS_PER_SECOND } from '../src/rules.js';
+import { BOARD_OPTIONS, createBoard } from '../src/core/board.js';
+import { advance, nearStanding, occupancy, publicView } from '../src/core/game.js';
+import { key } from '../src/core/hex.js';
+import { createServerNet } from '../src/client/net.js';
+import { TICKS_PER_SECOND } from '../src/core/rules.js';
 
 /** @type {Awaited<ReturnType<typeof startGameServer>>} */
 let server;
@@ -166,12 +166,21 @@ async function twoPlayers() {
 
 // --- HTTP ------------------------------------------------------------------
 
-test('the server serves the page with the Colyseus client loaded first', async () => {
+test('the server serves the page and its modules, all by relative addresses', async () => {
   const html = await (await fetch(`${base}/`)).text();
-  assert.match(html, /<script src="vendor\/colyseus\.js"><\/script>\n<script>\n\(\(\) => \{/, 'relative, so a proxy can serve it under a subfolder');
-  const sdk = await fetch(`${base}/vendor/colyseus.js`);
-  assert.equal(sdk.status, 200);
-  assert.match(await sdk.text(), /Colyseus/);
+  // Relative, so a proxy can serve the game under a subfolder.
+  assert.match(html, /<script src="vendor\/colyseus\.js"><\/script>\n<script type="module" src="client\/main\.js"><\/script>/);
+  assert.doesNotMatch(html, /(src|href)="\//, 'no root-relative addresses');
+
+  for (const path of ['/client/main.js', '/client/play.js', '/core/game.js', '/vendor/colyseus.js']) {
+    const res = await fetch(base + path);
+    assert.equal(res.status, 200, path);
+    assert.match(res.headers.get('content-type') ?? '', /javascript/, path);
+  }
+  assert.equal((await fetch(`${base}/client/style.css`)).status, 200);
+  assert.equal((await fetch(`${base}/client/nope.js`)).status, 404);
+  assert.equal((await fetch(`${base}/core/../../server/app.js`)).status, 404, 'only src/ is served');
+  assert.ok([403, 404].includes((await fetch(`${base}/core/%2e%2e/%2e%2e/package.json`)).status));
 });
 
 test('new games are stored with a castle per side, and listed; unknown ones are 404', async () => {
@@ -184,7 +193,8 @@ test('new games are stored with a castle per side, and listed; unknown ones are 
   assert.deepEqual(Object.values(game.state.buildings).map((b) => [b.owner, b.type]), [[0, 'castle'], [1, 'castle']]);
 
   const lobby = await (await fetch(`${base}/api/games`)).json();
-  assert.ok(lobby.some((g) => g.id === id && g.seatsTaken === 0 && g.tick === 0));
+  assert.deepEqual(lobby.find((g) => g.id === id)?.seats, [null, null]);
+  assert.equal(lobby.find((g) => g.id === id)?.tick, 0);
   assert.deepEqual(await (await fetch(`${base}/api/games/${id}/commands`)).json(), []);
 
   assert.equal((await fetch(`${base}/api/games/nope`)).status, 404);
@@ -247,6 +257,15 @@ test('signing in takes a name and the answer to the server\'s sum', async () => 
   assert.equal(server.storage.loadPlayer(playerId(token)).name, 'Samuel');
 });
 
+test('a token can ask who it belongs to', async () => {
+  assert.deepEqual(await (await post('/api/me', { token: TOKENS.a })).json(), { pid: playerId(TOKENS.a), name: 'Ann' });
+  for (const body of [{ token: 'y'.repeat(32) }, { token: 'short' }, {}]) {
+    const res = await post('/api/me', body);
+    assert.equal(res.status, 200, 'not signed in is an answer, not an error');
+    assert.equal(await res.json(), null);
+  }
+});
+
 test('starting or joining a game needs a player who has signed in', async () => {
   const stranger = 'z'.repeat(32);
   assert.equal((await fetch(`${base}/api/games`, { method: 'POST' })).status, 401);
@@ -285,6 +304,9 @@ test('the first two players take the seats; later ones watch', async () => {
   assert.equal(viewers[a.sessionId].pid.includes('a'.repeat(8)), false, 'the token itself is never shared');
   assert.deepEqual(Object.values(viewers).map((v) => v.name).sort(), ['Ann', 'Bēla', 'Cai']);
   assert.equal((await (await fetch(`${base}/api/games/${id}`)).json()).seats.filter(Boolean).length, 2);
+  const listed = (await (await fetch(`${base}/api/games`)).json()).find((g) => g.id === id);
+  assert.deepEqual(listed.seats, [{ pid: playerId(TOKENS.a), name: 'Ann' }, { pid: playerId(TOKENS.b), name: 'Bēla' }],
+    'the lobby shows who plays, by public id and name');
   await leaveAll(a, b, c);
 });
 
@@ -509,7 +531,6 @@ test('the page transport plays through the server and follows it', async () => {
   await Promise.all([blue.ready(), crimson.ready()]);
 
   await until(() => blue.seat() === 0 && crimson.seat() === 1 && blue.viewers() === 2 && blue.running());
-  assert.equal(blue.mode, 'online');
   assert.equal(blue.connected(), true);
   assert.equal(crimson.canClaimSeat(), false, 'no seat free');
 

@@ -2,7 +2,7 @@
  * The room state Colyseus keeps in sync with every client.
  *
  * It is a display copy of the game core's state (`publicView` in
- * src/game.js), which stays the only real copy: the room changes the core's
+ * src/core/game.js), which stays the only real copy: the room changes the core's
  * state, then mirrors it here. The mirror knows nothing about the game's
  * fields. Each building and unit travels as its own JSON string, keyed by id,
  * and every other top-level field of the view as a JSON string of its own.

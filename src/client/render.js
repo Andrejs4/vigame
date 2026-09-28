@@ -8,9 +8,9 @@
  * cells by the clock.
  */
 
-import { DIRECTIONS, axialToPixel, corners, key } from './hex.js';
-import { footprint, occupancy } from './game.js';
-import { BUILDING_TYPES, SIDES } from './rules.js';
+import { DIRECTIONS, axialToPixel, corners, key } from '../core/hex.js';
+import { footprint, occupancy } from '../core/game.js';
+import { BUILDING_TYPES, SIDES } from '../core/rules.js';
 
 /** Base colours per terrain, before per-tile tint. */
 const TERRAIN_COLORS = {
@@ -60,7 +60,7 @@ function jitter(id) {
 export class BoardRenderer {
   /**
    * @param {HTMLCanvasElement} canvas
-   * @param {import('./board.js').Board} board
+   * @param {import('../core/board.js').Board} board
    */
   constructor(canvas, board) {
     this.canvas = canvas;
@@ -151,7 +151,7 @@ export class BoardRenderer {
     };
 
     // Cull anything outside the viewport before touching the path API.
-    /** @type {Array<{ tile: import('./board.js').Tile, cx: number, cy: number }>} */
+    /** @type {Array<{ tile: import('../core/board.js').Tile, cx: number, cy: number }>} */
     const visible = [];
     for (const tile of this.board.list) {
       const sp = cellScreen(tile.q, tile.r);

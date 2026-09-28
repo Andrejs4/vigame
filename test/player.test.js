@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { createChallenges } from '../server/challenge.js';
-import { PLAYER_NAME_MAX, cleanPlayerName } from '../src/player.js';
+import { PLAYER_NAME_MAX, cleanPlayerName } from '../src/core/player.js';
 
 test('player names: letters and digits in any script, up to 15 characters', () => {
   for (const name of ['Ann', 'Jānis', 'Ōtani 2', 'Анна-Мария', '李小龍', 'अनिल', "O'Neil", 'x_y.z', '7']) {

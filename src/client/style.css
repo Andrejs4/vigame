@@ -1,0 +1,176 @@
+/* A deliberate single visual world: a field seen at dusk. The board supplies
+   the colour, so the chrome stays dark and quiet. */
+:root {
+  color-scheme: dark;
+  --ground: #0f130e;
+  --panel: rgba(20, 27, 21, 0.86);
+  --panel-solid: rgba(20, 27, 21, 0.97);
+  --panel-edge: rgba(190, 214, 188, 0.16);
+  --ink: #e9ede7;
+  --ink-dim: #93a191;
+  --amber: #ffd84d;
+  --sans: "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { height: 100%; }
+body {
+  margin: 0;
+  background: var(--ground);
+  color: var(--ink);
+  font: 14px/1.5 var(--sans);
+  -webkit-font-smoothing: antialiased;
+}
+a { color: var(--amber); }
+
+button, .button {
+  display: inline-block;
+  font: 13px var(--sans); color: var(--ink); text-decoration: none;
+  background: rgba(233, 237, 231, 0.07);
+  border: 1px solid var(--panel-edge);
+  border-radius: 7px;
+  padding: 8px 13px;
+  cursor: pointer; text-align: left;
+  transition: background 120ms ease, border-color 120ms ease;
+}
+button:hover:not(:disabled), .button:hover { background: rgba(233, 237, 231, 0.14); }
+button:disabled { opacity: 0.45; cursor: not-allowed; }
+button:focus-visible, .button:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
+button[aria-pressed="true"] { background: rgba(255, 216, 77, 0.18); border-color: rgba(255, 216, 77, 0.5); }
+.primary {
+  font-weight: 600; text-align: center;
+  background: rgba(255, 216, 77, 0.16);
+  border-color: rgba(255, 216, 77, 0.45);
+}
+.primary:hover:not(:disabled) { background: rgba(255, 216, 77, 0.27); }
+
+@media (prefers-reduced-motion: reduce) {
+  button, .button { transition: none; }
+}
+
+/* --- login and lobby ------------------------------------------------------ */
+
+.page {
+  min-height: 100%;
+  display: flex; align-items: center; justify-content: center;
+  padding: 24px 16px;
+}
+.card {
+  width: min(320px, 100%);
+  padding: 20px 22px;
+  background: var(--panel-solid);
+  border: 1px solid var(--panel-edge);
+  border-radius: 10px;
+}
+.card.wide { width: min(520px, 100%); }
+.card h1 {
+  margin: 0 0 6px;
+  font-size: 12px; font-weight: 500; letter-spacing: 0.10em; text-transform: uppercase;
+  color: var(--ink-dim);
+}
+.card h2 { margin: 20px 0 8px; font-size: 14px; font-weight: 600; }
+.card .hint { margin: 0 0 14px; color: var(--ink-dim); font-size: 13px; }
+.card .hint strong { color: var(--ink); font-weight: 600; }
+.card label { display: block; margin-bottom: 12px; color: var(--ink-dim); font-size: 13px; }
+.card input {
+  display: block; width: 100%; margin-top: 4px;
+  font: 14px var(--sans); color: var(--ink);
+  background: rgba(233, 237, 231, 0.07);
+  border: 1px solid var(--panel-edge); border-radius: 7px;
+  padding: 8px 10px;
+}
+.card input:focus-visible { outline: 2px solid var(--amber); outline-offset: 1px; }
+.card form button, .card > .primary, .card > .button { width: 100%; }
+.card .error { color: var(--amber); min-height: 1.5em; margin: 0 0 10px; font-size: 13px; }
+.card .empty { margin: 0; color: var(--ink-dim); font-size: 13px; }
+
+.games { list-style: none; margin: 0; padding: 0; }
+.games li {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 8px 0;
+  border-top: 1px solid var(--panel-edge);
+}
+.games li:last-child { border-bottom: 1px solid var(--panel-edge); }
+.games .who { font-size: 13px; }
+.games .when { color: var(--ink-dim); font: 12px var(--mono); margin-left: 6px; }
+.games .button { flex: none; }
+
+/* --- the game ------------------------------------------------------------- */
+
+#stage { position: fixed; inset: 0; overflow: hidden; }
+
+#board {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%;
+  display: block;
+  touch-action: none;
+  cursor: grab;
+}
+#board:active { cursor: grabbing; }
+
+.hud {
+  position: absolute; z-index: 2;
+  background: var(--panel);
+  border: 1px solid var(--panel-edge);
+  border-radius: 10px;
+  backdrop-filter: blur(10px);
+  padding: 11px 13px;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+#status { top: 14px; left: 14px; min-width: 216px; }
+#controls { top: 14px; right: 14px; display: flex; flex-direction: column; gap: 6px; }
+#legend { bottom: 14px; left: 14px; font-size: 12px; color: var(--ink-dim); max-width: 300px; }
+
+.masthead {
+  font-size: 11px;
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+  padding-bottom: 7px;
+  margin-bottom: 7px;
+  border-bottom: 1px solid var(--panel-edge);
+}
+
+dl { margin: 0; }
+.row { display: flex; justify-content: space-between; gap: 18px; }
+.row dt { color: var(--ink-dim); margin: 0; }
+.row dd { margin: 0; font-family: var(--mono); font-size: 12px; font-variant-numeric: tabular-nums; }
+
+.group-label {
+  font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--ink-dim); margin: 4px 0 -2px;
+}
+
+.zoom-row { display: flex; gap: 6px; }
+.zoom-row button { flex: 1; text-align: center; font-size: 15px; padding: 5px 0; }
+
+.swatch {
+  display: inline-block; width: 10px; height: 10px;
+  border-radius: 2px; margin-right: 6px; vertical-align: -1px;
+}
+.legend-note { margin-top: 8px; color: var(--ink-dim); }
+
+.notice {
+  margin: 8px 0 0; padding-top: 7px; max-width: 240px;
+  border-top: 1px solid var(--panel-edge);
+  color: var(--amber); font-size: 12px;
+}
+
+/* Narrow screens: controls become a thumb-reachable row along the bottom. */
+@media (max-width: 620px) {
+  #legend { display: none; }
+  .hud { font-size: 12px; padding: 9px 11px; }
+  #status { min-width: 0; top: 10px; left: 10px; }
+  #controls {
+    top: auto; right: 10px; left: 10px;
+    bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+    flex-direction: row; flex-wrap: wrap; justify-content: center; gap: 8px;
+  }
+  #controls button, #controls .button { flex: 1; text-align: center; padding: 12px 6px; }
+  #controls .group-label, #toggle-coords, #recenter { display: none; }
+  .zoom-row { flex: 1; }
+}

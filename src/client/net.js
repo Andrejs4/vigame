@@ -1,14 +1,9 @@
 /**
- * Networking seam: where the game the page shows comes from, and where the
- * player's commands go.
+ * The connection to a game on the Vigame game server (server/), which runs
+ * the real game: the player's commands go to it as room messages, and its
+ * state comes back as patches.
  *
- * Two implementations of one interface. `createLocalNet` runs the game core
- * right here in the page, with one person playing either side. `createServerNet`
- * plays through the Vigame game server (server/), which runs the real game:
- * commands go to it as room messages, and its state comes back as patches.
- *
- * Interface:
- *   mode            'local' | 'online'
+ * `createServerNet` returns:
  *   ready()         resolves once the first state has arrived
  *   onState(fn)     fn(view) whenever the game changes; a late subscriber is
  *                   handed the latest view straight away. A view has the
@@ -27,13 +22,13 @@
  *   releaseSeat()
  *   viewers()       number of people currently viewing
  *   connected()     boolean
+ *   leave()
  */
 
-import { advance, applyCommand } from './game.js';
-import { SIDES, TICKS_PER_SECOND } from './rules.js';
+import { SIDES, TICKS_PER_SECOND } from '../core/rules.js';
 
 /** @typedef {{ q: number, r: number }} Axial */
-/** @typedef {ReturnType<typeof import('./game.js').publicView>} GameView */
+/** @typedef {ReturnType<typeof import('../core/game.js').publicView>} GameView */
 /** @typedef {{ peer: string, uid: string | null, seat: number | null, sel: Axial | null, isMe: boolean, color: string, name: string }} NetPeer */
 
 /** Distinct hues for selection rings, assigned by sorted peer id so every
@@ -49,9 +44,6 @@ export const PEER_COLORS = [
 
 /** Real milliseconds per game tick. */
 const TICK_MS = 1000 / TICKS_PER_SECOND;
-
-/** Most ticks the local clock catches up at once, after the tab was asleep. */
-const MAX_CATCH_UP = TICKS_PER_SECOND;
 
 /**
  * A list of listeners.
@@ -77,73 +69,7 @@ function listeners() {
 }
 
 /**
- * The game core running in the page: no server, one person at the screen,
- * playing whichever side they pick.
- * @param {object} options
- * @param {import('./board.js').Board} options.board
- * @param {import('./game.js').GameState} options.state The game to run.
- * @param {() => number} [options.now] Milliseconds; tests pass a fake clock.
- */
-export function createLocalNet({ board, state, now = () => performance.now() }) {
-  const game = state;
-  const states = listeners();
-  const seats = listeners();
-  let side = 0;
-  let lastTickAt = now();
-
-  function tick() {
-    const t = now();
-    let steps = Math.floor((t - lastTickAt) / TICK_MS);
-    if (steps <= 0) return;
-    if (steps > MAX_CATCH_UP) {
-      // The tab slept: carry on from now rather than race through the gap.
-      lastTickAt = t - TICK_MS;
-      steps = 1;
-    }
-    for (let i = 0; i < steps; i++) advance(board, game);
-    lastTickAt += steps * TICK_MS;
-    states.emit(game);
-  }
-  const timer = setInterval(tick, TICK_MS / 2);
-
-  return {
-    mode: /** @type {const} */ ('local'),
-    ready: () => Promise.resolve(),
-    /** @param {(view: GameView) => void} fn */
-    onState(fn) {
-      fn(game);
-      return states.add(fn);
-    },
-    /** @param {unknown} command */
-    send(command) {
-      const outcome = applyCommand(board, game, side, command);
-      if (outcome.ok) states.emit(game);
-      return Promise.resolve(outcome);
-    },
-    clock: () => game.tick + Math.min(1, Math.max(0, (now() - lastTickAt) / TICK_MS)),
-    running: () => true,
-    select() {},
-    onPeers() { return () => {}; },
-    seat: () => /** @type {number | null} */ (side),
-    /** @param {(seat: number | null) => void} fn */
-    onSeat: (fn) => seats.add(fn),
-    canClaimSeat: () => false,
-    claimSeat: () => Promise.resolve(),
-    releaseSeat: () => Promise.resolve(),
-    /** Play the other side, from the same screen. */
-    switchSide() {
-      side = (side + 1) % SIDES.length;
-      seats.emit(side);
-    },
-    viewers: () => 1,
-    connected: () => false,
-    /** Stop the clock, when the page goes online instead. */
-    stop() { clearInterval(timer); },
-  };
-}
-
-/**
- * Online play through the Vigame game server (Colyseus). The server runs the
+ * Join a game on the Vigame game server (Colyseus). The server runs the
  * real game and checks every command, so this transport sends commands, never
  * state, and shows whatever the server says the game is.
  *
@@ -299,7 +225,6 @@ export async function createServerNet({ client, gameId, token, now = () => perfo
   room.onLeave(() => setConnected(false));
 
   return {
-    mode: /** @type {const} */ ('online'),
     ready: () => readyPromise,
 
     /** @param {(view: GameView) => void} fn */

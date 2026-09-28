@@ -6,8 +6,8 @@ module list and the data formats in more detail.
 
 ## The game core
 
-The core is `src/game.js`, with its numbers in `src/rules.js` and the map in
-`src/board.js`. It is the whole game as one plain JSON object, plus the
+The core is `src/core/game.js`, with its numbers in `src/core/rules.js` and the map in
+`src/core/board.js`. It is the whole game as one plain JSON object, plus the
 functions that change it:
 
 - `newGame(board)`: the opening position, a castle per side.
@@ -66,35 +66,36 @@ commands, and reports (win rates, game length, balance per unit type).
 
 ## The page
 
-The modules in `src/` form layers, each depending only on the ones above it:
+The page is plain ES modules with no framework and no build step: the game
+server serves `src/client/` and `src/core/` as they are. It runs no game
+rules. It draws what the server sends and passes the player's clicks on as
+commands.
 
-| Module | Role |
+| Path | Role |
 | --- | --- |
-| `hex.js` | Hex-grid math. Pure. |
-| `board.js` | Terrain and castle sites from a seed, so every client builds the same map. Pure. |
-| `rules.js` | The numbers. Pure data. |
-| `game.js` | The game core, above. Pure. |
-| `player.js` | Player-name rules, checked on the page and again on the server. Pure. |
-| `camera.js`, `render.js` | Pan and zoom, and canvas drawing. The renderer sits behind a small interface so PixiJS can replace it. |
-| `net.js` | The networking seam: one interface, two transports. |
-| `main.js` | Input, HUD, sign-in, and the switch to the server. The only module that touches the page. |
+| `src/core/` | The pure modules above, shared with the server: hex math, the board, the rules, the core, player names. |
+| `client/main.js` | Picks the view: the login page while the browser isn't signed in, then a game (`?game=<id>`) or the lobby. Views switch with a page load, so leaving a game always leaves its room. |
+| `client/api.js` | The browser's token and the HTTP calls, all by addresses relative to the page. |
+| `client/login.js`, `lobby.js` | The login page and the lobby. |
+| `client/play.js` | The game view: input, HUD, controls. |
+| `client/net.js` | The connection to a game: commands out, the core's view in. |
+| `client/camera.js`, `render.js` | Pan and zoom, and canvas drawing. The renderer sits behind a small interface so PixiJS can replace it. |
 
-`net.js` has two transports:
-
-- **Local**: the core runs in the page on its own clock, and the one person
-  at the screen commands either side.
-- **Game server**: play through the Vigame server below. Used when that
-  server served the page, which it signals by loading the Colyseus client
-  first. The page shows what the server sends; it doesn't predict. A command
-  takes effect on the server's next tick, a tenth of a second at most, which
-  is normal for a strategy game.
-
-Either way the page gets a view with the shape of the core's state, and uses
-the core's own `occupancy` on it.
+- **No prediction.** A command takes effect on the server's next tick, a
+  tenth of a second at most, which is normal for a strategy game.
+- **Shared helpers, not copied logic.** The page gets a view with the shape
+  of the core's state, and uses the core's own read-only helpers on it: the
+  board from its seed, `occupancy`, a building's `footprint`, where one may
+  build. It imports them from `src/core/`, the same files the server runs,
+  so nothing can drift apart.
+- **No local play.** An earlier version could run the core in the page for
+  play on one screen. It was dropped: everything goes through the server,
+  and `npm run dev` lets a game's clock run with one player for trying things
+  alone.
 
 ## Game server
 
-`server/`, started with `npm run server`.
+`server/`, started with `npm start`.
 
 ### Shape
 
@@ -127,9 +128,9 @@ the core's own `occupancy` on it.
   (`server/challenge.js`), and the `players` table records the name. The
   room's `onAuth` refuses anyone else before a room is found or created.
   Logins would replace the token and the sum.
-- **Client**: `createServerNet` in `net.js`. The page loads the Colyseus
-  browser client from the server (`vendor/colyseus.js`), so `src/` stays
-  free of npm imports and the bundler stays simple. Every address the page
+- **Client**: `createServerNet` in `src/client/net.js`. The page loads the
+  Colyseus browser client from the server (`vendor/colyseus.js`), so `src/`
+  stays free of npm imports and needs no build step. Every address the page
   uses is relative to its own folder, so a proxy such as nginx can serve the
   game under a subfolder.
 
@@ -206,12 +207,12 @@ database.
 
 - **Breakpoints**: run the server with `node --inspect server/main.js` and
   attach VS Code or Chrome DevTools (`chrome://inspect`). In VS Code, running
-  `npm run server` in a JavaScript Debug Terminal attaches the debugger
+  `npm start` in a JavaScript Debug Terminal attaches the debugger
   automatically.
 - **Colyseus tools**, each a separate npm package:
   - `@colyseus/playground`: a browser page for joining rooms as test clients,
     sending messages such as `command` by hand, and watching the state
-    change. Served at `/playground` by `npm run server:dev` only.
+    change. Served at `/playground` by `npm run dev` only.
   - `@colyseus/monitor`: a web panel listing live rooms, their clients, and
     each room's current state. Served at `/monitor` only when
     `MONITOR_PASSWORD` is set.

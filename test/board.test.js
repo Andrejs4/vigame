@@ -1,9 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { TERRAIN, createBoard, tileAt } from '../src/board.js';
-import { findPath } from '../src/game.js';
-import { hexagon } from '../src/hex.js';
+import { TERRAIN, createBoard, tileAt } from '../src/core/board.js';
+import { findPath } from '../src/core/game.js';
+import { hexagon } from '../src/core/hex.js';
 
 /** @param {ReturnType<typeof createBoard>} b */
 const terrainOf = (b) => b.list.map((t) => `${t.q},${t.r}:${t.terrain}`).join(' ');

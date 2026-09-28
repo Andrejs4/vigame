@@ -146,7 +146,7 @@ export function openStorage(file = ':memory:') {
       return selectRecent.all(limit).map((/** @type {any} */ row) => ({
         id: row.id,
         tick: row.tick,
-        seatsTaken: parseSeats(row.seats).filter(Boolean).length,
+        seats: parseSeats(row.seats),
         createdAt: row.created_at,
         updatedAt: row.updated_at,
       }));
@@ -224,7 +224,7 @@ function migrate(db) {
       CREATE TABLE games (
         id         TEXT PRIMARY KEY,
         seed       INTEGER NOT NULL,
-        state      TEXT NOT NULL,              -- JSON snapshot: a src/game.js GameState
+        state      TEXT NOT NULL,              -- JSON snapshot: a src/core/game.js GameState
         seq        INTEGER NOT NULL DEFAULT 0, -- the last command the snapshot includes
         seats      TEXT NOT NULL DEFAULT '[]', -- JSON: player id per seat, null when free
         created_at INTEGER NOT NULL,           -- ms since the epoch
@@ -236,7 +236,7 @@ function migrate(db) {
         seq     INTEGER NOT NULL,              -- 1, 2, 3… within a game
         tick    INTEGER NOT NULL,              -- the game tick it was applied at
         player  INTEGER NOT NULL,              -- the seat that gave it
-        command TEXT NOT NULL,                 -- JSON: a src/game.js Command
+        command TEXT NOT NULL,                 -- JSON: a src/core/game.js Command
         at      INTEGER NOT NULL,              -- ms since the epoch
         PRIMARY KEY (game_id, seq)
       );

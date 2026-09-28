@@ -18,7 +18,6 @@ jobs:
 
       - run: npm ci
       - run: npm test
-      - run: npm run build
 
       - name: Install Chromium for Playwright
         run: npx playwright install --with-deps chromium
@@ -32,9 +31,3 @@ jobs:
           name: smoke-screenshots
           path: smoke-output/
           if-no-files-found: ignore
-
-      - name: Upload built page
-        uses: actions/upload-artifact@v4
-        with:
-          name: vigame-html
-          path: dist/vigame.html

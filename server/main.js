@@ -1,14 +1,15 @@
 /**
  * Run the game server.
  *
- * Usage: node server/main.js [--dev]
+ * Usage: node server/main.js [--dev]      (npm start, npm run dev)
  *
  * Environment:
  *   PORT              default 2567
  *   HOST              default 127.0.0.1; 0.0.0.0 to accept other machines
  *   VIGAME_DB         SQLite file, default data/vigame.db
  *   MONITOR_PASSWORD  mounts /monitor behind this password (user "admin")
- *   VIGAME_DEV=1      same as --dev: rebuild the page per request, mount /playground
+ *   VIGAME_DEV=1      same as --dev: mount /playground, and run a game's clock
+ *                     with one player, for trying things alone
  */
 
 import { mkdirSync } from 'node:fs';
@@ -30,6 +31,7 @@ const server = await startGameServer({
   db,
   monitorPassword: process.env.MONITOR_PASSWORD || undefined,
   dev,
+  soloClock: dev,
   handleSignals: true,
 });
 
@@ -37,4 +39,4 @@ const shown = host === '0.0.0.0' ? server.url.replace('0.0.0.0', 'localhost') : 
 console.log(`vigame game server: ${shown}`);
 console.log(`  database: ${db} (journal: ${server.storage.journalMode()})`);
 if (process.env.MONITOR_PASSWORD) console.log(`  monitor:  ${shown}monitor (user "admin")`);
-if (dev) console.log(`  playground: ${shown}playground`);
+if (dev) console.log(`  playground: ${shown}playground\n  dev: a game's clock runs with one player`);

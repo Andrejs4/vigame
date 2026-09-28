@@ -2,16 +2,16 @@
  * Shared test fixtures.
  */
 
-import { TERRAIN } from '../src/board.js';
-import { STATE_VERSION, advance, checkState } from '../src/game.js';
-import { hexagon, key } from '../src/hex.js';
+import { TERRAIN } from '../src/core/board.js';
+import { STATE_VERSION, advance, checkState } from '../src/core/game.js';
+import { hexagon, key } from '../src/core/hex.js';
 
 /**
  * A hand-built board from a terrain map, for tests that need exact terrain.
- * @param {Record<string, import('../src/board.js').Terrain>} terrainByKey
+ * @param {Record<string, import('../src/core/board.js').Terrain>} terrainByKey
  *   e.g. { '0,0': 'grass', '1,0': 'scrub' }.
- * @param {{ seed?: number, starts?: import('../src/hex.js').Axial[] }} [options]
- * @returns {import('../src/board.js').Board}
+ * @param {{ seed?: number, starts?: import('../src/core/hex.js').Axial[] }} [options]
+ * @returns {import('../src/core/board.js').Board}
  */
 export function boardFrom(terrainByKey, { seed = 1, starts = [] } = {}) {
   const tiles = new Map();
@@ -33,11 +33,11 @@ export function boardFrom(terrainByKey, { seed = 1, starts = [] } = {}) {
 /**
  * A hexagonal board of one terrain, with exceptions.
  * @param {number} radius
- * @param {Record<string, import('../src/board.js').Terrain>} [except]
- * @param {{ seed?: number, starts?: import('../src/hex.js').Axial[] }} [options]
+ * @param {Record<string, import('../src/core/board.js').Terrain>} [except]
+ * @param {{ seed?: number, starts?: import('../src/core/hex.js').Axial[] }} [options]
  */
 export function openBoard(radius, except = {}, options = {}) {
-  /** @type {Record<string, import('../src/board.js').Terrain>} */
+  /** @type {Record<string, import('../src/core/board.js').Terrain>} */
   const terrain = {};
   for (const { q, r } of hexagon(radius)) terrain[key(q, r)] = 'grass';
   return boardFrom({ ...terrain, ...except }, options);
@@ -46,10 +46,10 @@ export function openBoard(radius, except = {}, options = {}) {
 /**
  * A two-side state with exactly these buildings and units, for tests that
  * set up a position by hand.
- * @param {Array<Partial<import('../src/game.js').Building> & { id: string }>} buildings
- * @param {Array<Partial<import('../src/game.js').Unit> & { id: string }>} [units]
+ * @param {Array<Partial<import('../src/core/game.js').Building> & { id: string }>} buildings
+ * @param {Array<Partial<import('../src/core/game.js').Unit> & { id: string }>} [units]
  * @param {number} [seed]
- * @returns {import('../src/game.js').GameState}
+ * @returns {import('../src/core/game.js').GameState}
  */
 export function stateWith(buildings, units = [], seed = 1) {
   const ids = [...buildings, ...units].map((e) => Number(e.id.slice(1)));
@@ -78,8 +78,8 @@ export function unitsIn(building, count, first, owner = 0) {
 
 /**
  * Advance `ticks` times, checking the state after every tick.
- * @param {import('../src/board.js').Board} board
- * @param {import('../src/game.js').GameState} state
+ * @param {import('../src/core/board.js').Board} board
+ * @param {import('../src/core/game.js').GameState} state
  * @param {number} ticks
  */
 export function run(board, state, ticks) {
@@ -92,8 +92,8 @@ export function run(board, state, ticks) {
 
 /**
  * Advance until `done` holds, checking every tick; fail after `limit` ticks.
- * @param {import('../src/board.js').Board} board
- * @param {import('../src/game.js').GameState} state
+ * @param {import('../src/core/board.js').Board} board
+ * @param {import('../src/core/game.js').GameState} state
  * @param {() => boolean} done
  * @param {number} [limit]
  */

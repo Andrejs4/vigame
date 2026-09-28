@@ -9,10 +9,8 @@
     "node": ">=22"
   },
   "scripts": {
-    "start": "node scripts/serve.js",
-    "server": "node server/main.js",
-    "server:dev": "node server/main.js --dev",
-    "build": "node scripts/build.js",
+    "start": "node server/main.js",
+    "dev": "node server/main.js --dev",
     "test": "node --test test/*.test.js",
     "smoke": "node scripts/smoke.js"
   },

@@ -1,6 +1,6 @@
 /**
  * One Colyseus room per game. The room is a thin adapter around the game
- * core (src/game.js): it runs the core's clock, feeds it players' commands,
+ * core (src/core/game.js): it runs the core's clock, feeds it players' commands,
  * saves what it takes to rebuild the game, and mirrors the core's state into
  * the room state that Colyseus syncs to every client.
  *
@@ -24,9 +24,9 @@ import { createHash } from 'node:crypto';
 
 import { ErrorCode, Room, ServerError, logger } from '@colyseus/core';
 
-import { BOARD_OPTIONS, createBoard, tileAt } from '../src/board.js';
-import { advance, applyCommand, checkState, newGame, publicView } from '../src/game.js';
-import { SIDES, TICKS_PER_SECOND } from '../src/rules.js';
+import { BOARD_OPTIONS, createBoard, tileAt } from '../src/core/board.js';
+import { advance, applyCommand, checkState, newGame, publicView } from '../src/core/game.js';
+import { SIDES, TICKS_PER_SECOND } from '../src/core/rules.js';
 import { GameState, ViewerState, syncGame, syncSeats } from './schema.js';
 
 /** What a player token must look like: long, random, URL-safe. */
@@ -59,8 +59,8 @@ export function playerId(token) {
 /**
  * Play logged commands onto a game, each at the tick it was given, advancing
  * the clock in between.
- * @param {import('../src/board.js').Board} board
- * @param {import('../src/game.js').GameState} game Changed in place.
+ * @param {import('../src/core/board.js').Board} board
+ * @param {import('../src/core/game.js').GameState} game Changed in place.
  * @param {import('./storage.js').SavedCommand[]} commands
  * @param {number} [seq] The last command the game already includes.
  * @returns {number} The last command it includes now.
@@ -87,7 +87,7 @@ export function replay(board, game, commands, seq = 0) {
 export function restoreGame(saved, commandsAfter) {
   const board = createBoard({ ...BOARD_OPTIONS, seed: saved.seed });
   if (checkState(board, saved.state).length === 0) {
-    const game = /** @type {import('../src/game.js').GameState} */ (saved.state);
+    const game = /** @type {import('../src/core/game.js').GameState} */ (saved.state);
     return { board, game, seq: replay(board, game, commandsAfter(saved.seq), saved.seq) };
   }
   const game = newGame(board);
@@ -176,12 +176,13 @@ export class GameRoom extends Room {
   }
 
   /**
-   * @param {{ gameId?: unknown, storage: import('./storage.js').Storage, tickRate?: number }} options
-   *   `storage` and `tickRate` come from the room definition, which overrides
-   *   anything a client sends under those names. `tickRate` is ticks per real
-   *   second: TICKS_PER_SECOND, unless tests speed the clock up.
+   * @param {{ gameId?: unknown, storage: import('./storage.js').Storage, tickRate?: number, soloClock?: boolean }} options
+   *   `storage`, `tickRate` and `soloClock` come from the room definition,
+   *   which overrides anything a client sends under those names. `tickRate`
+   *   is ticks per real second: TICKS_PER_SECOND, unless tests speed the
+   *   clock up. `soloClock` runs the clock while any seated player is here.
    */
-  async onCreate({ gameId, storage, tickRate = TICKS_PER_SECOND }) {
+  async onCreate({ gameId, storage, tickRate = TICKS_PER_SECOND, soloClock = false }) {
     if (typeof gameId === 'string' && liveGames.has(gameId)) {
       // A closing room leaves matchmaking a moment before its onDispose lets
       // go of the game. Someone joining in between must not be turned away.
@@ -198,6 +199,7 @@ export class GameRoom extends Room {
     liveGames.add(saved.id);
 
     this.storage = storage;
+    this.soloClock = soloClock === true;
     this.gameId = saved.id;
     const { board, game, seq } = restoreGame(saved, (after) => storage.listCommands(saved.id, { after }));
     this.board = board;
@@ -226,15 +228,19 @@ export class GameRoom extends Room {
     this.setFixedTimestep(() => this.step(), tickRate);
   }
 
-  /** Whether the clock runs: only while every seat is held by someone here. */
-  everyoneHere() {
+  /**
+   * Whether the clock runs: only while every seat is held by someone here,
+   * or with `soloClock`, while any seated player is here.
+   */
+  clockRuns() {
     const here = new Set([...this.state.viewers.values()].map((v) => v.pid));
-    return this.seats.every((pid) => pid !== null && here.has(pid));
+    const present = (/** @type {string | null} */ pid) => pid !== null && here.has(pid);
+    return this.soloClock ? this.seats.some(present) : this.seats.every(present);
   }
 
   /** One tick of the game clock. */
   step() {
-    const running = this.everyoneHere();
+    const running = this.clockRuns();
     if (this.state.running !== running) this.state.running = running;
     if (!running) return;
     advance(this.board, this.game);

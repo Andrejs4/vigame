@@ -68,9 +68,9 @@ test('the lobby lists the most recently active games first', async () => {
   storage.recordCommand('new', { tick: 30, player: 0, command: {} });
 
   const games = storage.listGames();
-  assert.deepEqual(games.map(({ id, tick, seatsTaken }) => ({ id, tick, seatsTaken })), [
-    { id: 'new', tick: 30, seatsTaken: 2 },
-    { id: 'old', tick: 0, seatsTaken: 0 },
+  assert.deepEqual(games.map(({ id, tick, seats }) => ({ id, tick, seats })), [
+    { id: 'new', tick: 30, seats: ['a', 'b'] },
+    { id: 'old', tick: 0, seats: [null, null] },
   ]);
   assert.equal(storage.listGames({ limit: 1 }).length, 1);
   storage.close();

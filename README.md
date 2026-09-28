@@ -5,16 +5,26 @@ over time; players build towers and wagons, send units between their
 buildings, and drive wagons across the map with units inside. There is no
 combat yet: the structure is in place, and the rules are placeholders.
 
-The game core is plain data and pure functions (`src/game.js`), with no
-screen, network or clock of its own. The same core runs in the page, in the
-game server, and in tests that play whole games with no players. The page is
-plain JavaScript with no framework and no runtime dependencies: a canvas
-renderer and a handful of ES modules, which a build step inlines into one
-HTML file. The game server is Node with [Colyseus](https://colyseus.io/) and
-SQLite; it runs the core and mirrors its state to every player.
+The game core is plain data and pure functions (`src/core/`), with no
+screen, network or clock of its own. The game server runs it, and tests play
+whole games with it and no players at all. The server is Node with
+[Colyseus](https://colyseus.io/) and SQLite; it mirrors each game's state to
+its players. The page (`src/client/`) is plain JavaScript ES modules with no
+framework and no build step: the server serves them as they are. It shows
+what the server sends and passes on the player's clicks as commands.
 
 ## Playing
 
+Run `npm start` and open http://127.0.0.1:2567.
+
+- **Log in** with a name and the answer to a small sum. A browser stays
+  logged in across visits.
+- **The lobby** lists your games and games waiting for a second player;
+  **New game** starts one. A game's address (`?game=…`) is also the link to
+  send someone. The first two players take Blue and Crimson; later visitors
+  watch. **Release seat** frees a seat for a spectator to take.
+- **The game clock** runs only while both players are here. (`npm run dev`
+  runs it with one, for trying things alone.)
 - **Your castle** covers seven cells and makes a unit every two seconds, up
   to what it holds. It is its side's life (nothing can attack it yet).
 - **Send units**: click one of your buildings, then another of yours. Half of
@@ -33,15 +43,6 @@ SQLite; it runs the core and mirrors its state to every player.
 - Drag to pan, and use the wheel or the − / + buttons to zoom.
   **Coordinates** shows axial `q,r` labels. Escape cancels building and
   clears the selection.
-- **Game server** is the mode when `npm run server` serves the page. A new
-  browser first gives a name and answers a small sum, which the server
-  checks. Opening the address then starts a new game, and the address ends in
-  `?game=…`: that is the link to send the other player. The first two players
-  take Blue and Crimson; later viewers watch. The clock runs only while both
-  players are here. A browser keeps its name and seat across reloads and
-  later visits. **Release seat** frees a seat for a spectator to take.
-- **One screen** is the mode anywhere else: the game runs in the page, and
-  **Play Crimson** / **Play Blue** switches the side you command.
 - Every viewer's picked hex shows as a ring: solid for yours, dashed for
   others.
 
@@ -51,12 +52,10 @@ Node 22 or newer.
 
 ```sh
 npm install        # the game server's packages, plus Playwright for the smoke check
-npm run server     # the game server: http://127.0.0.1:2567, games saved in data/vigame.db
-npm run server:dev # the same, rebuilding the page on every load, with the Colyseus playground
-npm start          # static server for one-screen work: http://127.0.0.1:8080, src/ as ES modules
+npm start          # the game server and the page: http://127.0.0.1:2567, games saved in data/vigame.db
+npm run dev        # the same, with the Colyseus playground, and game clocks that run with one player
 npm test           # unit tests (node:test, no browser), including the game server
-npm run build      # dist/vigame.html: self-contained, opens from file:// too
-npm run smoke      # headless Chromium check of the built page; screenshots in smoke-output/
+npm run smoke      # headless Chromium check of the page through the server; screenshots in smoke-output/
 ```
 
 The game server reads these environment variables:
@@ -67,7 +66,7 @@ The game server reads these environment variables:
 | `HOST` | `127.0.0.1` | Set `0.0.0.0` to let other machines connect. |
 | `VIGAME_DB` | `data/vigame.db` | SQLite database file. It needs a persistent local disk, not a network drive. |
 | `MONITOR_PASSWORD` | unset | Serves the Colyseus monitor (live rooms, players and state) at `/monitor`, user `admin`. It can also disconnect players and close rooms, so use a strong password. Without it there is no monitor. |
-| `VIGAME_DEV=1` | unset | Same as `server:dev`. |
+| `VIGAME_DEV=1` | unset | Same as `npm run dev`. |
 
 `npm run smoke` needs a Chromium that Playwright can drive. If you don't
 have one, install it with `npx playwright install chromium`.
@@ -76,25 +75,27 @@ have one, install it with `npx playwright install chromium`.
 
 | Path | What it is |
 | --- | --- |
-| `src/hex.js` | Pointy-top axial hex math: neighbours, distance, lines, pixel conversion, board shapes. Pure. |
-| `src/board.js` | Seeded terrain, with what each terrain allows, and the castle sites; same seed, same map everywhere. Pure. |
-| `src/rules.js` | The numbers: tick rate, sides, building and unit types. Pure data. |
-| `src/game.js` | The game core: the state as plain JSON, `applyCommand`, `advance` (one tick), `occupancy`, `checkState`, `publicView`. Pure and deterministic. |
-| `src/player.js` | Player-name rules, shared by the page and the server. Pure. |
-| `src/camera.js` | Screen ↔ world transforms, pan, and zoom about a point. |
-| `src/render.js` | Canvas 2D renderer: terrain, buildings, marching units between cells, picks, hover. |
-| `src/net.js` | The networking seam: `createLocalNet` (the core in the page) and `createServerNet` (the game server), which share one interface. |
-| `src/main.js` | Wires it all together: input, HUD, sign-in, and the switch to the server. |
-| `index.html` | Page markup and styles; loads `src/main.js` as a module. |
-| `server/app.js` | The game server: Colyseus, the HTTP API, the page, the monitor. |
+| `src/core/` | Pure modules, shared by the server and the page, with no DOM, network or clock. |
+| `src/core/hex.js` | Pointy-top axial hex math: neighbours, distance, lines, pixel conversion, board shapes. |
+| `src/core/board.js` | Seeded terrain, with what each terrain allows, and the castle sites; same seed, same map everywhere. |
+| `src/core/rules.js` | The numbers: tick rate, sides, building and unit types. |
+| `src/core/game.js` | The game core: the state as plain JSON, `applyCommand`, `advance` (one tick), `occupancy`, `checkState`, `publicView`. Deterministic. |
+| `src/core/player.js` | Player-name rules, checked on the page and on the server. |
+| `src/client/` | The page, served as it is. |
+| `src/client/index.html`, `style.css` | Markup and styles for the three views: login, lobby, game. |
+| `src/client/main.js` | Entry point: picks the view. |
+| `src/client/api.js` | The browser's token, and the HTTP calls. |
+| `src/client/login.js`, `lobby.js` | The login page and the lobby. |
+| `src/client/play.js` | The game view: input, HUD, controls. |
+| `src/client/net.js` | The connection to a game on the server. |
+| `src/client/camera.js`, `render.js` | Pan and zoom, and the canvas renderer: terrain, buildings, marching units between cells, picks, hover. |
+| `server/app.js` | The game server: Colyseus, the HTTP API, the page's files, the monitor. |
 | `server/room.js` | `GameRoom`, one per game: runs the core's clock, logs and applies commands, snapshots. |
 | `server/schema.js` | The room state Colyseus syncs: a generic mirror of the core's view. |
 | `server/storage.js` | All database access (SQLite). |
 | `server/challenge.js` | The sign-in sums. |
-| `server/main.js` | Command-line entry point (`npm run server`). |
-| `scripts/build.js` | Bundles `src/` into `index.html` as one inline script. |
-| `scripts/serve.js` | Zero-dependency static server for development. |
-| `scripts/smoke.js` | Playwright check of the built page, on one screen and through the game server. |
+| `server/main.js` | Command-line entry point (`npm start`, `npm run dev`). |
+| `scripts/smoke.js` | Playwright check of the page through the game server: three browsers, a subfolder proxy, a phone. |
 | `test/` | Unit tests, including whole games of random commands checked tick by tick. |
 | `docs/architecture.md` | How the pieces fit, and the decisions behind them. |
 
@@ -126,7 +127,7 @@ http://127.0.0.1:2567;` with the same headers.
 
 ## The game core
 
-`src/game.js` holds the whole game as one plain JSON object:
+`src/core/game.js` holds the whole game as one plain JSON object:
 
 ```js
 {
@@ -161,7 +162,7 @@ http://127.0.0.1:2567;` with the same headers.
   games of random commands and check every tick.
 
 The numbers (speeds, capacities, production, build range, the unit limit)
-are placeholders in `src/rules.js`.
+are placeholders in `src/core/rules.js`.
 
 ## The game server
 
@@ -186,17 +187,18 @@ Before starting or joining a game, a browser signs its token in with a name
 and the answer to a sum such as `3 + 4`. The sum keeps out scripts that
 don't know about this server, not ones written for it. A name is 1 to 15
 letters or digits in any script, with space, `-`, `_`, `.` and `'` allowed
-between them; `src/player.js` checks it on the page and on the server.
+between them; `src/core/player.js` checks it on the page and on the server.
 Other viewers see it next to the seat. Signing in again renames.
 
 HTTP API:
 
 | Request | Result |
 | --- | --- |
+| `POST /api/me` | Who a token belongs to: `{ token }` gives `{ pid, name }`, or `null` if it hasn't signed in. |
 | `GET /api/challenge` | A sum to answer when signing in: `{ id, question }`. Each one answers once and lasts 10 minutes. |
 | `POST /api/players` | Signs in (or renames): `{ token, name, challenge, answer }` gives `{ pid, name }`. `400` for a bad token or name, `403` for a wrong answer. |
 | `POST /api/games` | Starts a game with a random map: `{ token }` of a signed-in player gives `201 { id }`, otherwise `401`. |
-| `GET /api/games` | The 50 most recently active games, for a lobby. |
+| `GET /api/games` | The 50 most recently active games, for the lobby, with who holds each seat: `{ pid, name }` or `null`. |
 | `GET /api/games/:id` | One game: its seed, latest snapshot and seats. |
 | `GET /api/games/:id/commands` | Its command log, with each command's tick. |
 
@@ -220,9 +222,6 @@ comes next.
 - Game server:
   - Players are browser tokens with a name. There are no accounts or
     passwords, and the sign-in sum stops only scripts not written for it.
-  - There is no way to change your name from the page yet, though the
-    server accepts a new one (`POST /api/players`).
-  - There is no lobby page, although `GET /api/games` lists games for one.
   - Any signed-in player can start games; nothing limits how many. Add a
     rate limit before opening it to the internet.
   - A crash loses the game time since the last command or snapshot, up to
@@ -236,6 +235,7 @@ comes next.
     turn-based version; players keep their names.
 - A seat is held until its player releases it, however long they are away,
   and the game waits for them.
+- The lobby lists only the 50 most recently active games.
 - On a phone, the 18 × 12 board is wider than the screen even at minimum
   zoom. Pinch-to-zoom and keyboard play are not wired up.
 

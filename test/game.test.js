@@ -1,11 +1,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { BOARD_OPTIONS, createBoard } from '../src/board.js';
+import { BOARD_OPTIONS, createBoard } from '../src/core/board.js';
 import {
   applyCommand, capacityOf, checkState, footprint, newGame, occupancy, publicView, random,
-} from '../src/game.js';
-import { BUILDING_TYPES, UNIT_LIMIT, UNIT_TYPES, WAGON_PATIENCE } from '../src/rules.js';
+} from '../src/core/game.js';
+import { BUILDING_TYPES, UNIT_LIMIT, UNIT_TYPES, WAGON_PATIENCE } from '../src/core/rules.js';
 import { boardFrom, openBoard, run, runUntil, stateWith, unitsIn } from './helpers.js';
 
 const OK = { ok: true };
@@ -239,7 +239,7 @@ test('wagons never pass through each other: a blocked one waits, then goes aroun
  * `ticks` ticks, checking every rule after every tick.
  * @param {number} seed Map seed.
  * @param {number} ticks
- * @param {(state: import('../src/game.js').GameState) => void} [midway] Called halfway.
+ * @param {(state: import('../src/core/game.js').GameState) => void} [midway] Called halfway.
  */
 function randomGame(seed, ticks, midway) {
   const board = createBoard({ ...BOARD_OPTIONS, seed });
