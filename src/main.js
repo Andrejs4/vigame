@@ -1,21 +1,21 @@
 /**
  * Entry point: wires board, game, camera, renderer, input and networking.
  *
- * Runs in two modes. Offline (no Artifact runtime) it is hotseat: one browser,
- * two players, everything local. Online it syncs authoritative game state
- * through a shared document and everyone's current selection through presence,
- * so both players see each other's highlights live.
+ * Runs in three modes. Served by the Vigame game server (which loads the
+ * Colyseus client first), it plays the game named in `?game=` through that
+ * server. Inside claude.ai it syncs through the Artifact runtime: game state
+ * in a shared document, everyone's selection as presence. Anywhere else it is
+ * hotseat: one browser, two players, everything local.
  */
 
 import { bounds, key, pixelToAxial } from './hex.js';
-import { TERRAIN, createBoard, tileAt } from './board.js';
-import { PLAYERS, createGame, endTurn, moveUnit, reachable, unitAt } from './game.js';
+import { BOARD_OPTIONS, TERRAIN, createBoard, tileAt } from './board.js';
+import { PLAYERS, applyCommand, createGame, reachable, unitAt } from './game.js';
 import { Camera } from './camera.js';
-import { applyState, createArtifactNet, createLocalNet, serialize } from './net.js';
+import { applyState, createArtifactNet, createLocalNet, createServerNet, serialize } from './net.js';
 import { BoardRenderer } from './render.js';
 
 const SEED = 1337;
-const BOARD_OPTIONS = { shape: 'rectangle', width: 18, height: 12, hexSize: 34 };
 
 const canvas = /** @type {HTMLCanvasElement} */ (document.getElementById('board'));
 const hud = {
@@ -30,6 +30,7 @@ const endTurnButton = /** @type {HTMLButtonElement | null} */ (document.getEleme
 const seatRow = document.getElementById('seat-row');
 const viewersRow = document.getElementById('viewers-row');
 const seatButton = document.getElementById('seat-button');
+const notice = document.getElementById('notice');
 
 let board = createBoard({ ...BOARD_OPTIONS, seed: SEED });
 let game = createGame(board);
@@ -89,9 +90,13 @@ function waitingReason() {
   return `Waiting for ${PLAYERS[game.currentPlayer].name}`;
 }
 
-/** Push the current authoritative state to the transport. */
-function commit() {
-  net.commit(serialize(board, game));
+/**
+ * Hand a command this page has just applied to the transport, along with the
+ * state it produced.
+ * @param {import('./game.js').Command} command
+ */
+function commit(command) {
+  net.commit(serialize(board, game), command);
 }
 
 function refreshReach() {
@@ -240,12 +245,14 @@ canvas.addEventListener('pointerup', (e) => {
   net.select({ q: h.q, r: h.r });
 
   const clicked = unitAt(game, h.q, h.r);
-  let moved = false;
+  /** @type {import('./game.js').Command | null} */
+  let command = null;
 
   if (clicked && clicked.owner === game.currentPlayer && canAct()) {
     game.selectedUnitId = clicked.id === game.selectedUnitId ? null : clicked.id;
   } else if (game.selectedUnitId && canAct() && reach.has(key(h.q, h.r))) {
-    moved = moveUnit(board, game, game.selectedUnitId, h.q, h.r);
+    command = { type: 'move', unit: game.selectedUnitId, q: h.q, r: h.r };
+    if (!applyCommand(board, game, game.currentPlayer, command)) command = null;
   } else if (!clicked) {
     game.selectedUnitId = null;
   }
@@ -253,7 +260,7 @@ canvas.addEventListener('pointerup', (e) => {
   refreshReach();
   updateHud();
   needsDraw = true;
-  if (moved) commit();
+  if (command) commit(command);
 });
 
 // The browser took the pointer over (a system gesture, a palm): end the drag
@@ -280,12 +287,14 @@ canvas.addEventListener('wheel', (e) => {
 
 endTurnButton?.addEventListener('click', () => {
   if (!canAct()) return;
-  endTurn(game);
+  /** @type {import('./game.js').Command} */
+  const command = { type: 'endTurn' };
+  applyCommand(board, game, game.currentPlayer, command);
   net.select(null);
   refreshReach();
   updateHud();
   needsDraw = true;
-  commit();
+  commit(command);
 });
 
 seatButton?.addEventListener('click', () => {
@@ -342,23 +351,102 @@ function frame() {
 requestAnimationFrame(frame);
 
 /**
- * Try to upgrade to online play. The page is already fully playable by the
- * time this runs; if the runtime never answers, nothing changes.
+ * Say something about the connection in the status panel.
+ * @param {string} text
+ * @param {{ href: string, text: string }} [link]
  */
-async function goOnline() {
-  const claude = /** @type {any} */ (globalThis).claude;
-  if (!claude?.use) return;
+function showNotice(text, link) {
+  if (!notice) return;
+  notice.textContent = text;
+  if (link) {
+    const a = document.createElement('a');
+    a.href = link.href;
+    a.textContent = link.text;
+    notice.append(' ', a);
+  }
+  notice.hidden = false;
+}
 
+/**
+ * This browser's secret player token for the game server, kept across visits
+ * so a returning player gets their seat back. Anyone holding it can play as
+ * this browser, so it never leaves the page except to the server.
+ */
+function playerToken() {
+  const KEY = 'vigame.token';
+  try {
+    const saved = localStorage.getItem(KEY);
+    if (saved && /^[0-9a-f]{32}$/.test(saved)) return saved;
+  } catch { /* storage blocked: a token for this visit only */ }
+  // getRandomValues, not randomUUID: the latter needs a secure context, and a
+  // server on the local network is plain http.
+  const token = [...crypto.getRandomValues(new Uint8Array(16))]
+    .map((b) => b.toString(16).padStart(2, '0')).join('');
+  try { localStorage.setItem(KEY, token); } catch { /* as above */ }
+  return token;
+}
+
+/**
+ * Join the game in `?game=` on the server that served this page, starting a
+ * new one first if the address names none.
+ * @param {any} Client The Colyseus client class.
+ */
+async function joinServerGame(Client) {
+  const params = new URLSearchParams(location.search);
+  let gameId = params.get('game');
+  if (!gameId) {
+    const res = await fetch('/api/games', { method: 'POST' });
+    if (!res.ok) throw new Error(`starting a game failed (${res.status})`);
+    gameId = String((await res.json()).id);
+    params.set('game', gameId);
+    // The address is now the invitation: send it to the other player.
+    history.replaceState(null, '', `${location.pathname}?${params}${location.hash}`);
+  }
+  return createServerNet({ client: new Client(location.origin), gameId, token: playerToken() });
+}
+
+/**
+ * Join through the claude.ai Artifact runtime.
+ * @param {any} claude
+ */
+async function joinArtifactGame(claude) {
   const [db, room, user] = await Promise.all([
     claude.use('db').catch(() => null),
     claude.use('room').catch(() => null),
     claude.use('user').catch(() => null),
   ]);
-  if (!db) return; // without shared state there is no online game
+  if (!db) return null; // without shared state there is no online game
+  return createArtifactNet({ db, room, user, initial: serialize(board, game) });
+}
 
-  const online = await createArtifactNet({
-    db, room, user, initial: serialize(board, game),
-  });
+/**
+ * Try to upgrade to online play. The page is already fully playable by the
+ * time this runs; if no transport answers, it stays hotseat.
+ */
+async function goOnline() {
+  const g = /** @type {any} */ (globalThis);
+  let online = null;
+  if (g.Colyseus?.Client) {
+    try {
+      online = await joinServerGame(g.Colyseus.Client);
+      const leaving = online;
+      // Closing or reloading the page is leaving, not a dropped connection
+      // the server should hold a place open for.
+      addEventListener('pagehide', () => { leaving.leave(); });
+      // A page restored from the back-forward cache has lost its connection.
+      addEventListener('pageshow', (e) => { if (e.persisted) location.reload(); });
+    } catch (e) {
+      const missing = /no game/.test(String(/** @type {any} */ (e)?.message));
+      showNotice(
+        `${missing ? 'There is no game at this address.' : 'Could not reach the game server.'} Playing on this screen only.`,
+        { href: '/', text: 'Start a new game' },
+      );
+      return;
+    }
+  } else if (g.claude?.use) {
+    online = await joinArtifactGame(g.claude);
+  }
+  if (!online) return;
 
   net = online;
   online.onState(onRemoteState);

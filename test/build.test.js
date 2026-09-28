@@ -28,3 +28,10 @@ test('the artifact body is the page without its document skeleton', () => {
   assert.doesNotMatch(body, /<!doctype|<html|<head|<body|<\/body>|<\/html>/i);
   assert.match(body, /<\/script>\n$/);
 });
+
+test('a preamble goes just before the game script, and only when asked for', () => {
+  const tag = '<script src="/vendor/lib.js"></script>\n';
+  const html = build({ preamble: tag });
+  assert.equal(html.indexOf(tag) + tag.length, html.indexOf("<script>\n(() => {"));
+  assert.equal(build().includes('/vendor/'), false);
+});

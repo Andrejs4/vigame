@@ -77,9 +77,12 @@ function collect(entry) {
 
 /**
  * Build the bundled HTML.
+ * @param {object} [options]
+ * @param {string} [options.preamble=''] HTML to place just before the game's
+ *   script, such as a client library the page should find already loaded.
  * @returns {string}
  */
-export function build() {
+export function build({ preamble = '' } = {}) {
   const modules = collect(ENTRY);
 
   /** @type {Map<string, string>} */
@@ -105,7 +108,7 @@ export function build() {
   if (at < 0 || template.indexOf(MODULE_TAG, at + 1) >= 0) {
     throw new Error(`${TEMPLATE} must contain exactly one ${MODULE_TAG}`);
   }
-  return template.slice(0, at) + script + template.slice(at + MODULE_TAG.length);
+  return template.slice(0, at) + preamble + script + template.slice(at + MODULE_TAG.length);
 }
 
 /**

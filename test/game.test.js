@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { createBoard, tileAt } from '../src/board.js';
-import { PLAYERS, createGame, endTurn, moveUnit, reachable, unitAt } from '../src/game.js';
+import { PLAYERS, applyCommand, createGame, endTurn, moveUnit, reachable, unitAt } from '../src/game.js';
 import { axialToPixel, key } from '../src/hex.js';
 import { boardFrom, gameWith } from './helpers.js';
 
@@ -128,4 +128,45 @@ test('endTurn hands over, restores the new side, and counts full rounds', () => 
   assert.equal(game.turn, 2);
   assert.equal(game.units.get('blue').move, 2);
   assert.equal(PLAYERS.length, 2);
+});
+
+test('applyCommand moves and ends turns for the side whose turn it is', () => {
+  const board = boardFrom(STRIP);
+  const game = gameWith([
+    { id: 'blue', owner: 0, q: 0, r: 0, move: 2 },
+    { id: 'red', owner: 1, q: 3, r: 0, move: 2 },
+  ]);
+
+  assert.equal(applyCommand(board, game, 0, { type: 'move', unit: 'blue', q: 1, r: 0 }), true);
+  assert.deepEqual([game.units.get('blue').q, game.units.get('blue').move], [1, 0]);
+  assert.equal(applyCommand(board, game, 0, { type: 'endTurn' }), true);
+  assert.equal(game.currentPlayer, 1);
+  assert.equal(applyCommand(board, game, 1, { type: 'move', unit: 'red', q: 2, r: 0 }), true);
+});
+
+test('applyCommand refuses the other side, and anything malformed, without changing the game', () => {
+  const board = boardFrom(STRIP);
+  const game = gameWith([
+    { id: 'blue', owner: 0, q: 0, r: 0, move: 2 },
+    { id: 'red', owner: 1, q: 3, r: 0, move: 2 },
+  ]);
+  const before = JSON.stringify([...game.units.values(), game.turn, game.currentPlayer]);
+
+  const refused = [
+    [1, { type: 'endTurn' }],                              // not Crimson's turn
+    [1, { type: 'move', unit: 'red', q: 2, r: 0 }],
+    [0, { type: 'move', unit: 'red', q: 2, r: 0 }],         // Blue moving Crimson's unit
+    [0, { type: 'move', unit: 'blue', q: '1', r: '0' }],    // "1" would match the hex key
+    [0, { type: 'move', unit: 'blue', q: 1.5, r: 0 }],
+    [0, { type: 'move', unit: 'blue', q: 1 }],
+    [0, { type: 'move', unit: ['blue'], q: 1, r: 0 }],
+    [0, { type: 'fly' }],
+    [0, null],
+    [0, 'endTurn'],
+    [undefined, { type: 'endTurn' }],
+  ];
+  for (const [player, cmd] of refused) {
+    assert.equal(applyCommand(board, game, player, cmd), false, JSON.stringify([player, cmd]));
+  }
+  assert.equal(JSON.stringify([...game.units.values(), game.turn, game.currentPlayer]), before);
 });

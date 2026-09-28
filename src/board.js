@@ -12,6 +12,13 @@ import { axialToPixel, hexagon, key, rectangle } from './hex.js';
 /** @typedef {'grass' | 'meadow' | 'scrub' | 'water'} Terrain */
 /** @typedef {{ q: number, r: number, terrain: Terrain, tint: number, moveCost: number, passable: boolean }} Tile */
 
+/**
+ * The board every game is played on; only the seed differs between games.
+ * The page and the game server must build the same board from a seed, so
+ * both take the options from here.
+ */
+export const BOARD_OPTIONS = Object.freeze({ shape: 'rectangle', width: 18, height: 12, hexSize: 34 });
+
 /** Movement cost and passability per terrain type. */
 export const TERRAIN = /** @type {Record<Terrain, { moveCost: number, passable: boolean, label: string }>} */ ({
   grass:  { moveCost: 1, passable: true,  label: 'Grass' },

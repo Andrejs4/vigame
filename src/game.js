@@ -1,8 +1,8 @@
 /**
  * Turn-based game state: units, whose turn it is, and where a unit may move.
  *
- * Deliberately free of rendering and input concerns so it can later run
- * unchanged on a Colyseus server as the authoritative simulation.
+ * Deliberately free of rendering and input concerns: the game server
+ * (server/room.js) runs it unchanged as the authoritative simulation.
  */
 
 import { axialToPixel, key, neighbors } from './hex.js';
@@ -11,6 +11,7 @@ import { tileAt } from './board.js';
 /** @typedef {import('./hex.js').Axial} Axial */
 /** @typedef {import('./board.js').Tile} Tile */
 /** @typedef {{ id: string, owner: number, q: number, r: number, move: number, moveMax: number, name: string }} Unit */
+/** @typedef {{ type: 'move', unit: string, q: number, r: number } | { type: 'endTurn' }} Command */
 
 /** Player colours, indexed by owner id. */
 export const PLAYERS = [
@@ -175,6 +176,35 @@ export function moveUnit(board, game, unitId, q, r) {
   unit.r = r;
   unit.move -= spend;
   return true;
+}
+
+/**
+ * Apply one player's command, if it is legal. Every change to a game in play
+ * goes through here, on the page and on the game server alike, so the rules
+ * are written once.
+ *
+ * The command is checked field by field: on the server it arrives straight
+ * off the wire.
+ *
+ * @param {ReturnType<typeof import('./board.js').createBoard>} board
+ * @param {{ units: Map<string, Unit>, turn: number, currentPlayer: number, selectedUnitId: string | null }} game
+ * @param {number} player The side issuing the command.
+ * @param {unknown} command A {@link Command}, or anything claiming to be one.
+ * @returns {boolean} Whether the command was legal, and so applied.
+ */
+export function applyCommand(board, game, player, command) {
+  if (player !== game.currentPlayer || !command || typeof command !== 'object') return false;
+  const cmd = /** @type {Record<string, unknown>} */ (command);
+  switch (cmd.type) {
+    case 'move':
+      if (typeof cmd.unit !== 'string' || !Number.isSafeInteger(cmd.q) || !Number.isSafeInteger(cmd.r)) return false;
+      return moveUnit(board, game, cmd.unit, /** @type {number} */ (cmd.q), /** @type {number} */ (cmd.r));
+    case 'endTurn':
+      endTurn(game);
+      return true;
+    default:
+      return false;
+  }
 }
 
 /**

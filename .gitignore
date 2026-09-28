@@ -144,3 +144,6 @@ vite.config.ts.timestamp-*
 
 # Headless smoke-test screenshots
 smoke-output/
+
+# Game server database (npm run server)
+data/

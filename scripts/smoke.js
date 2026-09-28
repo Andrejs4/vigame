@@ -1,9 +1,9 @@
 /**
  * Headless browser check of the real page: it boots without errors, draws the
- * board, and plays — hotseat on desktop and touch, and online across three
- * browsers sharing a fake Artifact runtime.
+ * board, and plays — hotseat on desktop and touch, online across three
+ * browsers sharing a fake Artifact runtime, and through the real game server.
  *
- * The online part runs test/fake-runtime.js in Node and bridges it into each
+ * The Artifact part runs test/fake-runtime.js in Node and bridges it into each
  * page as `window.claude`, so every page talks to one shared store, lease
  * table and room, the way viewers of the published artifact do.
  *
@@ -17,6 +17,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { chromium } from 'playwright';
 
+import { startGameServer } from '../server/app.js';
 import { createFakeRuntime } from '../test/fake-runtime.js';
 import { build } from './build.js';
 import { startServer } from './serve.js';
@@ -36,8 +37,9 @@ const problems = [];
  * @param {import('playwright').Browser} browser
  * @param {string} label
  * @param {import('playwright').BrowserContextOptions} [options]
+ * @param {RegExp} [expectedError] A console error this page is meant to cause.
  */
-async function openPage(browser, label, options = { viewport: { width: 1280, height: 800 } }) {
+async function openPage(browser, label, options = { viewport: { width: 1280, height: 800 } }, expectedError) {
   const context = await browser.newContext(options);
   const page = await context.newPage();
   await page.route(/fonts\.(googleapis|gstatic)\.com/, (route) => (
@@ -45,7 +47,7 @@ async function openPage(browser, label, options = { viewport: { width: 1280, hei
   ));
   page.on('pageerror', (e) => problems.push(`${label}: uncaught ${e.message}`));
   page.on('console', (m) => {
-    if (m.type() === 'error') problems.push(`${label}: console.error ${m.text()}`);
+    if (m.type() === 'error' && !expectedError?.test(m.text())) problems.push(`${label}: console.error ${m.text()}`);
   });
   return page;
 }
@@ -467,6 +469,75 @@ const ownUnitById = (page, id) => page.evaluate((id) => ({
   .../** @type {any} */ (window).__vigame.game.units.get(id),
 }), id);
 
+// --- game server -------------------------------------------------------------
+
+/**
+ * Open a page from the game server as a new browser (its own storage, so its
+ * own player token).
+ * @param {import('playwright').Browser} browser
+ * @param {string} url
+ * @param {string} label
+ */
+async function openServerPage(browser, url, label) {
+  const page = await openPage(browser, label);
+  await page.goto(url);
+  await page.waitForFunction(() => /** @type {any} */ (window).__vigame?.net.mode === 'online', null, { timeout: 10000 });
+  return page;
+}
+
+async function gameServer(browser, url) {
+  // Opening the bare address starts a game, and the address becomes its link.
+  const a = await openServerPage(browser, url, 'server-a');
+  const link = a.url();
+  assert.match(link, /\?game=[\w-]+$/);
+  await waitText(a, '#seat', 'Blue');
+  await endTurnEnabled(a);
+
+  const b = await openServerPage(browser, link, 'server-b');
+  await waitText(b, '#seat', 'Crimson');
+  assert.equal(await b.locator('#end-turn').getAttribute('title'), 'Waiting for Blue');
+
+  // Blue's move and pick reach Crimson through the server.
+  const moved = await selectAndMove(a, 'Scout');
+  const at = ({ id, q, r }) => {
+    const u = /** @type {any} */ (window).__vigame.game.units.get(id);
+    return u && u.q === q && u.r === r;
+  };
+  await b.waitForFunction(at, moved);
+  await b.waitForFunction(({ q, r }) => /** @type {any} */ (window).__vigame.peers
+    .some((p) => !p.isMe && p.sel && p.sel.q === q && p.sel.r === r), moved);
+
+  await a.click('#end-turn');
+  await endTurnEnabled(b);
+  await waitText(a, '#player', 'Crimson');
+
+  // Crimson reloads: same seat (the token is kept), same game (the server has it).
+  await b.reload();
+  await b.waitForFunction(() => /** @type {any} */ (window).__vigame?.net.mode === 'online');
+  await waitText(b, '#seat', 'Crimson');
+  await b.waitForFunction(at, moved);
+  await endTurnEnabled(b);
+  await frames(b);
+  await b.screenshot({ path: join(OUT, 'server-crimson.png') });
+
+  // A third browser watches.
+  const c = await openServerPage(browser, link, 'server-c');
+  await waitText(c, '#seat', 'Spectator');
+  await waitText(a, '#viewers', '3');
+
+  // A link to a game that doesn't exist says so, and the page still works.
+  // (Chromium logs the refused join request itself as a console error.)
+  const lost = await openPage(browser, 'server-lost', undefined, /^Failed to load resource: .* 521\b/);
+  await lost.goto(`${url}?game=nope`);
+  await lost.waitForSelector('#notice:not([hidden])');
+  assert.match(await text(lost, '#notice'), /There is no game at this address/);
+  assert.equal(await lost.evaluate(() => /** @type {any} */ (window).__vigame.net.mode), 'local');
+  await frames(lost);
+  await lost.screenshot({ path: join(OUT, 'server-no-game.png') });
+
+  for (const p of [a, b, c, lost]) await p.context().close();
+}
+
 // --- main ------------------------------------------------------------------
 
 mkdirSync(OUT, { recursive: true });
@@ -474,12 +545,14 @@ mkdirSync(dirname(BUNDLE), { recursive: true });
 writeFileSync(BUNDLE, build());
 
 const server = await startServer();
+const games = await startGameServer({ port: 0 });
 const browser = await chromium.launch();
 const scenarios = [
   ['hotseat on desktop', () => hotseatDesktop(browser)],
   ['hotseat on a touch phone', () => hotseatTouch(browser)],
   ['ES modules over HTTP', () => modulesOverHttp(browser, server.url)],
   ['online, three browsers', () => online(browser)],
+  ['game server, three browsers', () => gameServer(browser, games.url)],
 ];
 
 let failed = 0;
@@ -498,6 +571,7 @@ try {
 } finally {
   await browser.close();
   await server.close();
+  await games.close();
 }
 
 console.log(`\n${scenarios.length - failed}/${scenarios.length} passed; screenshots in ${OUT}`);

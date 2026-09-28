@@ -1,22 +1,23 @@
 /**
  * Networking seam.
  *
- * Two implementations of one interface. `createLocalNet` is hotseat: no
+ * Three implementations of one interface. `createLocalNet` is hotseat: no
  * transport, everything resolves immediately, and the page behaves exactly as
  * it does offline. `createArtifactNet` syncs through the claude.ai Artifact
  * runtime — authoritative game state in a shared document, ephemeral
- * selections as presence.
- *
- * A Colyseus implementation is the third one, and it implements this same
- * interface: `commit` becomes a room message, `onState` a room state patch.
- * Nothing above this file changes when it arrives.
+ * selections as presence. `createServerNet` plays through the Vigame game
+ * server (server/), which holds the real game: commands go to it as room
+ * messages and its state comes back as patches.
  *
  * Interface:
  *   mode           'local' | 'online'
  *   ready()        resolves once the initial state has been delivered
  *   onState(fn)    fn(serialisedState) whenever authoritative state changes;
  *                  a late subscriber is handed the latest state straight away
- *   commit(s)      publish new authoritative state
+ *   commit(s, c)   publish the state `s` that command `c` produced on this
+ *                  page. The Artifact transport stores the state; the server
+ *                  transport sends only the command, and if the server refuses
+ *                  it, hands its own state back through onState.
  *   select(sel)    publish my ephemeral selection ({q, r} or null)
  *   onPeers(fn)    fn(peerList) whenever the set of viewers or their selections change
  *   seat()         0, 1, or null for spectator
@@ -449,6 +450,182 @@ export async function createArtifactNet({ db, room, user, initial }) {
     canWrite: () => canWrite,
     viewers: () => (room ? room.peers().filter((p) => p.kind === 'viewer').length : 1),
     connected: () => (room ? room.connected() : false),
+  };
+}
+
+/**
+ * Online play through the Vigame game server (Colyseus). The server holds the
+ * real game and checks every command, so this transport sends commands,
+ * never state, and adopts whatever the server says the game is.
+ *
+ * The page applies a command itself before sending it, so play feels instant.
+ * The server's state patch confirms it; a refusal puts the server's state
+ * back.
+ *
+ * @param {object} options
+ * @param {any} options.client A Colyseus SDK client (`new Colyseus.Client(url)`).
+ * @param {string} options.gameId
+ * @param {string} options.token This browser's secret player token. The
+ *   server knows the player by it, so nobody else may ever see it.
+ * @returns {Promise<object>}
+ */
+export async function createServerNet({ client, gameId, token }) {
+  const room = await client.joinOrCreate('game', { gameId, token });
+
+  /** @type {Array<(s: GameState) => void>} */
+  const stateHandlers = [];
+  /** @type {Array<(p: NetPeer[]) => void>} */
+  const peerHandlers = [];
+  /** @type {Array<(s: number | null) => void>} */
+  const seatHandlers = [];
+
+  /** @type {GameState | null} */
+  let latestState = null;
+  let latestKey = '';
+  /** @type {number | null} */
+  let mySeat = null;
+  let seatFree = false;
+  /** @type {NetPeer[]} */
+  let peerList = [];
+  let peersKey = '';
+  let viewerCount = 1;
+  let isConnected = true;
+
+  let resolveReady = () => {};
+  const readyPromise = new Promise((res) => { resolveReady = () => res(undefined); });
+
+  function notifySeat() {
+    for (const fn of [...seatHandlers]) fn(mySeat);
+  }
+
+  /** @param {unknown} v */
+  const isPlayer = (v) => Number.isInteger(v) && Number(v) >= 0 && Number(v) < PLAYERS.length;
+
+  /**
+   * Take in the server's state. Colyseus reports every patch, including ones
+   * that only move someone's selection, so each part is passed on only when
+   * it actually changed.
+   * @param {any} synced
+   */
+  function adopt(synced) {
+    const raw = synced?.toJSON?.() ?? {};
+    // The very first callback can come before the server's state has arrived.
+    if (!Number.isSafeInteger(raw.seed)) return;
+
+    const units = raw.units && typeof raw.units === 'object' ? Object.values(raw.units) : [];
+    const state = sanitizeState({ ...raw, units });
+    const key = JSON.stringify(state);
+    if (state && key !== latestKey) {
+      latestKey = key;
+      latestState = state;
+      for (const fn of [...stateHandlers]) fn(state);
+    }
+
+    const seats = Array.isArray(raw.seats) ? raw.seats : [];
+    /** @type {Array<[string, any]>} */
+    const viewers = raw.viewers && typeof raw.viewers === 'object' ? Object.entries(raw.viewers) : [];
+    const me = viewers.find(([session]) => session === room.sessionId)?.[1];
+    const seat = me && isPlayer(me.seat) ? me.seat : null;
+    const free = PLAYERS.some((_, i) => !seats[i]);
+    if (seat !== mySeat || free !== seatFree) {
+      mySeat = seat;
+      seatFree = free;
+      notifySeat();
+    }
+
+    viewerCount = viewers.length;
+    const order = viewers.map(([session]) => session).sort();
+    const list = viewers.map(([session, v]) => ({
+      peer: session,
+      uid: typeof v?.pid === 'string' ? v.pid : null,
+      seat: isPlayer(v?.seat) ? v.seat : null,
+      sel: v?.hasSel && Number.isSafeInteger(v.q) && Number.isSafeInteger(v.r) ? { q: v.q, r: v.r } : null,
+      isMe: session === room.sessionId,
+      color: PEER_COLORS[order.indexOf(session) % PEER_COLORS.length],
+      name: '',
+    }));
+    const listKey = JSON.stringify(list);
+    if (listKey !== peersKey) {
+      peersKey = listKey;
+      peerList = list;
+      for (const fn of [...peerHandlers]) fn(peerList);
+    }
+
+    resolveReady();
+  }
+
+  room.onStateChange(adopt);
+  adopt(room.state);
+
+  /** @param {boolean} value */
+  function setConnected(value) {
+    if (value === isConnected) return;
+    isConnected = value;
+    notifySeat();
+  }
+  // The client reconnects by itself after a drop; `onLeave` is final.
+  room.onDrop(() => setConnected(false));
+  room.onReconnect(() => setConnected(true));
+  room.onLeave(() => setConnected(false));
+
+  /** The page ran ahead of the server and was wrong: show the server's game. */
+  function revert() {
+    if (latestState) for (const fn of [...stateHandlers]) fn(latestState);
+  }
+
+  return {
+    mode: /** @type {const} */ ('online'),
+    ready: () => readyPromise,
+
+    onState(fn) {
+      stateHandlers.push(fn);
+      if (latestState) fn(latestState);
+      return () => {
+        const i = stateHandlers.indexOf(fn);
+        if (i >= 0) stateHandlers.splice(i, 1);
+      };
+    },
+
+    /**
+     * @param {GameState} _state Ignored: the server works the state out itself.
+     * @param {import('./game.js').Command} [command]
+     */
+    commit(_state, command) {
+      if (!command) return Promise.resolve();
+      const { type, ...payload } = command;
+      return room.request(type, payload).then(() => {}, revert);
+    },
+
+    /** @param {Axial | null} sel */
+    select(sel) {
+      room.send('select', sel ? { q: sel.q, r: sel.r } : null);
+    },
+
+    onPeers(fn) {
+      peerHandlers.push(fn);
+      fn(peerList);
+      return () => {
+        const i = peerHandlers.indexOf(fn);
+        if (i >= 0) peerHandlers.splice(i, 1);
+      };
+    },
+
+    seat: () => mySeat,
+    onSeat(fn) {
+      seatHandlers.push(fn);
+      return () => {
+        const i = seatHandlers.indexOf(fn);
+        if (i >= 0) seatHandlers.splice(i, 1);
+      };
+    },
+    canClaimSeat: () => isConnected && mySeat === null && seatFree,
+    claimSeat: () => room.request('claimSeat').then(() => {}, () => {}),
+    releaseSeat: () => room.request('releaseSeat').then(() => {}, () => {}),
+    canWrite: () => true,
+    viewers: () => viewerCount,
+    connected: () => isConnected,
+    /** Leave the game, for tests and page teardown. */
+    leave: () => room.leave(),
   };
 }
 
