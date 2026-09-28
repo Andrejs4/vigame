@@ -97,6 +97,8 @@ Run `npm start` and open http://127.0.0.1:2567.
   yours and blocks nothing; it has no hit points and gives no cover, and it
   breaks up as soon as it has nobody (its last unit left or died). It goes
   at the pace of its slowest walker.
+- **Pits** don't stop units or bands: they cross any pit, yours or the
+  enemy's. Wagons can't enter a pit and go around it.
 - Drag to pan, and use the wheel or the − / + buttons to zoom.
   **Coordinates** shows axial `q,r` labels. Escape cancels building and
   clears the selection.

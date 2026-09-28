@@ -415,7 +415,9 @@ test('a crew marches through the server, one cell of its route at a time', async
   for (const u of Object.values(seen(b).units).filter((x) => x.to === tower.id && x.path)) {
     assert.equal(u.path.length, 1, 'players see only the next cell of a route');
   }
-  await until(() => (occupancy(seen(b)).inside.get(tower.id)?.length ?? 0) === 4);
+  // Up to five cells at two seconds each (four on scrub), on a clock that
+  // falls behind when the machine is busy.
+  await until(() => (occupancy(seen(b)).inside.get(tower.id)?.length ?? 0) === 4, 15000);
   await leaveAll(a, b);
 });
 

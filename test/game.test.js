@@ -424,6 +424,19 @@ test('a band goes at its slowest member\'s pace', () => {
   assert.equal(tick, 1 + 2 * WALK_TICKS, 'as slow as the one who never ran');
 });
 
+test('units and bands cross pits, anyone\'s; wagons go around them', () => {
+  // A corridor with an enemy pit in the middle, and a detour round it.
+  const board = boardFrom({ '0,0': 'grass', '1,0': 'grass', '2,0': 'grass', '3,0': 'grass', '4,0': 'grass', '1,-1': 'grass', '2,-1': 'grass', '3,-1': 'grass' });
+  const state = stateWith(
+    [{ id: 'b1', q: 0, r: 0 }, { id: 'b2', owner: 1, type: 'pit', q: 2, r: 0 }, { id: 'b3', q: 4, r: 0 }, { id: 'b4', type: 'wagon', q: 1, r: 0 }],
+    unitsIn('b1', 1, 10),
+  );
+  assert.deepEqual(applyCommand(board, state, 0, { type: 'crew', building: 'b3', units: ['u10'] }), OK);
+  assert.deepEqual(state.units.u10.path, [[1, 0], [2, 0], [3, 0], [4, 0]], 'straight through the pit');
+  assert.deepEqual(applyCommand(board, state, 0, { type: 'move', building: 'b4', q: 3, r: 0 }), OK);
+  assert.deepEqual(state.buildings.b4.path, [[2, -1], [3, -1], [3, 0]], 'around it');
+});
+
 // --- building ------------------------------------------------------------------
 
 test('building needs open, buildable ground near one of your standing buildings', () => {

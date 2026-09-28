@@ -437,7 +437,9 @@ function walkTicks(board, u, cell) {
 }
 
 /**
- * Units may cross any cell but one under another side's building.
+ * Units and bands may cross any cell but one under another side's
+ * building. Pits, anyone's, they cross freely. (Wagons may enter no
+ * building's cell, pits included: see takenCells.)
  * @param {GameState} state
  * @param {Occupancy} occ
  * @param {number} owner
@@ -445,7 +447,9 @@ function walkTicks(board, u, cell) {
 function hostileCells(state, occ, owner) {
   return (/** @type {string} */ k) => {
     const id = occ.buildingAt.get(k);
-    return id !== undefined && state.buildings[id].owner !== owner;
+    if (id === undefined) return false;
+    const b = state.buildings[id];
+    return b.owner !== owner && b.type !== 'pit';
   };
 }
 
