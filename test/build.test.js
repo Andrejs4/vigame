@@ -8,7 +8,7 @@ test('the bundle inlines every module, dependencies first, as one script', () =>
   const order = [...html.matchAll(/^\/\/ ---- (src\/\w+\.js) -+$/gm)].map((m) => m[1]);
   assert.deepEqual(order, [
     'src/hex.js', 'src/board.js', 'src/game.js', 'src/camera.js',
-    'src/net.js', 'src/render.js', 'src/main.js',
+    'src/net.js', 'src/player.js', 'src/render.js', 'src/main.js',
   ]);
   assert.equal(html.includes('type="module"'), false);
   assert.match(html, /<title>Vigame Hex Board<\/title>/);

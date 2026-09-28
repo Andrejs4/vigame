@@ -21,10 +21,11 @@ module to check every move.
   everyone's movement.
 - Drag to pan, and use the wheel or the − / + buttons to zoom.
   **Coordinates** shows axial `q,r` labels.
-- **Game server** is the mode when `npm run server` serves the page. Opening
-  its address starts a new game, and the address then ends in `?game=…`:
-  that is the link to send the other player. A browser keeps its seat across
-  reloads and later visits.
+- **Game server** is the mode when `npm run server` serves the page. A new
+  browser first gives a name and answers a small sum, which the server
+  checks. Opening the address then starts a new game, and the address ends
+  in `?game=…`: that is the link to send the other player. A browser keeps
+  its name and seat across reloads and later visits.
 - **Artifact** is the mode inside claude.ai, where the page syncs through the
   Artifact runtime.
 - **Hotseat** is the mode anywhere else: two players share one browser.
@@ -69,11 +70,13 @@ have one, install it with `npx playwright install chromium`.
 | `src/game.js` | Units, turns, movement rules, Dijkstra reachability, and `applyCommand`, the one way a game changes in play. No rendering or input: the game server runs it unchanged. |
 | `src/camera.js` | Screen ↔ world transforms, pan, and zoom about a point. |
 | `src/render.js` | Canvas 2D renderer: terrain, grid, movement range, selection rings, hover, units. |
+| `src/player.js` | Player-name rules, shared by the page and the server. Pure. |
 | `src/net.js` | The networking seam: `createLocalNet` (hotseat), `createServerNet` (game server) and `createArtifactNet` (claude.ai runtime), which share one interface. |
 | `src/main.js` | Wires it all together: input, HUD, and the switch to online play. |
 | `index.html` | Page markup and styles; loads `src/main.js` as a module. |
 | `server/app.js` | The game server: Colyseus, the HTTP API, the page, the monitor. |
-| `server/room.js` | `GameRoom`, one per game: checks, saves and shares every command. |
+| `server/room.js` | `GameRoom`, one per game: checks, saves and shares every command. Only signed-in players get in. |
+| `server/challenge.js` | The sign-in sums. |
 | `server/schema.js` | The room state Colyseus syncs to every client. |
 | `server/storage.js` | All database access (SQLite). |
 | `server/main.js` | Command-line entry point (`npm run server`). |
@@ -132,17 +135,27 @@ Players have no accounts. Each browser makes a random token, keeps it in
 it, and shows other viewers only a hash of it. Clearing site data loses the
 seat.
 
+Before starting or joining a game, a browser signs its token in with a name
+and the answer to a sum such as `3 + 4`. The sum keeps out scripts that
+don't know about this server, not ones written for it. A name is 1 to 15
+letters or digits in any script, with space, `-`, `_`, `.` and `'` allowed
+between them; `src/player.js` checks it on the page and on the server.
+Other viewers see it next to the seat. Signing in again renames.
+
 HTTP API:
 
 | Request | Result |
 | --- | --- |
-| `POST /api/games` | Starts a game with a random map: `201 { id }`. |
+| `GET /api/challenge` | A sum to answer when signing in: `{ id, question }`. Each one answers once and lasts 10 minutes. |
+| `POST /api/players` | Signs in (or renames): `{ token, name, challenge, answer }` gives `{ pid, name }`. `400` for a bad token or name, `403` for a wrong answer. |
+| `POST /api/games` | Starts a game with a random map: `{ token }` of a signed-in player gives `201 { id }`, otherwise `401`. |
 | `GET /api/games` | The 50 most recently active games, for a lobby. |
 | `GET /api/games/:id` | One game: its seed, state and seats. |
 | `GET /api/games/:id/moves` | Its move log. |
 
-The database has two tables: `games` (each game's seed, current state and
-seats) and `moves` (every accepted command, in order, never changed).
+The database has three tables: `games` (each game's seed, current state and
+seats), `moves` (every accepted command, in order, never changed) and
+`players` (each signed-in player's public id and name; never the token).
 Replaying a game's moves from its seed rebuilds its state, and a room falls
 back to that if the saved state is unreadable.
 
@@ -181,11 +194,13 @@ and how it would stretch to real-time play.
 
 - There is no combat, capture or win condition; units only move.
 - Game server:
-  - Players are anonymous browser tokens. There are no accounts or logins.
+  - Players are browser tokens with a name. There are no accounts or
+    passwords, and the sign-in sum stops only scripts not written for it.
+  - There is no way to change your name from the page yet, though the
+    server accepts a new one (`POST /api/players`).
   - There is no lobby page, although `GET /api/games` lists games for one.
-  - Anyone who can reach the server can start games; nothing limits how
-    many. Put it behind a login or a rate limit before opening it to the
-    internet.
+  - Any signed-in player can start games; nothing limits how many. Add a
+    rate limit before opening it to the internet.
   - One process only: SQLite allows a single writer. Several processes would
     need Postgres (see the architecture doc).
   - Backups are not set up. The architecture doc suggests Litestream.

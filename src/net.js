@@ -542,7 +542,7 @@ export async function createServerNet({ client, gameId, token }) {
       sel: v?.hasSel && Number.isSafeInteger(v.q) && Number.isSafeInteger(v.r) ? { q: v.q, r: v.r } : null,
       isMe: session === room.sessionId,
       color: PEER_COLORS[order.indexOf(session) % PEER_COLORS.length],
-      name: '',
+      name: typeof v?.name === 'string' ? v.name : '',
     }));
     const listKey = JSON.stringify(list);
     if (listKey !== peersKey) {

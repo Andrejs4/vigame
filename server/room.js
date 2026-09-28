@@ -102,20 +102,59 @@ function fields(message) {
     : {};
 }
 
+/**
+ * Whether a player token is well formed. It proves nothing on its own: see
+ * `signedIn`.
+ * @param {unknown} token
+ * @returns {token is string}
+ */
+export function isToken(token) {
+  return typeof token === 'string' && TOKEN.test(token);
+}
+
+/**
+ * The player a token belongs to, if they have signed in (POST /api/players).
+ * @param {import('./storage.js').Storage} storage
+ * @param {unknown} token
+ * @returns {{ pid: string, name: string } | null}
+ */
+export function signedIn(storage, token) {
+  if (!isToken(token)) return null;
+  const player = storage.loadPlayer(playerId(token));
+  return player && { pid: player.pid, name: player.name };
+}
+
+/**
+ * The room class for games kept in `storage`. Colyseus asks the class, not a
+ * room, whether a client may join (`onAuth` runs before any room is found or
+ * created) and passes it only what the client sent, so the class carries the
+ * storage it checks players against.
+ * @param {import('./storage.js').Storage} storage
+ */
+export function gameRoom(storage) {
+  return class extends GameRoom {
+    /**
+     * @param {string} _authToken
+     * @param {any} options
+     */
+    static onAuth(_authToken, options) {
+      if (!isToken(options?.token)) return false;
+      const player = signedIn(storage, options.token);
+      // A ServerError's message reaches the page, which then asks for a name.
+      if (!player) throw new ServerError(ErrorCode.AUTH_FAILED, 'sign in first');
+      return player;
+    }
+  };
+}
+
+/** Use `gameRoom(storage)`, which checks who is joining. */
 export class GameRoom extends Room {
   /** Tap-rate input; anything faster is a script, and gets disconnected. */
   maxMessagesPerSecond = 20;
 
-  /**
-   * Runs before a room is found or created, so a join without a proper token
-   * is turned away without opening anything.
-   * @param {string} _authToken
-   * @param {any} options
-   */
-  static onAuth(_authToken, options) {
-    const token = options?.token;
-    if (typeof token !== 'string' || !TOKEN.test(token)) return false;
-    return { pid: playerId(token) };
+  /** Without storage to check players against, nobody gets in. */
+  static onAuth() {
+    return false;
   }
 
   /**
@@ -252,9 +291,9 @@ export class GameRoom extends Room {
    * @param {import('@colyseus/core').Client} client
    */
   onJoin(client) {
-    const { pid } = client.auth;
+    const { pid, name } = client.auth;
     const seat = this.takeSeat(pid);
-    this.state.viewers.set(client.sessionId, new ViewerState({ pid, seat: seat ?? -1 }));
+    this.state.viewers.set(client.sessionId, new ViewerState({ pid, name, seat: seat ?? -1 }));
   }
 
   /**

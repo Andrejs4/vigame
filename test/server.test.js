@@ -11,7 +11,7 @@ import { matchMaker } from '@colyseus/core';
 import { Client } from '@colyseus/sdk';
 
 import { startGameServer } from '../server/app.js';
-import { replay, restoreGame } from '../server/room.js';
+import { playerId, replay, restoreGame } from '../server/room.js';
 import { BOARD_OPTIONS, createBoard } from '../src/board.js';
 import { applyCommand, createGame, reachable } from '../src/game.js';
 import { createServerNet, serialize } from '../src/net.js';
@@ -32,17 +32,40 @@ before(async () => {
     logger: { debug() {}, info() {}, trace() {}, warn: quiet, error: quiet },
   });
   base = server.url.replace(/\/$/, '');
+  // The test players have signed in; the sign-in itself has its own tests.
+  for (const [who, token] of Object.entries(TOKENS)) server.storage.savePlayer(playerId(token), NAMES[who]);
 });
 
 after(() => server.close());
 
 const TOKENS = { a: 'a'.repeat(32), b: 'b'.repeat(32), c: 'c'.repeat(32) };
+const NAMES = { a: 'Ann', b: 'Bēla', c: 'Cai' };
+
+/**
+ * POST JSON, the way the page does.
+ * @param {string} path
+ * @param {unknown} body
+ */
+function post(path, body) {
+  return fetch(`${base}${path}`, {
+    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body),
+  });
+}
 
 /** Start a game over HTTP, the way the page does. */
 async function startGame() {
-  const res = await fetch(`${base}/api/games`, { method: 'POST' });
+  const res = await post('/api/games', { token: TOKENS.a });
   assert.equal(res.status, 201);
   return /** @type {string} */ ((await res.json()).id);
+}
+
+/** A sign-in challenge, and its answer. */
+async function challenge() {
+  const res = await fetch(`${base}/api/challenge`);
+  assert.equal(res.headers.get('cache-control'), 'no-store');
+  const { id, question } = await res.json();
+  const [, a, b] = /^(\d+) \+ (\d+)$/.exec(question) ?? [];
+  return { id, answer: Number(a) + Number(b) };
 }
 
 /**
@@ -161,6 +184,57 @@ test('the monitor, which can call any room method, needs its password', async ()
   await leaveAll(a);
 });
 
+// --- signing in ------------------------------------------------------------
+
+test('signing in takes a name and the answer to the server\'s sum', async () => {
+  const token = 's'.repeat(32);
+  const sum = await challenge();
+
+  assert.equal((await post('/api/players', { token: 'short', name: 'Sam', challenge: sum.id, answer: sum.answer })).status, 400);
+  const badName = await post('/api/players', { token, name: 'Sam 🙂', challenge: sum.id, answer: sum.answer });
+  assert.equal(badName.status, 400);
+  assert.deepEqual(await badName.json(), { error: 'bad name' });
+  assert.equal(server.storage.loadPlayer(playerId(token)), null);
+
+  // A bad name didn't use the challenge up, so it still works.
+  const ok = await post('/api/players', { token, name: '  Sam   Lee ', challenge: sum.id, answer: String(sum.answer) });
+  assert.equal(ok.status, 200);
+  assert.deepEqual(await ok.json(), { pid: playerId(token), name: 'Sam Lee' });
+  assert.equal(server.storage.loadPlayer(playerId(token)).name, 'Sam Lee');
+
+  // Every challenge answers once, and a wrong answer uses one up too.
+  const again = await post('/api/players', { token, name: 'Sam', challenge: sum.id, answer: sum.answer });
+  assert.equal(again.status, 403);
+  const next = await challenge();
+  assert.equal((await post('/api/players', { token, name: 'Sam', challenge: next.id, answer: next.answer + 1 })).status, 403);
+  assert.equal((await post('/api/players', { token, name: 'Sam', challenge: next.id, answer: next.answer })).status, 403);
+  assert.equal((await post('/api/players', { token, name: 'Sam', challenge: 'made-up', answer: 2 })).status, 403);
+  for (const body of ['{broken', JSON.stringify('not an object'), JSON.stringify({ name: 'x'.repeat(4000) })]) {
+    const res = await fetch(`${base}/api/players`, { method: 'POST', headers: { 'content-type': 'application/json' }, body });
+    assert.ok(res.status === 400 || res.status === 413, `${res.status} for ${body.slice(0, 20)}`);
+    assert.deepEqual(await res.json(), { error: 'bad request' }, 'no stack trace');
+  }
+  assert.equal(server.storage.loadPlayer(playerId(token)).name, 'Sam Lee', 'refusals change nothing');
+
+  // Signing in again, with a new sum, renames.
+  const rename = await challenge();
+  assert.equal((await post('/api/players', { token, name: 'Samuel', challenge: rename.id, answer: rename.answer })).status, 200);
+  assert.equal(server.storage.loadPlayer(playerId(token)).name, 'Samuel');
+});
+
+test('starting or joining a game needs a player who has signed in', async () => {
+  const stranger = 'z'.repeat(32);
+  assert.equal((await fetch(`${base}/api/games`, { method: 'POST' })).status, 401);
+  const refused = await post('/api/games', { token: stranger });
+  assert.equal(refused.status, 401);
+  assert.deepEqual(await refused.json(), { error: 'sign in first' });
+
+  const id = await startGame();
+  await assert.rejects(new Client(base).joinOrCreate('game', { gameId: id, token: stranger }), /sign in first/);
+  assert.equal((await matchMaker.query({ name: 'game' })).some((r) => r.metadata?.gameId === id), false);
+  assert.deepEqual((await (await fetch(`${base}/api/games/${id}`)).json()).seats, [null, null], 'no seat taken');
+});
+
 // --- joining ---------------------------------------------------------------
 
 test('joining needs a player token and a game that exists', async () => {
@@ -184,6 +258,7 @@ test('the first two players take the seats; later ones watch', async () => {
   assert.equal(viewers[b.sessionId].seat, 1);
   assert.equal(viewers[c.sessionId].seat, -1);
   assert.equal(viewers[a.sessionId].pid.includes('a'.repeat(8)), false, 'the token itself is never shared');
+  assert.deepEqual(Object.values(viewers).map((v) => v.name).sort(), ['Ann', 'Bēla', 'Cai']);
   assert.equal((await (await fetch(`${base}/api/games/${id}`)).json()).seats.filter(Boolean).length, 2);
   await leaveAll(a, b, c);
 });
@@ -413,6 +488,8 @@ test('the page transport plays through the server and follows it', async () => {
   blue.select({ q: move.q, r: move.r });
   await until(() => peers.some((p) => !p.isMe && p.seat === 0 && p.sel?.q === move.q));
   assert.equal(peers.filter((p) => p.isMe).length, 1);
+  assert.equal(peers.find((p) => p.seat === 0)?.name, 'Ann');
+  assert.equal(peers.find((p) => p.isMe)?.name, 'Bēla');
   assert.notEqual(peers[0].color, peers[1].color);
 
   // Blue gives up the seat; Crimson's page sees a seat it could not take

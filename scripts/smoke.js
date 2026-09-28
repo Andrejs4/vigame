@@ -474,29 +474,72 @@ const ownUnitById = (page, id) => page.evaluate((id) => ({
 // --- game server -------------------------------------------------------------
 
 /**
+ * Answer the sign-in form with this name.
+ * @param {import('playwright').Page} page
+ * @param {string} name
+ */
+async function signIn(page, name) {
+  await page.waitForSelector('#signin[open]');
+  const question = await page.waitForFunction(() => {
+    const m = /What is (\d+) \+ (\d+)\?/.exec(document.getElementById('signin-question')?.textContent ?? '');
+    return m && Number(m[1]) + Number(m[2]);
+  });
+  await page.fill('#signin-name', name);
+  await page.fill('#signin-answer', String(await question.jsonValue()));
+  await page.click('#signin-submit');
+  await page.waitForSelector('#signin', { state: 'hidden' });
+}
+
+/**
  * Open a page from the game server as a new browser (its own storage, so its
- * own player token).
+ * own player token), and sign in.
  * @param {import('playwright').Browser} browser
  * @param {string} url
  * @param {string} label
+ * @param {string} name
  */
-async function openServerPage(browser, url, label) {
+async function openServerPage(browser, url, label, name) {
   const page = await openPage(browser, label);
   await page.goto(url);
+  await signIn(page, name);
   await page.waitForFunction(() => /** @type {any} */ (window).__vigame?.net.mode === 'online', null, { timeout: 10000 });
   return page;
 }
 
 async function gameServer(browser, url) {
+  // A new browser is asked for a name and a sum before anything else. The
+  // form checks the name itself; the server checks the sum, and a wrong
+  // answer gets a new one. (Chromium logs the refused request as an error.)
+  const a = await openPage(browser, 'server-a', undefined, /^Failed to load resource: .* 403\b/);
+  await a.goto(url);
+  await a.waitForSelector('#signin[open]');
+  await a.waitForFunction(() => /What is/.test(document.getElementById('signin-question')?.textContent ?? ''));
+  await frames(a);
+  await a.screenshot({ path: join(OUT, 'server-sign-in.png') });
+  await a.fill('#signin-name', 'Ann \u{1F642}');
+  await a.fill('#signin-answer', '1');
+  await a.click('#signin-submit');
+  await a.waitForFunction(() => /letters or digits/.test(document.getElementById('signin-error')?.textContent ?? ''));
+  const first = await text(a, '#signin-question');
+  await a.fill('#signin-name', 'Ann');
+  await a.fill('#signin-answer', '99');
+  await a.click('#signin-submit');
+  await a.waitForFunction(() => /not it/.test(document.getElementById('signin-error')?.textContent ?? ''));
+  await a.waitForFunction((q) => /What is/.test(document.getElementById('signin-question')?.textContent ?? '')
+    && document.getElementById('signin-question')?.textContent !== q, first);
+  assert.equal(await a.locator('#signin[open]').count(), 1, 'still asking');
+  await signIn(a, 'Ann');
+
   // Opening the bare address starts a game, and the address becomes its link.
-  const a = await openServerPage(browser, url, 'server-a');
+  await a.waitForFunction(() => /** @type {any} */ (window).__vigame?.net.mode === 'online', null, { timeout: 10000 });
   const link = a.url();
   assert.match(link, /\?game=[\w-]+$/);
-  await waitText(a, '#seat', 'Blue');
+  await waitText(a, '#seat', 'Ann \u00b7 Blue');
   await endTurnEnabled(a);
 
-  const b = await openServerPage(browser, link, 'server-b');
-  await waitText(b, '#seat', 'Crimson');
+  const b = await openServerPage(browser, link, 'server-b', 'B\u0113la');
+  await waitText(b, '#seat', 'B\u0113la \u00b7 Crimson');
+  await waitText(b, '#player', 'Blue \u00b7 Ann');
   assert.equal(await b.locator('#end-turn').getAttribute('title'), 'Waiting for Blue');
 
   // Blue's move and pick reach Crimson through the server.
@@ -511,26 +554,29 @@ async function gameServer(browser, url) {
 
   await a.click('#end-turn');
   await endTurnEnabled(b);
-  await waitText(a, '#player', 'Crimson');
+  await waitText(a, '#player', 'Crimson \u00b7 B\u0113la');
 
-  // Crimson reloads: same seat (the token is kept), same game (the server has it).
+  // Crimson reloads: same seat (the token is kept), same game (the server
+  // has it), and no sign-in (the server knows the token).
   await b.reload();
   await b.waitForFunction(() => /** @type {any} */ (window).__vigame?.net.mode === 'online');
-  await waitText(b, '#seat', 'Crimson');
+  assert.equal(await b.locator('#signin[open]').count(), 0);
+  await waitText(b, '#seat', 'B\u0113la \u00b7 Crimson');
   await b.waitForFunction(at, moved);
   await endTurnEnabled(b);
   await frames(b);
   await b.screenshot({ path: join(OUT, 'server-crimson.png') });
 
   // A third browser watches.
-  const c = await openServerPage(browser, link, 'server-c');
-  await waitText(c, '#seat', 'Spectator');
+  const c = await openServerPage(browser, link, 'server-c', 'Cai');
+  await waitText(c, '#seat', 'Cai \u00b7 Spectator');
   await waitText(a, '#viewers', '3');
 
   // A link to a game that doesn't exist says so, and the page still works.
   // (Chromium logs the refused join request itself as a console error.)
   const lost = await openPage(browser, 'server-lost', undefined, /^Failed to load resource: .* 521\b/);
   await lost.goto(`${url}?game=nope`);
+  await signIn(lost, 'Lou');
   await lost.waitForSelector('#notice:not([hidden])');
   assert.match(await text(lost, '#notice'), /There is no game at this address/);
   assert.equal(await lost.locator('#notice a').getAttribute('href'), new URL(url).pathname);

@@ -4,6 +4,8 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
+import Database from 'better-sqlite3';
+
 import { openStorage } from '../server/storage.js';
 
 const STATE = { seed: 7, turn: 1, currentPlayer: 0, units: [] };
@@ -77,6 +79,50 @@ test('a database file keeps games across restarts, with write-ahead logging on',
     assert.equal(second.loadGame('g1').state.currentPlayer, 1);
     assert.equal(second.listMoves('g1').length, 1);
     second.close();
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('players are stored by public id, and signing in again renames them', () => {
+  const storage = openStorage();
+  assert.equal(storage.loadPlayer('p1'), null);
+  storage.savePlayer('p1', 'Ann');
+  const first = storage.loadPlayer('p1');
+  assert.equal(first.name, 'Ann');
+  storage.savePlayer('p1', 'Anna');
+  const renamed = storage.loadPlayer('p1');
+  assert.equal(renamed.name, 'Anna');
+  assert.equal(renamed.createdAt, first.createdAt);
+  storage.close();
+});
+
+test('a database from before players existed is upgraded, games intact', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'vigame-'));
+  try {
+    const file = join(dir, 'vigame.db');
+    // The version 1 tables, as the first release of the server made them.
+    const old = new Database(file);
+    old.exec(`
+      CREATE TABLE games (id TEXT PRIMARY KEY, seed INTEGER NOT NULL, state TEXT NOT NULL,
+        seats TEXT NOT NULL DEFAULT '[]', created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL);
+      CREATE INDEX games_by_update ON games (updated_at);
+      CREATE TABLE moves (game_id TEXT NOT NULL REFERENCES games (id), seq INTEGER NOT NULL,
+        player INTEGER NOT NULL, command TEXT NOT NULL, at INTEGER NOT NULL, PRIMARY KEY (game_id, seq));
+      PRAGMA user_version = 1;
+    `);
+    old.prepare('INSERT INTO games VALUES (?, ?, ?, ?, 1, 1)').run('g1', 7, JSON.stringify(STATE), '["p1",null]');
+    old.close();
+
+    const storage = openStorage(file);
+    assert.deepEqual(storage.loadGame('g1').seats, ['p1', null]);
+    storage.savePlayer('p1', 'Ann');
+    assert.equal(storage.loadPlayer('p1').name, 'Ann');
+    storage.close();
+
+    const check = new Database(file, { readonly: true });
+    assert.equal(check.pragma('user_version', { simple: true }), 2);
+    check.close();
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

@@ -3,7 +3,9 @@
  *
  *   GET  /                      the game page (?game=<id> joins that game)
  *   GET  /vendor/colyseus.js    the Colyseus browser client the page uses
- *   POST /api/games             start a game          -> 201 { id }
+ *   GET  /api/challenge         a sum to answer when signing in -> { id, question }
+ *   POST /api/players           sign in: { token, name, challenge, answer } -> { pid, name }
+ *   POST /api/games             start a game: { token } -> 201 { id }
  *   GET  /api/games             recently active games (a lobby)
  *   GET  /api/games/:id         one game's state and seats
  *   GET  /api/games/:id/moves   its move log (history, replays)
@@ -19,12 +21,15 @@ import { dirname, join } from 'node:path';
 import { Server, basicAuth } from '@colyseus/core';
 import { monitor } from '@colyseus/monitor';
 import { WebSocketTransport } from '@colyseus/ws-transport';
+import express from 'express';
 
 import { build } from '../scripts/build.js';
 import { BOARD_OPTIONS, createBoard } from '../src/board.js';
 import { PLAYERS, createGame } from '../src/game.js';
 import { serialize } from '../src/net.js';
-import { GameRoom } from './room.js';
+import { cleanPlayerName } from '../src/player.js';
+import { createChallenges } from './challenge.js';
+import { gameRoom, isToken, playerId, signedIn } from './room.js';
 import { openStorage } from './storage.js';
 
 const require = createRequire(import.meta.url);
@@ -82,6 +87,7 @@ export async function startGameServer({
   logger,
 } = {}) {
   const storage = openStorage(db);
+  const challenges = createChallenges();
   const playground = dev ? (await import('@colyseus/playground')).playground : null;
   const cachedPage = dev ? null : page();
 
@@ -99,7 +105,29 @@ export async function startGameServer({
       // For stepping into the client in DevTools.
       app.get('/vendor/colyseus.js.map', (_req, res) => { res.sendFile(`${SDK_BUNDLE}.map`); });
 
-      app.post('/api/games', (_req, res) => { res.status(201).json({ id: newGame(storage) }); });
+      // Request bodies are a few short fields.
+      app.use('/api', express.json({ limit: '2kb' }));
+
+      app.get('/api/challenge', (_req, res) => {
+        res.set('cache-control', 'no-store').json(challenges.issue());
+      });
+      // Signing in, and changing name: both answer a new sum.
+      app.post('/api/players', (req, res) => {
+        const { token, name, challenge, answer } = req.body ?? {};
+        if (!isToken(token)) return void res.status(400).json({ error: 'bad token' });
+        const clean = cleanPlayerName(name);
+        // Checked before the sum, so a bad name doesn't use up the challenge.
+        if (!clean) return void res.status(400).json({ error: 'bad name' });
+        if (!challenges.check(challenge, answer)) return void res.status(403).json({ error: 'wrong answer' });
+        const pid = playerId(token);
+        storage.savePlayer(pid, clean);
+        res.json({ pid, name: clean });
+      });
+
+      app.post('/api/games', (req, res) => {
+        if (!signedIn(storage, req.body?.token)) return void res.status(401).json({ error: 'sign in first' });
+        res.status(201).json({ id: newGame(storage) });
+      });
       app.get('/api/games', (_req, res) => { res.json(storage.listGames()); });
       app.get('/api/games/:id', (req, res) => {
         const saved = GAME_ID.test(req.params.id) ? storage.loadGame(req.params.id) : null;
@@ -110,6 +138,14 @@ export async function startGameServer({
         const saved = GAME_ID.test(req.params.id) ? storage.loadGame(req.params.id) : null;
         if (!saved) return void res.status(404).json({ error: 'no such game' });
         res.json(storage.listMoves(saved.id));
+      });
+      // Express's own error page carries a stack trace. A malformed request
+      // gets a short answer instead, and a fault is logged here, not sent.
+      app.use('/api', (/** @type {any} */ err, /** @type {any} */ _req, /** @type {any} */ res, /** @type {any} */ _next) => {
+        const status = Number(err?.status ?? err?.statusCode);
+        if (status >= 400 && status < 500) return void res.status(status).json({ error: 'bad request' });
+        (logger ?? console).error(err);
+        res.status(500).json({ error: 'server error' });
       });
 
       // The monitor shows every game's full state, and its API can call any
@@ -122,7 +158,7 @@ export async function startGameServer({
     },
   });
 
-  server.define('game', GameRoom, { storage }).filterBy(['gameId']);
+  server.define('game', gameRoom(storage), { storage }).filterBy(['gameId']);
   // Runs once every room is disposed, whether shutdown came from close() or,
   // with handleSignals, from Ctrl-C.
   server.onShutdown(() => storage.close());

@@ -14,6 +14,7 @@ The modules in `src/` form layers, each depending only on the ones above it:
 | `board.js` | Terrain generated from a seed, so every client builds the same map. Pure. |
 | `game.js` | Rules: units, turns, movement, and `applyCommand`. Pure, with no DOM: the game server runs it unchanged. |
 | `camera.js`, `render.js` | Pan and zoom, and canvas drawing. The renderer sits behind a small interface so PixiJS can replace it. |
+| `player.js` | Player-name rules, checked on the page and again on the server. Pure. |
 | `net.js` | The networking seam: one interface, three transports. |
 | `main.js` | Input, HUD, and the switch to online play. The only module that touches the page. |
 
@@ -68,12 +69,16 @@ needs the game server.
 - **State**: the room state is Colyseus Schema (`server/schema.js`), a copy of
   the `game.js` objects that the room updates after each change. Colyseus
   sends clients only the fields that changed.
-- **REST**: only around the game itself: starting a game, the game list (for
-  a lobby) and each game's move history. Colyseus provides the HTTP
+- **REST**: only around the game itself: signing in, starting a game, the
+  game list (for a lobby) and each game's move history. Colyseus provides the HTTP
   endpoints for joining rooms.
-- **Players**: anonymous. Each browser keeps a random token in
+- **Players**: no accounts. Each browser keeps a random token in
   `localStorage` and sends it when joining; the room knows the player by it
-  and shows other viewers only a hash. Logins would replace the token.
+  and shows other viewers only a hash. Before a token may start or join a
+  game, it is signed in with a name and the answer to a small sum
+  (`server/challenge.js`), and the `players` table records the name. The
+  room's `onAuth` refuses anyone else before a room is found or created.
+  Logins would replace the token and the sum.
 - **Client**: `createServerNet` in `net.js`. The page loads the Colyseus
   browser client from the server (`vendor/colyseus.js`), so `src/` stays
   free of npm imports and the bundler stays simple. Every address the page
@@ -90,9 +95,11 @@ copy.
 - **Tables**: `games` holds each game's seed, current state (JSON, the same
   shape the page uses) and seats. `moves` is an append-only log of every
   accepted command, so any game can be replayed, checked and debugged.
+  `players` maps each signed-in player's public id to their name; the token
+  itself is never stored.
 - **Storage module**: all database access goes through `server/storage.js`
   (`createGame`, `loadGame`, `recordMove`, `saveSeats`, `listMoves`,
-  `listGames`), so moving to Postgres later changes one file. The schema
+  `listGames`, `savePlayer`, `loadPlayer`), so moving to Postgres later changes one file. The schema
   version lives in SQLite's `user_version`; the module creates or upgrades
   the tables when it opens the database.
 - **Write-ahead logging** (`journal_mode=WAL`): on.

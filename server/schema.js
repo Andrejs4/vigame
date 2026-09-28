@@ -25,6 +25,8 @@ export const UnitState = schema({
 export const ViewerState = schema({
   /** Public player id. Several tabs of one player share it. */
   pid: t.string(),
+  /** The player's name, as they gave it when signing in. */
+  name: t.string(),
   /** The seat this viewer's player holds, or -1 when spectating. */
   seat: t.int8().default(-1),
   /** The hex this viewer last picked, if `hasSel`. */

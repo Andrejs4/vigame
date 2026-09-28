@@ -1,5 +1,5 @@
 /**
- * Durable storage for games: SQLite through better-sqlite3.
+ * Durable storage for games and players: SQLite through better-sqlite3.
  *
  * All database access goes through this module, so moving to Postgres later
  * changes this file and nothing else. Calls are synchronous: a turn-based game
@@ -7,20 +7,23 @@
  * room goes on to send it to anyone.
  *
  * Tables:
- *   games  one row per game: its seed, its current state and its seats.
- *   moves  every accepted command, in order, never updated or deleted, so any
- *          game can be replayed from its seed.
+ *   games    one row per game: its seed, its current state and its seats.
+ *   moves    every accepted command, in order, never updated or deleted, so
+ *            any game can be replayed from its seed.
+ *   players  everyone who has signed in: their public player id and name.
+ *            The secret token behind the id is never stored.
  */
 
 import Database from 'better-sqlite3';
 
 /** Bump when the tables change, and add the upgrade step to `migrate`. */
-const SCHEMA_VERSION = 1;
+const SCHEMA_VERSION = 2;
 
 /**
  * @typedef {{ id: string, seed: number, state: unknown, seats: Array<string | null>,
  *   createdAt: number, updatedAt: number }} SavedGame
  * @typedef {{ seq: number, player: number, command: unknown, at: number }} SavedMove
+ * @typedef {{ pid: string, name: string, createdAt: number, updatedAt: number }} SavedPlayer
  */
 
 /**
@@ -53,6 +56,10 @@ export function openStorage(file = ':memory:') {
            json_extract(state, '$.turn') AS turn,
            json_extract(state, '$.currentPlayer') AS current_player
     FROM games ORDER BY updated_at DESC, id LIMIT ?`);
+  const upsertPlayer = db.prepare(`
+    INSERT INTO players (pid, name, created_at, updated_at) VALUES (@pid, @name, @now, @now)
+    ON CONFLICT (pid) DO UPDATE SET name = excluded.name, updated_at = excluded.updated_at`);
+  const selectPlayer = db.prepare('SELECT * FROM players WHERE pid = ?');
 
   /** One move and the state it led to land together or not at all. */
   const recordMoveTx = db.transaction((/** @type {string} */ id, /** @type {any} */ row) => {
@@ -133,6 +140,24 @@ export function openStorage(file = ':memory:') {
       }));
     },
 
+    /**
+     * Record a player who has signed in, or give them a new name.
+     * @param {string} pid
+     * @param {string} name
+     */
+    savePlayer(pid, name) {
+      upsertPlayer.run({ pid, name, now: Date.now() });
+    },
+
+    /**
+     * @param {string} pid
+     * @returns {SavedPlayer | null}
+     */
+    loadPlayer(pid) {
+      const row = /** @type {any} */ (selectPlayer.get(pid));
+      return row ? { pid: row.pid, name: row.name, createdAt: row.created_at, updatedAt: row.updated_at } : null;
+    },
+
     /** Whether writes go through a write-ahead log. */
     journalMode: () => /** @type {string} */ (db.pragma('journal_mode', { simple: true })),
 
@@ -171,6 +196,17 @@ function migrate(db) {
         PRIMARY KEY (game_id, seq)
       );
       PRAGMA user_version = 1;
+    `))();
+  }
+  if (version < 2) {
+    db.transaction(() => db.exec(`
+      CREATE TABLE players (
+        pid        TEXT PRIMARY KEY,           -- public player id, a hash of their token
+        name       TEXT NOT NULL,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+      );
+      PRAGMA user_version = 2;
     `))();
   }
 }

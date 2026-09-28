@@ -36,9 +36,9 @@ The build concatenates every module into one IIFE, drops imports, and strips
 - No npm packages. The page gets the Colyseus client as the global
   `Colyseus`, from a `<script>` the game server puts before the bundle
   (`build({ preamble })`).
-- Only `src/main.js` may touch the DOM at load time. Keep hex, board and game
-  pure: the game server imports them (and `net.js`) directly and runs them
-  unchanged.
+- Only `src/main.js` may touch the DOM at load time. Keep hex, board, game
+  and player pure: the game server imports them (and `net.js`) directly and
+  runs them unchanged.
 
 ## Game server (server/)
 
@@ -59,6 +59,11 @@ The build concatenates every module into one IIFE, drops imports, and strips
   (README, "Behind nginx"). So the page never uses a root-relative address:
   resolve against `serverBase()` in main.js, and keep the server's preamble
   `src` relative. The smoke check plays one game through such a proxy.
+- Only signed-in players join: `gameRoom(storage)` in `server/room.js` makes
+  the room class whose static `onAuth` checks the `players` table. Colyseus
+  calls `onAuth` on the class before any room exists, with only the client's
+  options, which is why the class carries the storage. Name rules live in
+  `src/player.js` so the page and the server agree.
 - Throw `ServerError` for refusals a client should see (unknown game, and so
   on); Colyseus logs other errors as server faults.
 - The database schema version is `SCHEMA_VERSION` in `server/storage.js`.

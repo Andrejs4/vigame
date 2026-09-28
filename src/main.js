@@ -13,6 +13,7 @@ import { BOARD_OPTIONS, TERRAIN, createBoard, tileAt } from './board.js';
 import { PLAYERS, applyCommand, createGame, reachable, unitAt } from './game.js';
 import { Camera } from './camera.js';
 import { applyState, createArtifactNet, createLocalNet, createServerNet, serialize } from './net.js';
+import { PLAYER_NAME_MAX, cleanPlayerName } from './player.js';
 import { BoardRenderer } from './render.js';
 
 const SEED = 1337;
@@ -31,6 +32,7 @@ const seatRow = document.getElementById('seat-row');
 const viewersRow = document.getElementById('viewers-row');
 const seatButton = document.getElementById('seat-button');
 const notice = document.getElementById('notice');
+const signinDialog = /** @type {HTMLDialogElement | null} */ (document.getElementById('signin'));
 
 let board = createBoard({ ...BOARD_OPTIONS, seed: SEED });
 let game = createGame(board);
@@ -106,11 +108,20 @@ function refreshReach() {
     : new Map();
 }
 
+/**
+ * The name of whoever holds `seat`, while they are here and have one.
+ * @param {number} seat
+ */
+function seatHolderName(seat) {
+  return peers.find((p) => p.seat === seat && p.name)?.name ?? '';
+}
+
 function updateHud() {
   const player = PLAYERS[game.currentPlayer];
   if (hud.turn) hud.turn.textContent = String(game.turn);
   if (hud.player) {
-    hud.player.textContent = player.name;
+    const holder = seatHolderName(game.currentPlayer);
+    hud.player.textContent = holder ? `${player.name} \u00b7 ${holder}` : player.name;
     hud.player.style.color = player.accent;
   }
   if (hud.selection) {
@@ -138,12 +149,15 @@ function updateHud() {
   if (online) {
     const seat = net.seat();
     if (hud.seat) {
-      hud.seat.textContent = seat === null ? 'Spectator' : PLAYERS[seat].name;
+      const role = seat === null ? 'Spectator' : PLAYERS[seat].name;
+      const me = peers.find((p) => p.isMe)?.name;
+      hud.seat.textContent = me ? `${me} \u00b7 ${role}` : role;
       hud.seat.style.color = seat === null ? '' : PLAYERS[seat].accent;
     }
     if (hud.viewers) {
       const n = net.viewers();
       hud.viewers.textContent = net.connected() ? String(n) : 'offline';
+      hud.viewers.title = peers.map((p) => p.name).filter(Boolean).join(', ');
     }
   }
 
@@ -395,23 +409,146 @@ function serverBase() {
   return new URL('.', location.href);
 }
 
+/** The name this browser last signed in with, if any. */
+function savedName() {
+  try { return localStorage.getItem('vigame.name'); } catch { return null; }
+}
+
+/**
+ * POST JSON to the game server.
+ * @param {string} path Relative to the server's base.
+ * @param {object} body
+ */
+function post(path, body) {
+  return fetch(new URL(path, serverBase()), {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+}
+
+/**
+ * Ask for a name and the answer to the server's sum, and sign this browser's
+ * token in with them. The dialog stays up until the server accepts.
+ * @param {string} token
+ * @returns {Promise<void>}
+ */
+function signIn(token) {
+  const dialog = signinDialog;
+  if (!dialog) return Promise.reject(new Error('no sign-in form'));
+  const form = /** @type {HTMLFormElement} */ (dialog.querySelector('form'));
+  const nameInput = /** @type {HTMLInputElement} */ (document.getElementById('signin-name'));
+  const answerInput = /** @type {HTMLInputElement} */ (document.getElementById('signin-answer'));
+  const question = /** @type {HTMLElement} */ (document.getElementById('signin-question'));
+  const error = /** @type {HTMLElement} */ (document.getElementById('signin-error'));
+  const submit = /** @type {HTMLButtonElement} */ (document.getElementById('signin-submit'));
+
+  /** The challenge on screen, or null while there is none. */
+  /** @type {string | null} */
+  let challenge = null;
+
+  async function newQuestion() {
+    challenge = null;
+    answerInput.value = '';
+    question.textContent = 'Loading the question\u2026';
+    try {
+      const res = await fetch(new URL('api/challenge', serverBase()), { cache: 'no-store' });
+      if (!res.ok) throw new Error(String(res.status));
+      const next = await res.json();
+      challenge = String(next.id);
+      question.textContent = `What is ${next.question}?`;
+    } catch {
+      question.textContent = 'Could not load the question. Press Play to try again.';
+    }
+  }
+
+  nameInput.value = savedName() ?? nameInput.value;
+  const done = new AbortController();
+  return new Promise((resolve) => {
+    // The game needs a name: Escape doesn't dismiss the form.
+    dialog.addEventListener('cancel', (e) => e.preventDefault(), { signal: done.signal });
+    dialog.addEventListener('close', () => dialog.showModal(), { signal: done.signal });
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      if (submit.disabled) return;
+      const name = cleanPlayerName(nameInput.value);
+      if (!name) {
+        error.textContent = `Use 1\u2013${PLAYER_NAME_MAX} letters or digits. Spaces and - _ . ' may go between them.`;
+        nameInput.focus();
+        return;
+      }
+      if (!challenge) {
+        await newQuestion();
+        return;
+      }
+      submit.disabled = true;
+      error.textContent = '';
+      try {
+        const res = await post('api/players', { token, name, challenge, answer: answerInput.value.trim() });
+        if (res.ok) {
+          try { localStorage.setItem('vigame.name', name); } catch { /* asked again next visit */ }
+          done.abort();
+          dialog.close();
+          resolve();
+          return;
+        }
+        const why = (await res.json().catch(() => ({}))).error;
+        error.textContent = why === 'wrong answer' ? 'That\u2019s not it. Try this one.' : `The server said no (${why ?? res.status}).`;
+      } catch {
+        error.textContent = 'Could not reach the game server.';
+      } finally {
+        submit.disabled = false;
+      }
+      // Every answer, right or wrong, uses its sum up.
+      await newQuestion();
+      answerInput.focus();
+    }, { signal: done.signal });
+
+    dialog.showModal();
+    newQuestion();
+    (nameInput.value ? answerInput : nameInput).focus();
+  });
+}
+
 /**
  * Join the game in `?game=` on the server that served this page, starting a
  * new one first if the address names none.
  * @param {any} Client The Colyseus client class.
+ * @param {string} token
  */
-async function joinServerGame(Client) {
+async function openServerGame(Client, token) {
   const params = new URLSearchParams(location.search);
   let gameId = params.get('game');
   if (!gameId) {
-    const res = await fetch(new URL('api/games', serverBase()), { method: 'POST' });
-    if (!res.ok) throw new Error(`starting a game failed (${res.status})`);
+    const res = await post('api/games', { token });
+    if (!res.ok) {
+      const why = (await res.json().catch(() => ({}))).error;
+      throw new Error(`starting a game failed: ${why ?? res.status}`);
+    }
     gameId = String((await res.json()).id);
     params.set('game', gameId);
     // The address is now the invitation: send it to the other player.
     history.replaceState(null, '', `${location.pathname}?${params}${location.hash}`);
   }
-  return createServerNet({ client: new Client(serverBase().href), gameId, token: playerToken() });
+  return createServerNet({ client: new Client(serverBase().href), gameId, token });
+}
+
+/**
+ * Sign in if this browser hasn't yet, then join the server's game.
+ * @param {any} Client The Colyseus client class.
+ */
+async function joinServerGame(Client) {
+  const token = playerToken();
+  if (!savedName()) await signIn(token);
+  try {
+    return await openServerGame(Client, token);
+  } catch (e) {
+    // The server doesn't know this browser after all (a new database, say).
+    if (!/sign in first/.test(String(/** @type {any} */ (e)?.message))) throw e;
+    await signIn(token);
+    return openServerGame(Client, token);
+  }
 }
 
 /**
