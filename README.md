@@ -2,9 +2,10 @@
 
 A real-time hex strategy prototype. Players direct buildings, not units.
 Each side has a castle, home to its units, who raise new ones. Players
-build towers, wagons and pits and choose each one's crew from their named
-units, who walk there and get better at the work. There is no combat and
-there are no resources yet: the structure is in place, and the rules and
+build towers, wagons, pits and farms and choose each one's crew from their
+named units, who walk there and get better at the work. Pits dig stone,
+which pays for towers, farms and upgrades; castles and farms grow food.
+There is no combat yet: the structure is in place, and the rules and
 numbers are placeholders.
 
 The game core is plain data and pure functions (`src/core/`), with no
@@ -34,10 +35,13 @@ Run `npm start` and open http://127.0.0.1:2567.
 - **Units** each have a medieval name, a level from 1 to 100, and six
   skills: breeding, ranged attack, close combat, building (which covers
   repairing and digging), farming and running. Work trains the skill it
-  uses, and the unit's level with it. A skill can't pass the unit's level;
-  it climbs faster than the level, then waits for it. Each level takes 1.1
-  times the work of the one before, so the last ones are all but out of
-  reach. Only breeding, building and running do anything yet.
+  uses, and the unit's level with it: every skill at the same pace, the
+  level faster the fiercer the work (breeding least, then running, farming,
+  building, ranged and close combat, and a killing blow most). A skill
+  can't pass the unit's level; it climbs faster than the level, then waits
+  for it. Each level takes 1.1 times the work of the one before, so the
+  last ones are all but out of reach. Only breeding, building, farming and
+  running do anything yet.
 - **Crews**: units walk only when they're given to a building's crew or sent
   home. Select one of your buildings and press **Crew…** for a list of your
   units: tick up to what it holds. Those you untick go home; those you tick
@@ -45,15 +49,25 @@ Run `npm start` and open http://127.0.0.1:2567.
   ground and four on scrub, less the better they run. Water is impassable.
   **Return** sends the whole crew home. Units heading for a full castle wait
   at its door.
-- **Build**: pick **Tower**, **Wagon** or **Pit**, then a highlighted cell:
-  open, buildable ground within three cells of one of your standing
-  buildings. Scrub can be crossed but not built on; water is neither. One
-  building per cell.
+- **Stone and food** go straight into your side's stock (the HUD shows
+  it); nothing carries them. Each side starts with 200 stone.
+- **Build**: pick **Tower** (60 stone), **Wagon**, **Pit** or **Farm** (30
+  stone), then a highlighted cell: open, buildable ground within three
+  cells of one of your standing buildings. Scrub can be crossed but not
+  built on; water is neither. One building per cell.
 - **Pits**: placing one asks for its crew first, up to 8, with the best
-  diggers at home ticked. They walk there and dig it a grade deeper at a
-  time, faster the more of them and the better they build. At depth 5 it is
-  dug out and the crew goes home. (Stone isn't counted yet.)
-- **Upgrade** the selected building: each grade holds as many units again.
+  diggers at home ticked. They walk there and dig stone, faster the more of
+  them and the better they build; every 20 stone the pit is a grade deeper.
+  At depth 5 it is dug out and the crew goes home.
+- **Food**: every minute the castle yields enough for half the units it can
+  hold, and each farm a little even with nobody working it. A farm's crew
+  (up to 6) grows more, faster the better they farm. Nobody eats yet.
+- **Upgrade** the selected building, for stone: the castle 200 × its grade,
+  a tower 60 × its grade. Each grade holds as many units again and takes as
+  many hits again.
+- **Hit points**: every building has them, a castle 2000 and a pit 800. At
+  none left it collapses at once, and whoever was inside is left standing
+  there. Nothing does damage yet.
 - **Wagons** are buildings that move. Select one, then click a cell to drive
   it there, two seconds a cell; its crew rides along inside. Wagons can't
   pass through other buildings, each other included: a blocked wagon waits,
@@ -151,13 +165,13 @@ http://127.0.0.1:2567;` with the same headers.
 ```js
 {
   version: 1, seed: 1337, tick: 420, rng: 123456789, nextId: 58,
-  players: [{ id: 0 }, { id: 1 }],
+  players: [{ id: 0, stone: 140, food: 62 }, { id: 1, stone: 200, food: 30 }],
   buildings: {
-    b1: { id: 'b1', owner: 0, type: 'castle', grade: 1, q: 2, r: 5,
+    b1: { id: 'b1', owner: 0, type: 'castle', grade: 1, q: 2, r: 5, hp: 2000,
           work: 5200 },                                      // toward the next unit
-    b30: { id: 'b30', owner: 0, type: 'pit', grade: 1, q: 5, r: 3,
-           work: 12000, depth: 2 },                          // toward the next grade
-    b31: { id: 'b31', owner: 0, type: 'wagon', grade: 1, q: 6, r: 4,
+    b30: { id: 'b30', owner: 0, type: 'pit', grade: 1, q: 5, r: 3, hp: 800,
+           work: 1200, dug: 47 },                            // 47 stone so far: depth 2
+    b31: { id: 'b31', owner: 0, type: 'wagon', grade: 1, q: 6, r: 4, hp: 300,
            path: [[7, 4], [8, 4]], since: 410, until: 430 }, // rolling to 7,4
   },
   units: {
@@ -181,12 +195,12 @@ http://127.0.0.1:2567;` with the same headers.
   heading for it) from `crewOf(state, id)`.
 - `applyCommand(board, state, side, command)` applies one of these, or
   refuses with a reason and changes nothing:
-  - `{ type: 'build', kind, q, r, units? }`: a tower, wagon or pit, with a crew if `units` lists one;
+  - `{ type: 'build', kind, q, r, units? }`: a tower, wagon, pit or farm, with a crew if `units` lists one;
   - `{ type: 'crew', building, units }`: that building's whole crew (`[]` sends them all home);
   - `{ type: 'upgrade', building }`;
   - `{ type: 'move', building, q, r }`: a wagon.
-- `advance(board, state)` runs one tick: work in castles and pits, wagons,
-  walking.
+- `advance(board, state)` runs one tick: collapses, food, work in castles,
+  pits and farms, wagons, walking.
 - The core never reads the clock or `Math.random`; dice come from `rng`. The
   same commands at the same ticks always give the same game, which the
   server's saves and a future simulation harness rely on.
@@ -249,12 +263,13 @@ opening position.
 [docs/architecture.md](docs/architecture.md) covers the design and what
 comes next.
 
-- No combat, capture or win condition: units only work and walk.
-- No resources: building and upgrading cost nothing, and pits yield no
-  stone, only depth. No farms yet.
-- Of the six skills, only breeding, building (digging) and running do
-  anything; ranged attack, close combat and farming wait for combat and
-  farms. Towers and wagons hold crews but give them nothing to do.
+- No combat, capture or win condition: units only work and walk, and
+  nothing damages buildings. A castle can collapse, but losing it doesn't
+  end the game yet. Units will get a dice-based way of taking hits instead
+  of hit points.
+- Nobody eats yet (hunger comes later), and there is no dark metal.
+- Of the six skills, ranged attack and close combat do nothing yet; towers
+  and wagons hold crews but give them nothing to do. Towers don't repair.
 - A simulation harness: the core can already play games with no players (the
   tests do), but there are no bots or reports yet.
 - Game server:

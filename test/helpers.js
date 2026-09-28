@@ -49,8 +49,9 @@ export function openBoard(radius, except = {}, options = {}) {
 
 /**
  * A two-side state with exactly these buildings and units, for tests that
- * set up a position by hand. Buildings default to towers at 0,0, and units to
- * fresh level 1 units named Test Unit; types that work start with none done.
+ * set up a position by hand. Buildings default to unharmed towers at 0,0,
+ * and units to fresh level 1 units named Test Unit; types that work start
+ * with none done. Each side has 1000 stone.
  * @param {Array<Partial<import('../src/core/game.js').Building> & { id: string }>} buildings
  * @param {Array<Partial<import('../src/core/game.js').Unit> & { id: string }>} [units]
  * @param {number} [seed]
@@ -62,8 +63,9 @@ export function stateWith(buildings, units = [], seed = 1) {
     const type = BUILDING_TYPES[b.type ?? 'tower'];
     return {
       owner: 0, type: 'tower', grade: 1, q: 0, r: 0,
+      hp: (type?.hp ?? 1) * (b.grade ?? 1),
       ...(type?.work !== undefined ? { work: 0 } : {}),
-      ...(type?.depth !== undefined ? { depth: 0 } : {}),
+      ...(type?.depth !== undefined ? { dug: 0 } : {}),
       ...b,
     };
   };
@@ -76,7 +78,7 @@ export function stateWith(buildings, units = [], seed = 1) {
     tick: 0,
     rng: 1,
     nextId: Math.max(0, ...ids) + 1,
-    players: [{ id: 0 }, { id: 1 }],
+    players: [{ id: 0, stone: 1000, food: 0 }, { id: 1, stone: 1000, food: 0 }],
     buildings: Object.fromEntries(buildings.map((b) => [b.id, building(b)])),
     units: Object.fromEntries(units.map((u) => [u.id, unit(u)])),
   };

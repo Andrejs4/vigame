@@ -61,6 +61,8 @@
       <div class="row"><dt>Time</dt><dd id="time">0:00</dd></div>
       <div class="row"><dt>You</dt><dd id="seat">&mdash;</dd></div>
       <div class="row"><dt>Units</dt><dd id="units">&mdash;</dd></div>
+      <div class="row"><dt>Stone</dt><dd id="stone">&mdash;</dd></div>
+      <div class="row"><dt>Food</dt><dd id="food">&mdash;</dd></div>
       <div class="row"><dt>Selected</dt><dd id="selection">none</dd></div>
       <div class="row"><dt>Tile</dt><dd id="tile">&mdash;</dd></div>
       <div class="row"><dt>Viewers</dt><dd id="viewers">1</dd></div>
@@ -73,6 +75,7 @@
     <button id="build-tower" data-kind="tower" aria-pressed="false">Tower</button>
     <button id="build-wagon" data-kind="wagon" aria-pressed="false">Wagon</button>
     <button id="build-pit" data-kind="pit" aria-pressed="false">Pit</button>
+    <button id="build-farm" data-kind="farm" aria-pressed="false">Farm</button>
     <div class="group-label">Selected</div>
     <button id="upgrade" disabled>Upgrade</button>
     <button id="crew-button" disabled>Crew…</button>
@@ -97,7 +100,8 @@
       The units at home in your castle raise new ones: the more of them, and
       the better they breed, the sooner. Build near your standing buildings.
       Select a building and press Crew to choose who works there; Return
-      sends them home. A pit's crew digs it deeper. Select a wagon, then
+      sends them home. A pit's crew digs stone, which pays for towers, farms
+      and upgrades; farms grow food. Select a wagon, then
       click a cell, to drive it; it carries its crew and can't pass other
       buildings. Drag to pan, wheel to zoom.
     </div>

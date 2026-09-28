@@ -25,16 +25,18 @@
  *
  * Players direct buildings, not units: units walk only when they are given
  * to a building's crew, or sent home to their castle. A castle is every
- * unit's home; its units there raise new ones. A pit's crew digs it deeper.
- * Work trains the skill it uses, and the unit's level with it.
+ * unit's home; its units there raise new ones. A pit's crew digs stone, and
+ * a farm's grows food, straight into their side's stock. Stone pays for
+ * towers, farms and upgrades. Work trains the skill it uses, and the unit's
+ * level with it. A building with no hit points left collapses.
  */
 
 import { distance, key, neighbors, parseKey } from './hex.js';
 import { tileAt } from './board.js';
 import { unitName } from './names.js';
 import {
-  BUILDING_TYPES, BUILD_RANGE, DEPART_GAP, LEVEL_GROWTH, LEVEL_XP, MAX_LEVEL, SIDES, SKILLS, SKILL_XP,
-  START_UNITS, UNIT_LIMIT, WAGON_PATIENCE, WALK_TICKS, WORK_BASE,
+  BUILDING_TYPES, BUILD_RANGE, DEPART_GAP, FOOD_PERIOD, LEVEL_GROWTH, LEVEL_RATE, LEVEL_XP, MAX_LEVEL, SIDES,
+  SKILLS, SKILL_XP, START_STONE, START_UNITS, UNIT_LIMIT, WAGON_PATIENCE, WALK_TICKS, WORK_BASE,
 } from './rules.js';
 
 /** @typedef {import('./hex.js').Axial} Axial */
@@ -50,8 +52,9 @@ import {
  * @property {number} grade From 1 to the type's `grades`.
  * @property {number} q Anchor cell: the building's cell, or a castle's centre.
  * @property {number} r
+ * @property {number} hp Hit points left.
  * @property {number} [work] Work done toward what it yields next, for types that work.
- * @property {number} [depth] A pit's depth, in grades.
+ * @property {number} [dug] Stone dug from a pit so far; its depth follows from it.
  * @property {Cell[]} [path] A moving building's route, next cell first.
  * @property {number} [since] While it rolls to path[0]: the tick it set off,
  * @property {number} [until] and the tick it gets there. It holds both cells meanwhile.
@@ -84,9 +87,16 @@ import {
  * @property {number} tick Ticks since the game began.
  * @property {number} rng The random generator's state.
  * @property {number} nextId The number the next building or unit id gets.
- * @property {Array<{ id: number }>} players One per side in this game.
+ * @property {Player[]} players One per side in this game.
  * @property {Record<string, Building>} buildings By id.
  * @property {Record<string, Unit>} units By id.
+ */
+
+/**
+ * @typedef {object} Player A side, and what it has in store.
+ * @property {number} id
+ * @property {number} stone
+ * @property {number} food
  */
 
 /**
@@ -107,7 +117,7 @@ import {
  */
 
 /** Bump when GameState changes shape, and teach `checkState` the new one. */
-export const STATE_VERSION = 2;
+export const STATE_VERSION = 3;
 
 const SKILL_NAMES = /** @type {Skill[]} */ (Object.keys(SKILLS));
 
@@ -145,9 +155,10 @@ export function newGame(board) {
     units: {},
   };
   board.starts.slice(0, SIDES.length).forEach((start, owner) => {
-    state.players.push({ id: owner });
+    state.players.push({ id: owner, stone: START_STONE, food: 0 });
     const id = newId(state, 'b');
-    state.buildings[id] = { id, owner, type: 'castle', grade: 1, q: start.q, r: start.r, work: 0 };
+    const hp = BUILDING_TYPES.castle.hp;
+    state.buildings[id] = { id, owner, type: 'castle', grade: 1, q: start.q, r: start.r, hp, work: 0 };
     for (let i = 0; i < START_UNITS; i++) newUnit(state, owner, id);
   });
   return state;
@@ -192,15 +203,20 @@ function newUnit(state, owner, building) {
 }
 
 /**
- * A tick of work with a skill: a point of experience for the unit, and one
- * for the skill, which rises while it is below the unit's level.
+ * A tick of work with a skill: experience for the unit, as much as the work
+ * is worth, and a point for the skill, which rises while it is below the
+ * unit's level.
  * @param {Unit} u
  * @param {Skill} skill
  */
 function practise(u, skill) {
-  if (u.level < MAX_LEVEL && ++u.xp >= levelXp(u.level)) {
-    u.xp = 0;
-    u.level += 1;
+  if (u.level < MAX_LEVEL) {
+    u.xp += LEVEL_RATE[skill];
+    if (u.xp >= levelXp(u.level)) {
+      u.xp -= levelXp(u.level);
+      u.level += 1;
+      if (u.level === MAX_LEVEL) u.xp = 0;
+    }
   }
   const practice = Math.min(SKILL_XP, u.practice[skill] + 1);
   if (practice >= SKILL_XP && u.skills[skill] < u.level) {
@@ -240,6 +256,22 @@ function heldCells(b) {
  */
 export function capacityOf(b) {
   return BUILDING_TYPES[b.type].capacity * b.grade;
+}
+
+/**
+ * A building's hit points when unharmed.
+ * @param {Building} b
+ */
+export function maxHp(b) {
+  return BUILDING_TYPES[b.type].hp * b.grade;
+}
+
+/**
+ * How deep a pit is, in grades.
+ * @param {Building} b
+ */
+export function depthOf(b) {
+  return Math.floor((b.dug ?? 0) / (BUILDING_TYPES[b.type].perDepth ?? 1));
 }
 
 /**
@@ -599,12 +631,14 @@ function build(board, state, occ, player, cmd) {
   if (!nearStanding(state, player, at)) return refuse('too far from your buildings');
   const ids = unitList(state, player, cmd.units ?? []);
   if (typeof ids === 'string') return refuse(ids);
-
   const type = BUILDING_TYPES[kind];
+  const stock = state.players[player];
+  if (stock.stone < type.cost) return refuse('not enough stone');
+
   /** @type {Building} */
-  const b = { id: `b${state.nextId}`, owner: player, type: kind, grade: 1, q: at.q, r: at.r };
+  const b = { id: `b${state.nextId}`, owner: player, type: kind, grade: 1, q: at.q, r: at.r, hp: type.hp };
   if (type.work !== undefined) b.work = 0;
-  if (type.depth !== undefined) b.depth = 0;
+  if (type.depth !== undefined) b.dug = 0;
   // Crew the new building before it exists, so a crew that can't get there
   // leaves nothing behind.
   const planned = /** @type {GameState} */ ({ ...state, buildings: { ...state.buildings, [b.id]: b } });
@@ -612,6 +646,7 @@ function build(board, state, occ, player, cmd) {
   if (!staffed.ok) return staffed;
   state.buildings[b.id] = b;
   state.nextId += 1;
+  stock.stone -= type.cost;
   return { ok: true };
 }
 
@@ -629,7 +664,16 @@ export function nearStanding(state, player, at) {
 }
 
 /**
- * Raise a building's grade by one.
+ * Stone to upgrade a building from its grade now.
+ * @param {Building} b
+ */
+export function upgradeCost(b) {
+  return (BUILDING_TYPES[b.type].upgrade ?? 0) * b.grade;
+}
+
+/**
+ * Raise a building's grade by one, for stone: it holds more, and takes
+ * more hits.
  * @param {GameState} state
  * @param {number} player
  * @param {Record<string, unknown>} cmd
@@ -638,8 +682,14 @@ export function nearStanding(state, player, at) {
 function upgrade(state, player, cmd) {
   const b = ownBuilding(state, player, cmd.building);
   if (!b) return refuse('not your building');
-  if (b.grade >= BUILDING_TYPES[b.type].grades) return refuse('fully upgraded');
+  const type = BUILDING_TYPES[b.type];
+  if (b.grade >= type.grades) return refuse('fully upgraded');
+  const stock = state.players[player];
+  const cost = upgradeCost(b);
+  if (stock.stone < cost) return refuse('not enough stone');
+  stock.stone -= cost;
   b.grade += 1;
+  b.hp += type.hp;
   return { ok: true };
 }
 
@@ -681,27 +731,58 @@ function moveBuilding(board, state, occ, player, cmd) {
  */
 export function advance(board, state) {
   state.tick += 1;
+  for (const b of Object.values(state.buildings)) if (b.hp <= 0) collapse(state, b);
   const occ = occupancy(state);
+  if (state.tick % FOOD_PERIOD === 0) harvest(state);
   work(board, state, occ);
   rollWagons(board, state, occ);
   marchUnits(board, state, occ);
 }
 
 /**
+ * A building with no hit points left falls down. Whoever was inside is left
+ * standing on its cell; whoever was heading there stops where the way ends.
+ * @param {GameState} state
+ * @param {Building} b
+ */
+function collapse(state, b) {
+  for (const u of Object.values(state.units)) {
+    if (u.in !== b.id) continue;
+    delete u.in;
+    u.q = b.q;
+    u.r = b.r;
+  }
+  delete state.buildings[b.id];
+}
+
+/**
+ * Food that comes without work, every FOOD_PERIOD: a castle's, for half the
+ * units it can hold, and each farm's base.
+ * @param {GameState} state
+ */
+function harvest(state) {
+  for (const b of Object.values(state.buildings)) {
+    const stock = state.players[b.owner];
+    if (b.type === 'castle') stock.food += Math.floor(capacityOf(b) / 2);
+    else stock.food += BUILDING_TYPES[b.type].base ?? 0;
+  }
+}
+
+/**
  * Whether a building is a pit dug as deep as it goes.
  * @param {Building} b
  */
-function isDugOut(b) {
+export function isDugOut(b) {
   const { depth } = BUILDING_TYPES[b.type];
-  return depth !== undefined && /** @type {number} */ (b.depth) >= depth;
+  return depth !== undefined && depthOf(b) >= depth;
 }
 
 /**
  * Buildings where units work get a tick of it from each unit inside: more
  * units, and more skilled ones, get there sooner. The work trains them. A
  * castle's units raise a new unit while it has room and its side is under
- * the unit limit; a pit's crew digs it a grade deeper, and goes home once it
- * is dug out.
+ * the unit limit; a pit's crew digs a stone, and goes home once the pit is
+ * dug out; a farm's crew grows a food.
  * @param {Board} board
  * @param {GameState} state
  * @param {Occupancy} occ
@@ -726,11 +807,15 @@ function work(board, state, occ) {
     }
     b.work = Math.min(done - type.work, type.work - 1);
 
+    const stock = state.players[b.owner];
     if (type.yields === 'unit') {
       inside.push(newUnit(state, b.owner, b.id));
       occ.unitCount[b.owner] += 1;
+    } else if (type.yields === 'food') {
+      stock.food += 1;
     } else {
-      b.depth = /** @type {number} */ (b.depth) + 1;
+      stock.stone += 1;
+      b.dug = /** @type {number} */ (b.dug) + 1;
       if (isDugOut(b)) {
         b.work = 0;
         sendHome(board, state, occ, b);
@@ -899,9 +984,13 @@ export function checkState(board, raw) {
   if (!Number.isSafeInteger(state.tick) || state.tick < 0) fail('bad tick');
   if (!Number.isSafeInteger(state.rng) || state.rng < 0) fail('bad rng');
   if (!Number.isSafeInteger(state.nextId) || state.nextId < 1) fail('bad nextId');
+  const isCount = (/** @type {unknown} */ n, /** @type {number} */ below) => Number.isSafeInteger(n) && Number(n) >= 0 && Number(n) < below;
   if (!Array.isArray(state.players) || !state.players.every((p, i) => p?.id === i) || state.players.length > SIDES.length) {
     return [...problems, 'bad players'];
   }
+  state.players.forEach((p, i) => {
+    if (!isCount(p.stone, Infinity) || !isCount(p.food, Infinity)) fail(`side ${i}: bad stock`);
+  });
   if (!isRecord(state.buildings) || !isRecord(state.units)) return [...problems, 'bad buildings or units'];
 
   const isOwner = (/** @type {unknown} */ o) => Number.isInteger(o) && Number(o) >= 0 && Number(o) < state.players.length;
@@ -913,7 +1002,6 @@ export function checkState(board, raw) {
     && Boolean(tileAt(board, c[0], c[1])?.passable);
   const isTiming = (/** @type {Building | Unit} */ e) => (e.since === undefined && e.until === undefined)
     || (Number.isSafeInteger(e.since) && Number.isSafeInteger(e.until) && Number(e.until) > Number(e.since));
-  const isCount = (/** @type {unknown} */ n, /** @type {number} */ below) => Number.isSafeInteger(n) && Number(n) >= 0 && Number(n) < below;
 
   /** @type {Map<string, string>} */
   const held = new Map();
@@ -926,7 +1014,9 @@ export function checkState(board, raw) {
     if (!Number.isInteger(b.grade) || b.grade < 1 || b.grade > type.grades) fail(`building ${id}: bad grade`);
     if (b.type === 'castle') castles[b.owner] += 1;
     if (type.work === undefined ? b.work !== undefined : !isCount(b.work, type.work)) fail(`building ${id}: bad work`);
-    if (type.depth === undefined ? b.depth !== undefined : !isCount(b.depth, type.depth + 1)) fail(`building ${id}: bad depth`);
+    const deepest = /** @type {number} */ (type.depth) * /** @type {number} */ (type.perDepth);
+    if (type.depth === undefined ? b.dug !== undefined : !isCount(b.dug, deepest + 1)) fail(`building ${id}: bad dug`);
+    if (!Number.isSafeInteger(b.hp) || b.hp < 1 || b.hp > type.hp * b.grade) fail(`building ${id}: bad hp`);
     if (!Number.isSafeInteger(b.q) || !Number.isSafeInteger(b.r)) { fail(`building ${id}: bad cell`); continue; }
 
     for (const c of footprint(b.type, b.q, b.r)) {

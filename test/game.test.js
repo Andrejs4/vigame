@@ -3,10 +3,11 @@ import assert from 'node:assert/strict';
 
 import { BOARD_OPTIONS, createBoard } from '../src/core/board.js';
 import {
-  applyCommand, capacityOf, checkState, crewOf, footprint, levelXp, newGame, occupancy, publicView, random,
+  advance, applyCommand, capacityOf, checkState, crewOf, footprint, levelXp, newGame, occupancy, publicView, random,
 } from '../src/core/game.js';
 import {
-  BUILDING_TYPES, LEVEL_XP, MAX_LEVEL, SKILL_XP, START_UNITS, UNIT_LIMIT, WAGON_PATIENCE, WALK_TICKS, WORK_BASE,
+  BUILDING_TYPES, FOOD_PERIOD, LEVEL_RATE, LEVEL_XP, MAX_LEVEL, SKILL_XP, START_UNITS, UNIT_LIMIT, WAGON_PATIENCE,
+  WALK_TICKS, WORK_BASE,
 } from '../src/core/rules.js';
 import { boardFrom, openBoard, run, runUntil, skillsAt, stateWith, unitsIn } from './helpers.js';
 
@@ -96,13 +97,15 @@ test('work trains its skill up to the unit\'s level, and the level, each more sl
 
   run(board, state, SKILL_XP);
   assert.deepEqual([u.level, u.skills.build, u.practice.build], [1, 1, 0], 'a skill level takes SKILL_XP ticks of work');
-  run(board, state, LEVEL_XP - SKILL_XP - 1);
+  const perLevel = (/** @type {number} */ level) => levelXp(level) / LEVEL_RATE.build;
+  assert.equal(perLevel(1), LEVEL_XP / LEVEL_RATE.build);
+  run(board, state, perLevel(1) - SKILL_XP - 1);
   assert.deepEqual([u.level, u.skills.build, u.practice.build], [1, 1, SKILL_XP - 1]);
   run(board, state, 1);
   assert.deepEqual([u.level, u.xp, u.skills.build, u.practice.build], [2, 0, 2, 0], 'a level takes LEVEL_XP');
   run(board, state, SKILL_XP);
   assert.deepEqual([u.skills.build, u.practice.build], [2, SKILL_XP], 'the skill waits for the level');
-  run(board, state, levelXp(2) - SKILL_XP);
+  run(board, state, perLevel(2) - SKILL_XP);
   assert.deepEqual([u.level, u.skills.build], [3, 3], 'and rises with it');
   assert.deepEqual({ ...u.skills, build: 0 }, skillsAt(0), 'other skills are untouched');
 
@@ -195,25 +198,30 @@ test('a pit is built with its crew, who walk there and dig it deeper', () => {
   const state = stateWith([{ id: 'b1', type: 'castle' }], unitsIn('b1', 10, 10));
   const crew = ['u10', 'u11', 'u12', 'u13', 'u14', 'u15', 'u16', 'u17'];
   assert.deepEqual(applyCommand(board, state, 0, { type: 'build', kind: 'pit', q: 3, r: 0, units: crew }), OK);
-  assert.deepEqual(state.buildings.b20, { id: 'b20', owner: 0, type: 'pit', grade: 1, q: 3, r: 0, work: 0, depth: 0 });
+  assert.deepEqual(state.buildings.b20, {
+    id: 'b20', owner: 0, type: 'pit', grade: 1, q: 3, r: 0, hp: BUILDING_TYPES.pit.hp, work: 0, dug: 0,
+  });
   assert.deepEqual(crewOf(state, 'b20'), crew);
 
   runUntil(board, state, () => occupancy(state).inside.get('b20')?.length === crew.length);
   const { work } = state.buildings.b20;
   run(board, state, 1);
   assert.equal(state.buildings.b20.work, /** @type {number} */ (work) + crew.length * WORK_BASE);
-  runUntil(board, state, () => state.buildings.b20.depth === 1, 1000);
+  const stone = state.players[0].stone;
+  runUntil(board, state, () => state.buildings.b20.dug === 1, 1000);
+  assert.equal(state.players[0].stone, stone + 1, 'straight into the stock');
 });
 
 test('a dug-out pit sends its crew home, and takes no other', () => {
   const board = openBoard(5);
-  const { work, depth } = BUILDING_TYPES.pit;
+  const { work, depth, perDepth } = BUILDING_TYPES.pit;
+  const deepest = /** @type {number} */ (depth) * /** @type {number} */ (perDepth);
   const state = stateWith(
-    [{ id: 'b1', type: 'castle' }, { id: 'b2', type: 'pit', q: 3, r: 0, depth: /** @type {number} */ (depth) - 1, work: /** @type {number} */ (work) - 1 }],
+    [{ id: 'b1', type: 'castle' }, { id: 'b2', type: 'pit', q: 3, r: 0, dug: deepest - 1, work: /** @type {number} */ (work) - 1 }],
     [...unitsIn('b1', 1, 10), ...unitsIn('b2', 2, 20)],
   );
   run(board, state, 1);
-  assert.deepEqual([state.buildings.b2.depth, state.buildings.b2.work], [depth, 0]);
+  assert.deepEqual([state.buildings.b2.dug, state.buildings.b2.work], [deepest, 0]);
   assert.deepEqual(crewOf(state, 'b2'), []);
   assert.deepEqual([state.units.u20.to, state.units.u21.to], ['b1', 'b1']);
   assert.deepEqual(applyCommand(board, state, 0, { type: 'crew', building: 'b2', units: ['u10'] }), { ok: false, reason: 'dug out' });
@@ -225,7 +233,7 @@ test('commands that are not allowed are refused, and change nothing', () => {
   const board = openBoard(4, { '3,0': 'water', '3,1': 'water', '4,-1': 'water' });
   const state = stateWith([
     { id: 'b1', type: 'castle' }, { id: 'b2', q: -3, r: 0 }, { id: 'b3', owner: 1, q: 0, r: -3 }, { id: 'b4', q: 4, r: 0 },
-    { id: 'b5', type: 'pit', q: 3, r: -3, depth: BUILDING_TYPES.pit.depth }, { id: 'b6', type: 'pit', q: -3, r: 3 },
+    { id: 'b5', type: 'pit', q: 3, r: -3, dug: 100 }, { id: 'b6', type: 'pit', q: -3, r: 3 },
   ], [...unitsIn('b1', 10, 10), { id: 'u30', owner: 1, in: 'b3' }]);
   assert.deepEqual(checkState(board, state), []);
   const before = JSON.stringify(state);
@@ -261,6 +269,49 @@ test('commands that are not allowed are refused, and change nothing', () => {
   assert.equal(JSON.stringify(state), before);
 });
 
+// --- stone, food and hit points --------------------------------------------------
+
+test('stone pays for towers, farms and upgrades; pits and wagons are free', () => {
+  const board = openBoard(5);
+  const state = stateWith([{ id: 'b1', type: 'castle' }]);
+  state.players[0].stone = 100;
+  const build = (/** @type {string} */ kind, /** @type {number} */ q) => applyCommand(board, state, 0, { type: 'build', kind, q, r: 0 });
+  assert.deepEqual(build('tower', 2), OK);
+  assert.deepEqual(build('farm', 3), OK);
+  assert.equal(state.players[0].stone, 100 - BUILDING_TYPES.tower.cost - BUILDING_TYPES.farm.cost);
+  assert.deepEqual(build('tower', -2), { ok: false, reason: 'not enough stone' });
+  assert.deepEqual(build('pit', -2), OK);
+  assert.deepEqual(build('wagon', -3), OK);
+  assert.deepEqual(applyCommand(board, state, 0, { type: 'upgrade', building: 'b1' }), { ok: false, reason: 'not enough stone' });
+  state.players[0].stone = 1000;
+  assert.deepEqual(applyCommand(board, state, 0, { type: 'upgrade', building: 'b1' }), OK);
+  assert.equal(state.players[0].stone, 1000 - /** @type {number} */ (BUILDING_TYPES.castle.upgrade));
+  assert.equal(state.buildings.b1.hp, 2 * BUILDING_TYPES.castle.hp, 'an upgrade adds hit points');
+});
+
+test('castles and farms grow food every minute, farms more with a crew', () => {
+  const board = openBoard(5);
+  const state = stateWith([{ id: 'b1', type: 'castle' }, { id: 'b2', type: 'farm', q: 3, r: 0 }]);
+  run(board, state, FOOD_PERIOD);
+  const idle = BUILDING_TYPES.castle.capacity / 2 + /** @type {number} */ (BUILDING_TYPES.farm.base);
+  assert.equal(state.players[0].food, idle, 'half of what the castle can hold eats, plus the farm\'s base');
+
+  const worked = stateWith([{ id: 'b2', type: 'farm', q: 3, r: 0 }], unitsIn('b2', 1, 10));
+  run(board, worked, FOOD_PERIOD);
+  assert.ok(worked.players[0].food > /** @type {number} */ (BUILDING_TYPES.farm.base));
+  assert.ok(worked.units.u10.practice.farming > 0);
+});
+
+test('a building with no hit points left collapses, and leaves its units standing', () => {
+  const board = openBoard(4);
+  const state = stateWith([{ id: 'b1', q: 2, r: 0 }], unitsIn('b1', 2, 10));
+  state.buildings.b1.hp = 0;
+  advance(board, state);
+  assert.deepEqual(checkState(board, state), []);
+  assert.equal(state.buildings.b1, undefined);
+  assert.deepEqual(occupancy(state).onCell.get('2,0'), ['u10', 'u11']);
+});
+
 // --- building ------------------------------------------------------------------
 
 test('building needs open, buildable ground near one of your standing buildings', () => {
@@ -269,7 +320,7 @@ test('building needs open, buildable ground near one of your standing buildings'
   const tower = (/** @type {number} */ q, /** @type {number} */ r) => ({ type: 'build', kind: 'tower', q, r });
 
   assert.deepEqual(applyCommand(board, state, 0, tower(2, 0)), OK);
-  assert.deepEqual(state.buildings.b2, { id: 'b2', owner: 0, type: 'tower', grade: 1, q: 2, r: 0 });
+  assert.deepEqual(state.buildings.b2, { id: 'b2', owner: 0, type: 'tower', grade: 1, q: 2, r: 0, hp: BUILDING_TYPES.tower.hp });
   /** @type {Array<[unknown, string]>} */
   const refusals = [
     [tower(2, 0), 'cell taken'],
@@ -374,7 +425,7 @@ function randomGame(seed, ticks, midway) {
         const own = Object.values(state.buildings).filter((b) => b.owner === player);
         const cell = pick(board.list);
         const command = pick([
-          { type: 'build', kind: pick(['tower', 'wagon', 'pit']), q: cell.q, r: cell.r, units: some(player, Math.floor(roll() * 5)) },
+          { type: 'build', kind: pick(['tower', 'wagon', 'pit', 'farm']), q: cell.q, r: cell.r, units: some(player, Math.floor(roll() * 5)) },
           { type: 'crew', building: pick(own).id, units: some(player, Math.floor(roll() * 9)) },
           { type: 'upgrade', building: pick(own).id },
           { type: 'move', building: pick(own).id, q: cell.q, r: cell.r },
@@ -440,11 +491,13 @@ test('checkState finds broken states', () => {
       s.nextId = 100;
     }, /a crew of 21, more than it holds/],
     [(s) => {
-      s.buildings.b3 = { id: 'b3', owner: 0, type: 'pit', grade: 1, q: -3, r: 0, work: 0, depth: BUILDING_TYPES.pit.depth };
+      s.buildings.b3 = { id: 'b3', owner: 0, type: 'pit', grade: 1, q: -3, r: 0, hp: 1, work: 0, dug: 100 };
       s.units.u11.in = 'b3';
       s.nextId = 100;
     }, /dug out, but still has a crew/],
-    [(s) => { s.buildings.b3 = { id: 'b3', owner: 0, type: 'castle', grade: 1, q: -3, r: 3, work: 0 }; s.nextId = 100; }, /side 0 has 2 castles/],
+    [(s) => { s.buildings.b3 = { id: 'b3', owner: 0, type: 'castle', grade: 1, q: -3, r: 3, hp: 1, work: 0 }; s.nextId = 100; }, /side 0 has 2 castles/],
+    [(s) => { s.buildings.b2.hp = BUILDING_TYPES.tower.hp + 1; }, /bad hp/],
+    [(s) => { s.players[1].stone = -1; }, /side 1: bad stock/],
     [(s) => { s.units.u10.skills.build = 2; }, /bad skills/],
     [(s) => { s.units.u10.practice.running = SKILL_XP + 1; }, /bad practice/],
     [(s) => { s.units.u10.xp = LEVEL_XP; }, /bad xp/],

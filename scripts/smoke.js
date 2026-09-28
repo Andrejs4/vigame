@@ -392,7 +392,7 @@ async function threeBrowsers(browser, url, { full, label }) {
   const pit = (await buildings(a)).find((x) => x.type === 'pit');
   await a.waitForFunction((id) => /** @type {any} */ (window).__vigame.view.buildings[id].work > 0, pit.id, { timeout: 30000 });
   await selectBuilding(a, pit);
-  await waitMatch(a, '#selection', /^Pit · crew \d+\/\d+ · depth 0\/\d+, \d+%$/);
+  await waitMatch(a, '#selection', /^Pit · crew \d+\/\d+ · depth 0\/\d+, \d+ stone · HP \d+\/\d+$/);
   await a.click('#return-button');
   await a.waitForFunction((id) => !Object.values(/** @type {any} */ (window).__vigame.view.units)
     .some((u) => u.to === id || u.in === id), pit.id);

@@ -22,7 +22,7 @@
 import Database from 'better-sqlite3';
 
 /** Bump when the tables change, and add the upgrade step to `migrate`. */
-const SCHEMA_VERSION = 4;
+const SCHEMA_VERSION = 5;
 
 /**
  * @typedef {{ id: string, seed: number, state: unknown, seq: number, seats: Array<string | null>,
@@ -250,6 +250,15 @@ function migrate(db) {
       DELETE FROM commands;
       DELETE FROM games;
       PRAGMA user_version = 4;
+    `))();
+  }
+  if (version < 5) {
+    // Stone, food and hit points: building now costs stone, so earlier
+    // games' logs don't replay either.
+    db.transaction(() => db.exec(`
+      DELETE FROM commands;
+      DELETE FROM games;
+      PRAGMA user_version = 5;
     `))();
   }
 }

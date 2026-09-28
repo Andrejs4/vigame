@@ -6,7 +6,9 @@
 
 import { bounds, key, pixelToAxial } from '../core/hex.js';
 import { BOARD_OPTIONS, TERRAIN, createBoard, tileAt } from '../core/board.js';
-import { capacityOf, castleOf, crewOf, nearStanding, occupancy } from '../core/game.js';
+import {
+  capacityOf, castleOf, crewOf, depthOf, isDugOut, maxHp, nearStanding, occupancy, upgradeCost,
+} from '../core/game.js';
 import { BUILDING_TYPES, SIDES, SKILLS, TICKS_PER_SECOND, UNIT_LIMIT } from '../core/rules.js';
 import { serverBase } from './api.js';
 import { Camera } from './camera.js';
@@ -21,15 +23,6 @@ function formatTime(tick) {
 /** @typedef {import('../core/game.js').Building} Building */
 
 /**
- * Whether a building is a pit dug as deep as it goes.
- * @param {Building} b
- */
-function isDugOut(b) {
-  const { depth } = BUILDING_TYPES[b.type];
-  return depth !== undefined && /** @type {number} */ (b.depth) >= depth;
-}
-
-/**
  * Show the game and play it.
  * @param {Awaited<ReturnType<typeof import('./net.js').createServerNet>>} net A joined game.
  * @param {import('./api.js').Player} me
@@ -41,6 +34,8 @@ export async function startGame(net, me) {
     time: document.getElementById('time'),
     seat: document.getElementById('seat'),
     units: document.getElementById('units'),
+    stone: document.getElementById('stone'),
+    food: document.getElementById('food'),
     selection: document.getElementById('selection'),
     tile: document.getElementById('tile'),
     viewers: document.getElementById('viewers'),
@@ -159,6 +154,9 @@ export async function startGame(net, me) {
     if (hud.units) {
       hud.units.textContent = seat !== null && occ ? `${occ.unitCount[seat] ?? 0} / ${UNIT_LIMIT}` : '—';
     }
+    const stock = seat !== null ? view?.players[seat] : null;
+    if (hud.stone) hud.stone.textContent = stock ? String(stock.stone) : '—';
+    if (hud.food) hud.food.textContent = stock ? String(stock.food) : '—';
     if (hud.selection) {
       const b = selected ? view?.buildings[selected] : null;
       if (b) {
@@ -189,7 +187,9 @@ export async function startGame(net, me) {
     }
     const b = selected ? view?.buildings[selected] : null;
     const mine = Boolean(can && b && isMine(selected));
-    upgradeButton.disabled = !(mine && b && b.grade < BUILDING_TYPES[b.type].grades);
+    const upgradable = Boolean(mine && b && b.grade < BUILDING_TYPES[b.type].grades);
+    upgradeButton.disabled = !upgradable;
+    upgradeButton.textContent = upgradable && b && upgradeCost(b) ? `Upgrade · ${upgradeCost(b)}` : 'Upgrade';
     const crewed = Boolean(mine && b && b.type !== 'castle' && !isDugOut(b));
     crewButton.disabled = !crewed;
     returnButton.disabled = !(crewed && view && b && crewOf(view, b.id).length > 0);
@@ -208,7 +208,9 @@ export async function startGame(net, me) {
     } else {
       parts.push(`crew ${view ? crewOf(view, b.id).length : 0}/${capacityOf(b)}`);
     }
-    if (type.depth !== undefined) parts.push(isDugOut(b) ? 'dug out' : `depth ${b.depth}/${type.depth}, ${done}`);
+    if (type.depth !== undefined) parts.push(isDugOut(b) ? 'dug out' : `depth ${depthOf(b)}/${type.depth}, ${b.dug} stone`);
+    if (type.yields === 'food') parts.push(`next food ${done}`);
+    parts.push(`HP ${b.hp}/${maxHp(b)}`);
     return parts.join(' · ');
   }
 
@@ -480,6 +482,9 @@ export async function startGame(net, me) {
   });
 
   for (const button of buildButtons) {
+    const { name, cost } = BUILDING_TYPES[button.dataset.kind ?? ''];
+    button.textContent = cost ? `${name} · ${cost}` : name;
+    button.title = cost ? `${cost} stone` : 'Free';
     button.addEventListener('click', () => {
       const kind = button.dataset.kind ?? null;
       placing = placing === kind ? null : kind;
