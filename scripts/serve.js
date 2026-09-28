@@ -11,7 +11,6 @@ import { dirname, extname, join, normalize, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const PORT = Number(process.argv[2] ?? process.env.PORT ?? 8080);
 
 const TYPES = {
   '.html': 'text/html; charset=utf-8',
@@ -22,26 +21,45 @@ const TYPES = {
   '.png': 'image/png',
 };
 
-const server = createServer(async (req, res) => {
-  const url = new URL(req.url ?? '/', 'http://localhost');
-  let path = normalize(join(ROOT, decodeURIComponent(url.pathname)));
-  if (path !== ROOT && !path.startsWith(ROOT + sep)) {
-    res.writeHead(403).end();
-    return;
-  }
-  try {
-    if ((await stat(path)).isDirectory()) path = join(path, 'index.html');
-    const body = await readFile(path);
-    res.writeHead(200, {
-      'content-type': TYPES[extname(path)] ?? 'application/octet-stream',
-      'cache-control': 'no-store',
-    });
-    res.end(body);
-  } catch {
-    res.writeHead(404, { 'content-type': 'text/plain' }).end('not found');
-  }
-});
+/**
+ * Serve the repository root over HTTP.
+ * @param {number} [port=0] 0 picks a free port.
+ * @returns {Promise<{ url: string, close: () => Promise<void> }>}
+ */
+export function startServer(port = 0) {
+  const server = createServer(async (req, res) => {
+    const url = new URL(req.url ?? '/', 'http://localhost');
+    let path = normalize(join(ROOT, decodeURIComponent(url.pathname)));
+    if (path !== ROOT && !path.startsWith(ROOT + sep)) {
+      res.writeHead(403).end();
+      return;
+    }
+    try {
+      if ((await stat(path)).isDirectory()) path = join(path, 'index.html');
+      const body = await readFile(path);
+      res.writeHead(200, {
+        'content-type': TYPES[extname(path)] ?? 'application/octet-stream',
+        'cache-control': 'no-store',
+      });
+      res.end(body);
+    } catch {
+      res.writeHead(404, { 'content-type': 'text/plain' }).end('not found');
+    }
+  });
 
-server.listen(PORT, () => {
-  console.log(`vigame dev server: http://localhost:${PORT}/`);
-});
+  return new Promise((res, rej) => {
+    server.once('error', rej);
+    server.listen(port, '127.0.0.1', () => {
+      const { port: actual } = /** @type {import('node:net').AddressInfo} */ (server.address());
+      res({
+        url: `http://127.0.0.1:${actual}/`,
+        close: () => new Promise((done) => server.close(() => done())),
+      });
+    });
+  });
+}
+
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  const { url } = await startServer(Number(process.argv[2] ?? process.env.PORT ?? 8080));
+  console.log(`vigame dev server: ${url}`);
+}
