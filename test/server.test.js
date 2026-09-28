@@ -121,7 +121,7 @@ async function roomClosed(roomId) {
 
 test('the server serves the page with the Colyseus client loaded first', async () => {
   const html = await (await fetch(`${base}/`)).text();
-  assert.match(html, /<script src="\/vendor\/colyseus\.js"><\/script>\n<script>\n\(\(\) => \{/);
+  assert.match(html, /<script src="vendor\/colyseus\.js"><\/script>\n<script>\n\(\(\) => \{/, 'relative, so a proxy can serve it under a subfolder');
   const sdk = await fetch(`${base}/vendor/colyseus.js`);
   assert.equal(sdk.status, 200);
   assert.match(await sdk.text(), /Colyseus/);

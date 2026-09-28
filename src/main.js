@@ -387,6 +387,15 @@ function playerToken() {
 }
 
 /**
+ * Where the game server is, as seen from this page: the page's own folder.
+ * Behind a proxy that serves the game under a subfolder (say `/vigame/`),
+ * that folder is the server's root, so every request is made relative to it.
+ */
+function serverBase() {
+  return new URL('.', location.href);
+}
+
+/**
  * Join the game in `?game=` on the server that served this page, starting a
  * new one first if the address names none.
  * @param {any} Client The Colyseus client class.
@@ -395,14 +404,14 @@ async function joinServerGame(Client) {
   const params = new URLSearchParams(location.search);
   let gameId = params.get('game');
   if (!gameId) {
-    const res = await fetch('/api/games', { method: 'POST' });
+    const res = await fetch(new URL('api/games', serverBase()), { method: 'POST' });
     if (!res.ok) throw new Error(`starting a game failed (${res.status})`);
     gameId = String((await res.json()).id);
     params.set('game', gameId);
     // The address is now the invitation: send it to the other player.
     history.replaceState(null, '', `${location.pathname}?${params}${location.hash}`);
   }
-  return createServerNet({ client: new Client(location.origin), gameId, token: playerToken() });
+  return createServerNet({ client: new Client(serverBase().href), gameId, token: playerToken() });
 }
 
 /**
@@ -439,7 +448,7 @@ async function goOnline() {
       const missing = /no game/.test(String(/** @type {any} */ (e)?.message));
       showNotice(
         `${missing ? 'There is no game at this address.' : 'Could not reach the game server.'} Playing on this screen only.`,
-        { href: '/', text: 'Start a new game' },
+        { href: serverBase().pathname, text: 'Start a new game' },
       );
       return;
     }

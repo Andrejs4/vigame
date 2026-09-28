@@ -55,6 +55,10 @@ The build concatenates every module into one IIFE, drops imports, and strips
   page and in `GameRoom.play`. Put new rules there, not in the room.
 - Keep the order in `GameRoom.play`: check and apply on a copy, save, then
   adopt and sync. The tests check that a failed save changes nothing.
+- The page may be served under a subfolder by a proxy that strips it
+  (README, "Behind nginx"). So the page never uses a root-relative address:
+  resolve against `serverBase()` in main.js, and keep the server's preamble
+  `src` relative. The smoke check plays one game through such a proxy.
 - Throw `ServerError` for refusals a client should see (unknown game, and so
   on); Colyseus logs other errors as server faults.
 - The database schema version is `SCHEMA_VERSION` in `server/storage.js`.

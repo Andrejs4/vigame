@@ -75,8 +75,10 @@ needs the game server.
   `localStorage` and sends it when joining; the room knows the player by it
   and shows other viewers only a hash. Logins would replace the token.
 - **Client**: `createServerNet` in `net.js`. The page loads the Colyseus
-  browser client from the server (`/vendor/colyseus.js`), so `src/` stays
-  free of npm imports and the bundler stays simple.
+  browser client from the server (`vendor/colyseus.js`), so `src/` stays
+  free of npm imports and the bundler stays simple. Every address the page
+  uses is relative to its own folder, so a proxy such as nginx can serve the
+  game under a subfolder.
 
 ### Storage
 

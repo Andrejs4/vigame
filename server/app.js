@@ -54,9 +54,12 @@ export function newGame(storage, { seed = randomInt(1, 2 ** 31) } = {}) {
 /**
  * The game page: the bundled page with the Colyseus client loaded first. The
  * page sees `window.Colyseus` and plays through this server.
+ *
+ * The page uses only relative addresses, here and in main.js, so a proxy can
+ * serve the whole game under a subfolder.
  */
 function page() {
-  return build({ preamble: '<script src="/vendor/colyseus.js"></script>\n' });
+  return build({ preamble: '<script src="vendor/colyseus.js"></script>\n' });
 }
 
 /**

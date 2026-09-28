@@ -83,6 +83,32 @@ have one, install it with `npx playwright install chromium`.
 | `test/` | Unit tests, plus `fake-runtime.js`, an in-memory stand-in for the Artifact runtime. |
 | `docs/architecture.md` | How the pieces fit, and the decisions behind the game server. |
 
+### Behind nginx
+
+The game server uses one port for everything: the page, the API and the
+WebSocket connections. Keep it on `127.0.0.1` and let nginx forward to it;
+only nginx's ports (80, 443) need to be open or forwarded on the router.
+The page uses only relative addresses, so it works at a domain's root, on a
+subdomain, or under a subfolder:
+
+```nginx
+location /vigame/ {
+    proxy_pass http://127.0.0.1:2567/;         # the trailing slash strips /vigame
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;    # WebSocket
+    proxy_set_header Connection "upgrade";
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_read_timeout 1h;                     # idle games keep their connection
+}
+```
+
+Players open `https://example.com/vigame/`. The trailing slash matters:
+nginx redirects `/vigame` to `/vigame/` for a location like this one, but
+another proxy might not, and the page resolves its addresses against its
+folder. For a subdomain, use `location /` and `proxy_pass
+http://127.0.0.1:2567;` with the same headers.
+
 ### The game server
 
 The server holds each game in memory in a Colyseus room and keeps the

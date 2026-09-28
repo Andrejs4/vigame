@@ -12,6 +12,8 @@
 
 import assert from 'node:assert/strict';
 import { mkdirSync, writeFileSync } from 'node:fs';
+import { createServer, request } from 'node:http';
+import { connect } from 'node:net';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
@@ -531,11 +533,63 @@ async function gameServer(browser, url) {
   await lost.goto(`${url}?game=nope`);
   await lost.waitForSelector('#notice:not([hidden])');
   assert.match(await text(lost, '#notice'), /There is no game at this address/);
+  assert.equal(await lost.locator('#notice a').getAttribute('href'), new URL(url).pathname);
   assert.equal(await lost.evaluate(() => /** @type {any} */ (window).__vigame.net.mode), 'local');
   await frames(lost);
   await lost.screenshot({ path: join(OUT, 'server-no-game.png') });
 
   for (const p of [a, b, c, lost]) await p.context().close();
+}
+
+/**
+ * A stand-in for nginx serving the game under a subfolder: requests under
+ * `prefix` go to the game server with the prefix stripped, WebSocket upgrades
+ * included, and anything else is a 404, so a page that reaches for the root
+ * fails the scenario.
+ * @param {string} target The game server's URL.
+ * @param {string} prefix e.g. '/vigame'
+ */
+function startPrefixProxy(target, prefix) {
+  const { hostname, port } = new URL(target);
+  /** @param {string | undefined} url */
+  const strip = (url = '') => (url === prefix || url.startsWith(`${prefix}/`) || url.startsWith(`${prefix}?`)
+    ? url.slice(prefix.length) || '/'
+    : null);
+
+  const proxy = createServer((req, res) => {
+    const path = strip(req.url);
+    if (path === null) return void res.writeHead(404).end('outside the game folder');
+    const upstream = request({ hostname, port, path, method: req.method, headers: req.headers }, (answer) => {
+      res.writeHead(answer.statusCode ?? 502, answer.headers);
+      answer.pipe(res);
+    });
+    upstream.on('error', () => res.writeHead(502).end());
+    req.pipe(upstream);
+  });
+
+  proxy.on('upgrade', (req, socket, head) => {
+    const path = strip(req.url);
+    if (path === null) return void socket.destroy();
+    const upstream = connect(Number(port), hostname, () => {
+      const lines = [`${req.method} ${path} HTTP/${req.httpVersion}`];
+      for (let i = 0; i < req.rawHeaders.length; i += 2) lines.push(`${req.rawHeaders[i]}: ${req.rawHeaders[i + 1]}`);
+      upstream.write(`${lines.join('\r\n')}\r\n\r\n`);
+      upstream.write(head);
+      upstream.pipe(socket).pipe(upstream);
+    });
+    upstream.on('error', () => socket.destroy());
+    socket.on('error', () => upstream.destroy());
+  });
+
+  return new Promise((res) => {
+    proxy.listen(0, '127.0.0.1', () => {
+      const { port: own } = /** @type {import('node:net').AddressInfo} */ (proxy.address());
+      res({
+        url: `http://127.0.0.1:${own}${prefix}/`,
+        close: () => new Promise((done) => { proxy.closeAllConnections(); proxy.close(() => done(undefined)); }),
+      });
+    });
+  });
 }
 
 // --- main ------------------------------------------------------------------
@@ -546,6 +600,7 @@ writeFileSync(BUNDLE, build());
 
 const server = await startServer();
 const games = await startGameServer({ port: 0 });
+const proxied = /** @type {{ url: string, close: () => Promise<unknown> }} */ (await startPrefixProxy(games.url, '/vigame'));
 const browser = await chromium.launch();
 const scenarios = [
   ['hotseat on desktop', () => hotseatDesktop(browser)],
@@ -553,6 +608,7 @@ const scenarios = [
   ['ES modules over HTTP', () => modulesOverHttp(browser, server.url)],
   ['online, three browsers', () => online(browser)],
   ['game server, three browsers', () => gameServer(browser, games.url)],
+  ['game server under a subfolder, behind a proxy', () => gameServer(browser, proxied.url)],
 ];
 
 let failed = 0;
@@ -571,6 +627,7 @@ try {
 } finally {
   await browser.close();
   await server.close();
+  await proxied.close();
   await games.close();
 }
 
