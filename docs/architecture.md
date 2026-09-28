@@ -113,6 +113,31 @@ doesn't have.
 SQLite allows one writing process. Once Colyseus runs on several processes or
 machines (with Redis coordinating them), move to Postgres.
 
+### Debugging
+
+- **Breakpoints**: run the server with `node --inspect` and attach VS Code or
+  Chrome DevTools (`chrome://inspect`). In VS Code, running `npm start` in a
+  JavaScript Debug Terminal attaches the debugger automatically.
+- **Colyseus tools**, each a separate npm package:
+  - `@colyseus/playground`: a browser page for joining rooms as test clients,
+    sending messages such as `move` by hand, and watching the state change.
+  - `@colyseus/monitor`: a web panel listing live rooms, their clients, and
+    each room's current state.
+  - `@colyseus/testing`: starts the real server inside automated tests,
+    connects clients, and checks the resulting state.
+  - `@colyseus/loadtest`: connects many bots at once.
+- **Rules without a server**: `game.js` is pure, so most rule bugs reproduce
+  in a plain unit test.
+- **Replays**: the `moves` log rebuilds any game action by action, up to the
+  point where it went wrong.
+- **Production**: the playground is for development only. The monitor shows
+  every game's full state, so it must sit behind a password or not be mounted
+  at all.
+
+Stepping through code happens on a local machine. A Claude Code cloud session
+can run the server, drive it with test clients and read its logs, but an editor
+can't attach a debugger to it.
+
 ## Keeping real-time possible
 
 The in-memory authoritative room carries over to real-time play unchanged, and
