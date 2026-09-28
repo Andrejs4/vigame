@@ -163,9 +163,16 @@ have one, install it with `npx playwright install chromium`.
 | `server/storage.js` | All database access (SQLite). |
 | `server/challenge.js` | The sign-in sums. |
 | `server/main.js` | Command-line entry point (`npm start`, `npm run dev`). |
+| `deploy/` | Running it on a Debian server: a systemd unit, an install script, an nginx block. |
 | `scripts/smoke.js` | Playwright check of the page through the game server: three browsers, a subfolder proxy, a phone. |
 | `test/` | Unit tests, including whole games of random commands checked tick by tick. |
 | `docs/architecture.md` | How the pieces fit, and the decisions behind them. |
+
+### On a server
+
+[deploy/README.md](deploy/README.md) installs the game on a Debian server
+as a sandboxed systemd service with its own Node.js, in one script, and
+covers updates, backups and removing it again.
 
 ### Behind nginx
 
