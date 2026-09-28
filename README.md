@@ -87,6 +87,9 @@ the shape of `game/state` stays compatible.
 
 ## Not done yet
 
+[docs/architecture.md](docs/architecture.md) has the plan for a real game
+server (Colyseus with SQLite) and how it would stretch to real-time play.
+
 - There is no combat, capture or win condition; units only move.
 - Turn order is enforced by each client, not by a server. Anyone who can
   write the db could write any state. The `net.js` seam exists so that an

@@ -4,6 +4,10 @@ A turn-based hex strategy prototype in plain JavaScript ES modules. See
 README.md for the game, layout and data model. This file covers what isn't
 obvious from the code.
 
+Planned server architecture and the decisions behind it (Colyseus, SQLite,
+saving each action before broadcasting it) are in docs/architecture.md. Read it
+before working on networking or persistence.
+
 ## Commands
 
 - `npm test`: unit tests (node:test). Fast; run after every change.
