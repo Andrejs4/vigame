@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import {
   DIRECTIONS, axialRound, axialToPixel, bounds, corners, distance, hexagon,
   key, neighbor, neighbors, parseKey, pixelToAxial, rectangle,
-} from '../src/hex.js';
+} from '../src/core/hex.js';
 
 const SIZE = 34;
 

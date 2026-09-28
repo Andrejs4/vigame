@@ -132,6 +132,24 @@ export function axialRound(qf, rf) {
 }
 
 /**
+ * The hexes on a straight line from a to b, both ends included.
+ * @param {Axial} a
+ * @param {Axial} b
+ * @returns {Axial[]}
+ */
+export function line(a, b) {
+  const n = distance(a, b);
+  const out = [];
+  for (let i = 0; i <= n; i++) {
+    const t = n === 0 ? 0 : i / n;
+    // The nudge keeps points that fall exactly between two hexes from
+    // rounding differently along the line.
+    out.push(axialRound(a.q + (b.q - a.q) * t + 1e-6, a.r + (b.r - a.r) * t + 1e-6));
+  }
+  return out;
+}
+
+/**
  * The six corner offsets of a pointy-top hex, relative to its centre.
  * Corner 0 points due north; corners proceed clockwise.
  * @param {number} size

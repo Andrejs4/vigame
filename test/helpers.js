@@ -2,16 +2,18 @@
  * Shared test fixtures.
  */
 
-import { TERRAIN } from '../src/board.js';
-import { key } from '../src/hex.js';
+import { TERRAIN } from '../src/core/board.js';
+import { STATE_VERSION, advance, checkState } from '../src/core/game.js';
+import { hexagon, key } from '../src/core/hex.js';
 
 /**
  * A hand-built board from a terrain map, for tests that need exact terrain.
- * @param {Record<string, import('../src/board.js').Terrain>} terrainByKey
+ * @param {Record<string, import('../src/core/board.js').Terrain>} terrainByKey
  *   e.g. { '0,0': 'grass', '1,0': 'scrub' }.
- * @param {number} [seed=1]
+ * @param {{ seed?: number, starts?: import('../src/core/hex.js').Axial[] }} [options]
+ * @returns {import('../src/core/board.js').Board}
  */
-export function boardFrom(terrainByKey, seed = 1) {
+export function boardFrom(terrainByKey, { seed = 1, starts = [] } = {}) {
   const tiles = new Map();
   const list = [];
   for (const [k, terrain] of Object.entries(terrainByKey)) {
@@ -20,24 +22,83 @@ export function boardFrom(terrainByKey, seed = 1) {
       q, r, terrain, tint: 0.5,
       moveCost: TERRAIN[terrain].moveCost,
       passable: TERRAIN[terrain].passable,
+      buildable: TERRAIN[terrain].buildable,
     };
     tiles.set(key(q, r), tile);
     list.push(tile);
   }
-  return { tiles, list, hexSize: 34, seed };
+  return { tiles, list, hexSize: 34, seed, starts };
 }
 
 /**
- * A game object in the shape createGame returns, with the given units.
- * @param {Array<Partial<import('../src/game.js').Unit> & { id: string }>} units
+ * A hexagonal board of one terrain, with exceptions.
+ * @param {number} radius
+ * @param {Record<string, import('../src/core/board.js').Terrain>} [except]
+ * @param {{ seed?: number, starts?: import('../src/core/hex.js').Axial[] }} [options]
  */
-export function gameWith(units, currentPlayer = 0) {
+export function openBoard(radius, except = {}, options = {}) {
+  /** @type {Record<string, import('../src/core/board.js').Terrain>} */
+  const terrain = {};
+  for (const { q, r } of hexagon(radius)) terrain[key(q, r)] = 'grass';
+  return boardFrom({ ...terrain, ...except }, options);
+}
+
+/**
+ * A two-side state with exactly these buildings and units, for tests that
+ * set up a position by hand.
+ * @param {Array<Partial<import('../src/core/game.js').Building> & { id: string }>} buildings
+ * @param {Array<Partial<import('../src/core/game.js').Unit> & { id: string }>} [units]
+ * @param {number} [seed]
+ * @returns {import('../src/core/game.js').GameState}
+ */
+export function stateWith(buildings, units = [], seed = 1) {
+  const ids = [...buildings, ...units].map((e) => Number(e.id.slice(1)));
   return {
-    units: new Map(units.map((u) => [u.id, {
-      owner: 0, q: 0, r: 0, move: 2, moveMax: 2, name: 'Infantry', ...u,
-    }])),
-    turn: 1,
-    currentPlayer,
-    selectedUnitId: null,
+    version: STATE_VERSION,
+    seed,
+    tick: 0,
+    rng: 1,
+    nextId: Math.max(0, ...ids) + 1,
+    players: [{ id: 0 }, { id: 1 }],
+    buildings: Object.fromEntries(buildings.map((b) => [b.id, { owner: 0, type: 'tower', grade: 1, q: 0, r: 0, ...b }])),
+    units: Object.fromEntries(units.map((u) => [u.id, { owner: 0, type: 'militia', ...u }])),
   };
+}
+
+/**
+ * Units inside a building, as many as asked, with ids from `first`.
+ * @param {string} building
+ * @param {number} count
+ * @param {number} first
+ * @param {number} [owner]
+ */
+export function unitsIn(building, count, first, owner = 0) {
+  return Array.from({ length: count }, (_, i) => ({ id: `u${first + i}`, owner, in: building }));
+}
+
+/**
+ * Advance `ticks` times, checking the state after every tick.
+ * @param {import('../src/core/board.js').Board} board
+ * @param {import('../src/core/game.js').GameState} state
+ * @param {number} ticks
+ */
+export function run(board, state, ticks) {
+  for (let i = 0; i < ticks; i++) {
+    advance(board, state);
+    const problems = checkState(board, state);
+    if (problems.length) throw new Error(`tick ${state.tick}: ${problems.join('; ')}`);
+  }
+}
+
+/**
+ * Advance until `done` holds, checking every tick; fail after `limit` ticks.
+ * @param {import('../src/core/board.js').Board} board
+ * @param {import('../src/core/game.js').GameState} state
+ * @param {() => boolean} done
+ * @param {number} [limit]
+ */
+export function runUntil(board, state, done, limit = 2000) {
+  for (let i = 0; i < limit && !done(); i++) run(board, state, 1);
+  if (!done()) throw new Error(`not done after ${limit} ticks`);
+  return state.tick;
 }

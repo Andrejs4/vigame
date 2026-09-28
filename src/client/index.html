@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Vigame</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="client/style.css">
+<!-- Every address here is relative, so a proxy can serve the game under a subfolder. -->
+<script src="vendor/colyseus.js"></script>
+<script type="module" src="client/main.js"></script>
+</head>
+<body>
+
+<main class="page" id="problem" hidden>
+  <div class="card">
+    <h1>Vigame</h1>
+    <p class="error" id="problem-text" role="alert"></p>
+    <a class="button" href="">Try again</a>
+  </div>
+</main>
+
+<main class="page" id="login" hidden>
+  <form class="card" novalidate>
+    <h1>Vigame</h1>
+    <p class="hint">The name other players see: up to 15 letters or digits.</p>
+    <label>Your name
+      <input id="login-name" name="name" autocomplete="nickname" spellcheck="false" required>
+    </label>
+    <label><span id="login-question">Loading the question&hellip;</span>
+      <input id="login-answer" name="answer" inputmode="numeric" autocomplete="off" required>
+    </label>
+    <p class="error" id="login-error" role="alert"></p>
+    <button id="login-submit" class="primary">Play</button>
+  </form>
+</main>
+
+<main class="page" id="lobby" hidden>
+  <div class="card wide">
+    <h1>Vigame</h1>
+    <p class="hint">Playing as <strong id="lobby-name"></strong> &middot; <a href="" id="lobby-rename">Change name</a></p>
+    <p class="error" id="lobby-notice" role="status" hidden></p>
+    <button id="lobby-new" class="primary">New game</button>
+    <h2>Your games</h2>
+    <ul class="games" id="lobby-mine"></ul>
+    <p class="empty" id="lobby-mine-empty">None yet. Start one, or join one below.</p>
+    <h2>Waiting for a player</h2>
+    <ul class="games" id="lobby-open"></ul>
+    <p class="empty" id="lobby-open-empty">No one is waiting right now.</p>
+  </div>
+</main>
+
+<div id="stage" hidden>
+  <canvas id="board"></canvas>
+
+  <div class="hud" id="status">
+    <div class="masthead">Vigame &middot; prototype</div>
+    <dl>
+      <div class="row"><dt>Time</dt><dd id="time">0:00</dd></div>
+      <div class="row"><dt>You</dt><dd id="seat">&mdash;</dd></div>
+      <div class="row"><dt>Units</dt><dd id="units">&mdash;</dd></div>
+      <div class="row"><dt>Selected</dt><dd id="selection">none</dd></div>
+      <div class="row"><dt>Tile</dt><dd id="tile">&mdash;</dd></div>
+      <div class="row"><dt>Viewers</dt><dd id="viewers">1</dd></div>
+    </dl>
+    <p class="notice" id="message" role="status" hidden></p>
+  </div>
+
+  <div class="hud" id="controls">
+    <div class="group-label">Build</div>
+    <button id="build-tower" data-kind="tower" aria-pressed="false">Tower</button>
+    <button id="build-wagon" data-kind="wagon" aria-pressed="false">Wagon</button>
+    <div class="group-label">Selected</div>
+    <button id="upgrade" disabled>Upgrade</button>
+    <button id="send-amount">Send half</button>
+    <div class="group-label">View</div>
+    <button id="recenter">Recenter</button>
+    <div class="zoom-row">
+      <button id="zoom-out" aria-label="Zoom out">&minus;</button>
+      <button id="zoom-in" aria-label="Zoom in">+</button>
+    </div>
+    <button id="toggle-coords" aria-pressed="false">Coordinates</button>
+    <button id="seat-button" hidden>Release seat</button>
+    <a class="button" id="to-lobby" href="">Lobby</a>
+  </div>
+
+  <div class="hud" id="legend">
+    <div><span class="swatch" style="background:hsl(104,32%,40%)"></span>Grass &mdash; build, 1 s a cell</div>
+    <div><span class="swatch" style="background:hsl(88,38%,48%)"></span>Meadow &mdash; build, 1 s a cell</div>
+    <div><span class="swatch" style="background:hsl(74,24%,34%)"></span>Scrub &mdash; no building, 2 s a cell</div>
+    <div><span class="swatch" style="background:hsl(203,44%,40%)"></span>Water &mdash; neither</div>
+    <div class="legend-note">
+      Your castle makes a unit every two seconds. Click one of your buildings,
+      then another, to send units there. Build near your standing buildings.
+      Select a wagon, then click a cell, to drive it; wagons carry the units
+      inside and can't pass other buildings. Drag to pan, wheel to zoom.
+    </div>
+  </div>
+</div>
+
+</body>
+</html>
