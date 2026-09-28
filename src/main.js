@@ -29,7 +29,7 @@ const hud = {
 const endTurnButton = /** @type {HTMLButtonElement | null} */ (document.getElementById('end-turn'));
 const seatRow = document.getElementById('seat-row');
 const viewersRow = document.getElementById('viewers-row');
-const releaseButton = document.getElementById('release-seat');
+const seatButton = document.getElementById('seat-button');
 
 let board = createBoard({ ...BOARD_OPTIONS, seed: SEED });
 let game = createGame(board);
@@ -64,13 +64,29 @@ function rebuildBoard(seed) {
 let showCoords = false;
 
 /**
+ * Online, whether the shared game has arrived. Until it has, the board shows
+ * the local opening position, and a move made on that would be committed over
+ * the real game.
+ */
+let synced = false;
+
+/**
  * Whether this viewer may act right now. Hotseat always may; online, only the
  * player whose turn it is, and only if they hold that seat.
  */
 function canAct() {
   if (net.mode === 'local') return true;
   const seat = net.seat();
-  return seat !== null && seat === game.currentPlayer;
+  return synced && seat !== null && seat === game.currentPlayer;
+}
+
+/** Why End turn is disabled, for its tooltip. */
+function waitingReason() {
+  if (net.mode === 'online' && !synced) return 'Connecting\u2026';
+  if (net.seat() === null) {
+    return net.canClaimSeat() ? 'Take a seat to play' : 'Spectating \u2014 both seats are taken';
+  }
+  return `Waiting for ${PLAYERS[game.currentPlayer].name}`;
 }
 
 /** Push the current authoritative state to the transport. */
@@ -108,7 +124,11 @@ function updateHud() {
   const online = net.mode === 'online';
   if (seatRow) seatRow.hidden = !online;
   if (viewersRow) viewersRow.hidden = !online;
-  if (releaseButton) releaseButton.hidden = !online || net.seat() === null;
+  if (seatButton) {
+    const seated = net.seat() !== null;
+    seatButton.hidden = !online || (!seated && !net.canClaimSeat());
+    seatButton.textContent = seated ? 'Release seat' : 'Take seat';
+  }
 
   if (online) {
     const seat = net.seat();
@@ -125,11 +145,7 @@ function updateHud() {
   if (endTurnButton) {
     const allowed = canAct();
     endTurnButton.disabled = !allowed;
-    endTurnButton.title = allowed
-      ? ''
-      : net.seat() === null
-        ? 'Spectating \u2014 both seats are taken'
-        : `Waiting for ${PLAYERS[game.currentPlayer].name}`;
+    endTurnButton.title = allowed ? '' : waitingReason();
   }
 }
 
@@ -165,13 +181,16 @@ function hexAtScreen(sx, sy) {
   return pixelToAxial(world.x, world.y, board.hexSize);
 }
 
-let dragging = false;
+/** The pointer that is panning. A second finger must not hijack the drag. */
+/** @type {number | null} */
+let dragPointer = null;
 let dragMoved = false;
 let lastX = 0;
 let lastY = 0;
 
 canvas.addEventListener('pointerdown', (e) => {
-  dragging = true;
+  if (dragPointer !== null) return;
+  dragPointer = e.pointerId;
   dragMoved = false;
   lastX = e.clientX;
   lastY = e.clientY;
@@ -183,7 +202,7 @@ canvas.addEventListener('pointermove', (e) => {
   const sx = e.clientX - rect.left;
   const sy = e.clientY - rect.top;
 
-  if (dragging) {
+  if (e.pointerId === dragPointer) {
     const dx = e.clientX - lastX;
     const dy = e.clientY - lastY;
     if (Math.abs(dx) + Math.abs(dy) > 2) dragMoved = true;
@@ -203,13 +222,18 @@ canvas.addEventListener('pointermove', (e) => {
 });
 
 canvas.addEventListener('pointerup', (e) => {
-  dragging = false;
+  if (e.pointerId !== dragPointer) return;
+  dragPointer = null;
   canvas.releasePointerCapture(e.pointerId);
   if (dragMoved) return; // a drag is a pan, not a click
 
   const rect = canvas.getBoundingClientRect();
   const h = hexAtScreen(e.clientX - rect.left, e.clientY - rect.top);
   if (!tileAt(board, h.q, h.r)) return;
+
+  // Touch has no hover, so the tapped hex stands in for it: outlined, and
+  // described in the HUD's Tile row.
+  if (e.pointerType !== 'mouse') hover = { q: h.q, r: h.r };
 
   // Everyone shares what they picked, including spectators and the player
   // whose turn it is not. Highlights are not a lock.
@@ -232,6 +256,21 @@ canvas.addEventListener('pointerup', (e) => {
   if (moved) commit();
 });
 
+// The browser took the pointer over (a system gesture, a palm): end the drag
+// rather than leave it stuck on.
+canvas.addEventListener('pointercancel', (e) => {
+  if (e.pointerId === dragPointer) dragPointer = null;
+});
+
+// A mouse that leaves the board is no longer over any hex. A finger "leaves"
+// every time it lifts, and there the last tapped hex should stay in the HUD.
+canvas.addEventListener('pointerleave', (e) => {
+  if (e.pointerType !== 'mouse' || dragPointer !== null || !hover) return;
+  hover = null;
+  needsDraw = true;
+  updateHud();
+});
+
 canvas.addEventListener('wheel', (e) => {
   e.preventDefault();
   const rect = canvas.getBoundingClientRect();
@@ -249,8 +288,9 @@ endTurnButton?.addEventListener('click', () => {
   commit();
 });
 
-releaseButton?.addEventListener('click', () => {
-  net.releaseSeat?.();
+seatButton?.addEventListener('click', () => {
+  if (net.seat() !== null) net.releaseSeat();
+  else net.claimSeat();
 });
 
 document.getElementById('toggle-coords')?.addEventListener('click', (e) => {
@@ -292,11 +332,12 @@ resize();
 updateHud();
 
 function frame() {
-  if (needsDraw) {
-    renderer.draw({ camera, game, hover, reachable: reach, peers });
-    needsDraw = false;
-  }
+  // Queue the next frame first, so one frame that throws cannot stop the
+  // board from ever redrawing again.
   requestAnimationFrame(frame);
+  if (!needsDraw) return;
+  needsDraw = false;
+  renderer.draw({ camera, game, hover, reachable: reach, peers });
 }
 requestAnimationFrame(frame);
 
@@ -329,6 +370,7 @@ async function goOnline() {
   online.onSeat(() => { refreshReach(); updateHud(); needsDraw = true; });
 
   await online.ready();
+  synced = true;
   refreshReach();
   updateHud();
   needsDraw = true;
@@ -341,7 +383,7 @@ goOnline().catch(() => { /* stay hotseat */ });
 
 // Dev aid: '#select' preselects the current player's first unit, so the
 // movement-range overlay can be verified in a headless screenshot.
-if (true) {
+if (location.hash === '#select') {
   const first = [...game.units.values()].find((u) => u.owner === game.currentPlayer);
   if (first) {
     game.selectedUnitId = first.id;
@@ -357,6 +399,8 @@ Object.assign(globalThis, {
     get board() { return board; },
     get game() { return game; },
     get net() { return net; },
+    get reach() { return reach; },
+    get peers() { return peers; },
     camera,
     forceDraw: () => { needsDraw = true; },
     /** Inject fake peers to check the shared-selection rendering offline. */
