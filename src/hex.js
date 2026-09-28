@@ -127,7 +127,8 @@ export function axialRound(qf, rf) {
   if (dq > dr && dq > ds) q = -r - s;
   else if (dr > ds) r = -q - s;
 
-  return { q, r };
+  // `+ 0` turns the -0 that Math.round(-0.3) yields into a plain 0.
+  return { q: q + 0, r: r + 0 };
 }
 
 /**
