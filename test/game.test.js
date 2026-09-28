@@ -7,7 +7,7 @@ import {
   starveChance,
 } from '../src/core/game.js';
 import {
-  BUILDING_TYPES, FOOD_PER_UNIT, FOOD_PERIOD, LEVEL_RATE, LEVEL_XP, MAX_LEVEL, SKILL_XP, START_UNITS, UNIT_LIMIT, WAGON_PATIENCE,
+  BUILDING_TYPES, COMBAT_PERIOD, FOOD_PER_UNIT, FOOD_PERIOD, KILL_XP, LEVEL_RATE, RANGED_DAMAGE, LEVEL_XP, MAX_LEVEL, SKILL_XP, START_UNITS, UNIT_LIMIT, WAGON_PATIENCE,
   WALK_TICKS, WORK_BASE,
 } from '../src/core/rules.js';
 import { boardFrom, openBoard, run, runUntil, skillsAt, stateWith, unitsIn } from './helpers.js';
@@ -367,6 +367,61 @@ test('a building with no hit points left collapses, and leaves its units standin
   assert.deepEqual(checkState(board, state), []);
   assert.equal(state.buildings.b1, undefined);
   assert.deepEqual(occupancy(state).onCell.get('2,0'), ['u10', 'u11']);
+});
+
+// --- fighting --------------------------------------------------------------------
+
+test('units in a building strike enemy buildings in reach; a tower reaches further', () => {
+  const board = openBoard(7);
+  // Towers reach 3 + 2 = 5; the enemy tower 5 away is hit, the one 6 away isn't.
+  const state = stateWith(
+    [{ id: 'b1', q: 0, r: 0 }, { id: 'b2', owner: 1, q: 5, r: 0 }, { id: 'b3', owner: 1, q: -6, r: 0 }],
+    unitsIn('b1', 2, 10),
+  );
+  run(board, state, COMBAT_PERIOD);
+  assert.equal(state.buildings.b2.hp, BUILDING_TYPES.tower.hp - 2 * RANGED_DAMAGE);
+  assert.equal(state.buildings.b3.hp, BUILDING_TYPES.tower.hp);
+  assert.ok(state.units.u10.practice.ranged > 0);
+});
+
+test('a strike that brings a building down earns a killing blow; its units are left outside', () => {
+  const board = openBoard(4);
+  const state = stateWith([{ id: 'b1', q: 0, r: 0 }, { id: 'b2', owner: 1, q: 1, r: 0, hp: 1 }], [
+    ...unitsIn('b1', 1, 10), { id: 'u20', owner: 1, in: 'b2' },
+  ]);
+  run(board, state, COMBAT_PERIOD);
+  assert.equal(state.buildings.b2, undefined);
+  assert.ok(state.units.u10.xp >= KILL_XP, 'a killing blow');
+  assert.deepEqual([state.units.u20.q, state.units.u20.r, state.units.u20.in], [1, 0, undefined], 'left standing');
+});
+
+test('the side whose castle falls has lost, and gives no more commands', () => {
+  const board = openBoard(4);
+  const state = stateWith([{ id: 'b1', type: 'castle' }]);
+  state.buildings.b1.hp = 0;
+  run(board, state, 1);
+  assert.equal(state.players[0].lost, 1);
+  assert.deepEqual(applyCommand(board, state, 0, { type: 'build', kind: 'pit', q: 3, r: 0 }), { ok: false, reason: 'your castle has fallen' });
+});
+
+test('units mend their damaged building before their usual work', () => {
+  const board = openBoard(4);
+  const state = stateWith([{ id: 'b1', type: 'pit', q: 1, r: 0, hp: 100 }], unitsIn('b1', 5, 10));
+  run(board, state, 10);
+  assert.equal(state.buildings.b1.hp, 100 + 10, '5 units mend 1 hit point a tick');
+  assert.equal(state.buildings.b1.work, 0, 'no digging meanwhile');
+  assert.ok(state.units.u10.practice.build > 0);
+});
+
+test('a band goes at its slowest member\'s pace', () => {
+  const board = openBoard(5);
+  const state = stateWith([{ id: 'b1', type: 'band', q: 0, r: 0 }], [
+    { id: 'u10', in: 'b1', level: MAX_LEVEL, skills: { ...skillsAt(0), running: MAX_LEVEL } },
+    { id: 'u11', in: 'b1' },
+  ]);
+  assert.deepEqual(applyCommand(board, state, 0, { type: 'move', building: 'b1', q: 2, r: 0 }), OK);
+  const tick = runUntil(board, state, () => !state.buildings.b1.path);
+  assert.equal(tick, 1 + 2 * WALK_TICKS, 'as slow as the one who never ran');
 });
 
 // --- building ------------------------------------------------------------------

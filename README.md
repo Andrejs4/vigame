@@ -75,7 +75,19 @@ Run `npm start` and open http://127.0.0.1:2567.
   many hits again.
 - **Hit points**: every building has them, a castle 2000 and a pit 800. At
   none left it collapses at once, and whoever was inside is left standing
-  there. Nothing does damage yet.
+  there. While a building is damaged, the units inside mend it instead of
+  their usual work, faster the better they build.
+- **Fighting**: once a second, every unit inside a building or a band
+  strikes the nearest enemy in reach: close combat at 1 cell if it can,
+  else ranged at 3 cells, 4 from a castle, 5 from a tower. A strike takes 6
+  (close) or 3 (ranged) plus the skill used off a building's hit points.
+  Units inside a building are safe while it stands; units out in the open
+  or in a band die to a strike with a 10% chance, plus the striker's skill,
+  less their own level (a stand-in until units get their dice). The strike
+  that brings a building down or kills a unit is a killing blow, worth 600
+  experience.
+- **Losing**: a side whose castle falls has lost, and can give no more
+  commands.
 - **Wagons** are buildings that move. Select one, then click a cell to drive
   it there, two seconds a cell; its crew rides along inside. Wagons can't
   pass through other buildings, each other included: a blocked wagon waits,
@@ -83,7 +95,8 @@ Run `npm start` and open http://127.0.0.1:2567.
 - **Bands** are groups of up to 30 units that move like wagons, for free.
   Placing one asks who goes. A band holds no cell, so it passes anything of
   yours and blocks nothing; it has no hit points and gives no cover, and it
-  breaks up as soon as it has nobody (its last unit left or died).
+  breaks up as soon as it has nobody (its last unit left or died). It goes
+  at the pace of its slowest walker.
 - Drag to pan, and use the wheel or the − / + buttons to zoom.
   **Coordinates** shows axial `q,r` labels. Escape cancels building and
   clears the selection.
@@ -276,10 +289,10 @@ opening position.
 [docs/architecture.md](docs/architecture.md) covers the design and what
 comes next.
 
-- No combat, capture or win condition: units only work and walk, and
-  nothing damages buildings. A castle can collapse, but losing it doesn't
-  end the game yet. Units will get a dice-based way of taking hits instead
-  of hit points.
+- Combat is a first cut: units fight from wherever they are placed, with
+  no orders to attack, and a unit dies to a single lucky strike until units
+  get their dice. A fallen castle loses the game, but the other side's
+  buildings and units stay on the map.
 - There is no dark metal yet.
 - Of the six skills, ranged attack and close combat do nothing yet; towers
   and wagons hold crews but give them nothing to do. Towers don't repair.

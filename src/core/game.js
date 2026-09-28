@@ -38,7 +38,8 @@ import { distance, key, neighbors, parseKey } from './hex.js';
 import { tileAt } from './board.js';
 import { unitName } from './names.js';
 import {
-  BUILDING_TYPES, BUILD_RANGE, DEPART_GAP, FOOD_PER_UNIT, FOOD_PERIOD, FOOD_STORE, HUNGER_LINE, LEVEL_GROWTH,
+  BUILDING_TYPES, BUILD_RANGE, COMBAT_PERIOD, DEPART_GAP, FOOD_PER_UNIT, HIT_CHANCE, KILL_XP, MELEE_DAMAGE, MELEE_RANGE,
+  RANGED_DAMAGE, RANGED_RANGE, REPAIR_WORK, FOOD_PERIOD, FOOD_STORE, HUNGER_LINE, LEVEL_GROWTH,
   LEVEL_RATE, LEVEL_XP, MAX_HUNGER, MAX_LEVEL, SIDES, SKILLS, SKILL_XP, START_STONE, START_UNITS, STARVE_CHANCE,
   UNIT_LIMIT, WAGON_PATIENCE, WALK_TICKS, WORK_BASE,
 } from './rules.js';
@@ -58,6 +59,7 @@ import {
  * @property {number} r
  * @property {number} [hp] Hit points left. Bands have none.
  * @property {number} [work] Work done toward what it yields next, for types that work.
+ * @property {number} [mend] Repair work done toward the next hit point.
  * @property {number} [dug] Stone dug from a pit so far; its depth follows from it.
  * @property {Cell[]} [path] A moving building's route, next cell first.
  * @property {number} [since] While it rolls to path[0]: the tick it set off,
@@ -102,6 +104,7 @@ import {
  * @property {number} stone
  * @property {number} food
  * @property {number} hunger From 0 to MAX_HUNGER.
+ * @property {number} [lost] The tick its castle fell: the side is out of the game.
  */
 
 /**
@@ -122,7 +125,7 @@ import {
  */
 
 /** Bump when GameState changes shape, and teach `checkState` the new one. */
-export const STATE_VERSION = 4;
+export const STATE_VERSION = 5;
 
 const SKILL_NAMES = /** @type {Skill[]} */ (Object.keys(SKILLS));
 
@@ -214,15 +217,8 @@ function newUnit(state, owner, building) {
  * @param {Unit} u
  * @param {Skill} skill
  */
-function practise(u, skill) {
-  if (u.level < MAX_LEVEL) {
-    u.xp += LEVEL_RATE[skill];
-    if (u.xp >= levelXp(u.level)) {
-      u.xp -= levelXp(u.level);
-      u.level += 1;
-      if (u.level === MAX_LEVEL) u.xp = 0;
-    }
-  }
+function practise(u, skill, bonus = 0) {
+  gainXp(u, LEVEL_RATE[skill] + bonus);
   const practice = Math.min(SKILL_XP, u.practice[skill] + 1);
   if (practice >= SKILL_XP && u.skills[skill] < u.level) {
     u.skills[skill] += 1;
@@ -230,6 +226,20 @@ function practise(u, skill) {
   } else {
     u.practice[skill] = practice;
   }
+}
+
+/**
+ * Experience for a unit's level.
+ * @param {Unit} u
+ * @param {number} xp
+ */
+function gainXp(u, xp) {
+  u.xp += xp;
+  while (u.level < MAX_LEVEL && u.xp >= levelXp(u.level)) {
+    u.xp -= levelXp(u.level);
+    u.level += 1;
+  }
+  if (u.level === MAX_LEVEL) u.xp = 0;
 }
 
 /**
@@ -568,6 +578,7 @@ function commandCell(cmd) {
  */
 export function applyCommand(board, state, player, command) {
   if (!state.players.some((p) => p.id === player)) return refuse('not a player');
+  if (state.players[player].lost !== undefined) return refuse('your castle has fallen');
   if (!command || typeof command !== 'object') return refuse('not a command');
   const cmd = /** @type {Record<string, unknown>} */ (command);
   const occ = occupancy(state);
@@ -770,6 +781,7 @@ function moveBuilding(board, state, occ, player, cmd) {
  */
 export function advance(board, state) {
   state.tick += 1;
+  if (state.tick % COMBAT_PERIOD === 0) fight(state, occupancy(state));
   for (const b of Object.values(state.buildings)) if (/** @type {number} */ (b.hp) <= 0) collapse(state, b);
   if (state.tick % FOOD_PERIOD === 0) {
     harvest(state);
@@ -798,6 +810,61 @@ function collapse(state, b) {
     u.r = b.r;
   }
   delete state.buildings[b.id];
+  if (b.type === 'castle') state.players[b.owner].lost = state.tick;
+}
+
+/**
+ * The units inside a building, or in a band, strike the nearest enemy in
+ * reach: close combat if one is next to them, else ranged. See COMBAT_PERIOD
+ * in rules.js.
+ * @param {GameState} state
+ * @param {Occupancy} occ
+ */
+function fight(state, occ) {
+  /** @type {Array<{ cells: Axial[], owner: number, building?: Building, unit?: Unit }>} */
+  const targets = [];
+  const bandOf = (/** @type {Unit} */ u) => (u.in !== undefined && BUILDING_TYPES[state.buildings[u.in].type].band ? state.buildings[u.in] : null);
+  for (const b of Object.values(state.buildings)) {
+    if (b.hp !== undefined) targets.push({ cells: footprint(b.type, b.q, b.r), owner: b.owner, building: b });
+  }
+  for (const u of Object.values(state.units)) {
+    const band = bandOf(u);
+    if (u.in === undefined) targets.push({ cells: [{ q: /** @type {number} */ (u.q), r: /** @type {number} */ (u.r) }], owner: u.owner, unit: u });
+    else if (band) targets.push({ cells: [{ q: band.q, r: band.r }], owner: u.owner, unit: u });
+  }
+
+  for (const b of Object.values(state.buildings)) {
+    const inside = /** @type {string[]} */ (occ.inside.get(b.id));
+    if (!inside.length) continue;
+    const from = footprint(b.type, b.q, b.r);
+    const reach = RANGED_RANGE + (BUILDING_TYPES[b.type].reach ?? 0);
+    // Enemies in reach, nearest first; the list order breaks ties.
+    const near = targets
+      .filter((t) => t.owner !== b.owner)
+      .map((t) => ({ t, d: Math.min(...t.cells.flatMap((c) => from.map((f) => distance(c, f)))) }))
+      .filter(({ d }) => d <= reach)
+      .sort((x, y) => x.d - y.d);
+    for (const id of inside) {
+      const u = state.units[id];
+      if (!u) continue; // killed this very round
+      const target = near.find(({ t }) => (t.building ? t.building.hp > 0 && state.buildings[t.building.id] : state.units[t.unit?.id ?? '']));
+      if (!target) break;
+      const melee = target.d <= MELEE_RANGE;
+      const skill = melee ? 'melee' : 'ranged';
+      let killed = false;
+      if (target.t.building) {
+        const hit = target.t.building;
+        hit.hp = Math.max(0, /** @type {number} */ (hit.hp) - (melee ? MELEE_DAMAGE : RANGED_DAMAGE) - u.skills[skill]);
+        killed = hit.hp === 0;
+      } else {
+        const foe = /** @type {Unit} */ (target.t.unit);
+        const chance = HIT_CHANCE + u.skills[skill] - foe.level;
+        killed = random(state) * 100 < chance;
+        if (killed) delete state.units[foe.id];
+      }
+      practise(u, skill, killed ? KILL_XP : 0);
+    }
+  }
 }
 
 /**
@@ -851,6 +918,43 @@ export function isDugOut(b) {
 }
 
 /**
+ * Damaged buildings are mended by the units inside, a hit point per
+ * REPAIR_WORK of their work, which trains their building skill.
+ * @param {GameState} state
+ * @param {Occupancy} occ
+ */
+function mend(state, occ) {
+  for (const b of Object.values(state.buildings)) {
+    const inside = /** @type {string[]} */ (occ.inside.get(b.id));
+    if (b.hp === undefined || b.hp <= 0 || b.hp >= maxHp(b) || !inside.length) continue;
+    let done = b.mend ?? 0;
+    for (const id of inside) {
+      const u = state.units[id];
+      if (!u) continue;
+      done += WORK_BASE + u.skills.build;
+      practise(u, 'build');
+    }
+    b.hp = Math.min(maxHp(b), b.hp + Math.floor(done / REPAIR_WORK));
+    if (b.hp < maxHp(b)) b.mend = done % REPAIR_WORK;
+    else delete b.mend;
+  }
+}
+
+/**
+ * Ticks for a band to enter a cell: its slowest member's.
+ * @param {Board} board
+ * @param {GameState} state
+ * @param {Occupancy} occ
+ * @param {Building} b
+ * @param {Cell} cell
+ */
+function bandTicks(board, state, occ, b, cell) {
+  const riders = /** @type {string[]} */ (occ.inside.get(b.id)).map((id) => state.units[id]).filter(Boolean);
+  if (!riders.length) return stepTicks(board, WALK_TICKS, cell);
+  return Math.max(...riders.map((u) => walkTicks(board, u, cell)));
+}
+
+/**
  * Buildings where units work get a tick of it from each unit inside: more
  * units, and more skilled ones, get there sooner. The work trains them. A
  * castle's units raise a new unit while it has room and its side is under
@@ -861,11 +965,13 @@ export function isDugOut(b) {
  * @param {Occupancy} occ
  */
 function work(board, state, occ) {
+  mend(state, occ);
   for (const b of Object.values(state.buildings)) {
     const type = BUILDING_TYPES[b.type];
     if (type.work === undefined) continue;
     const inside = /** @type {string[]} */ (occ.inside.get(b.id));
     if (!inside.length || isDugOut(b)) continue;
+    if (b.hp !== undefined && b.hp < maxHp(b)) continue; // mending comes first
     if (type.yields === 'unit' && (inside.length >= capacityOf(b) || occ.unitCount[b.owner] >= UNIT_LIMIT)) continue;
 
     let done = /** @type {number} */ (b.work);
@@ -954,7 +1060,7 @@ function rollWagons(board, state, occ) {
     if (band || !occ.buildingAt.has(nk)) {
       if (!band) occ.buildingAt.set(nk, b.id);
       b.since = state.tick;
-      b.until = state.tick + stepTicks(board, speed, next);
+      b.until = state.tick + (band ? bandTicks(board, state, occ, b, next) : stepTicks(board, speed, next));
       delete b.waiting;
       continue;
     }
@@ -1086,6 +1192,7 @@ export function checkState(board, raw) {
   state.players.forEach((p, i) => {
     if (!isCount(p.stone, Infinity) || !isCount(p.food, Infinity)) fail(`side ${i}: bad stock`);
     if (!isCount(p.hunger, MAX_HUNGER + 1)) fail(`side ${i}: bad hunger`);
+    if (p.lost !== undefined && !isCount(p.lost, state.tick + 1)) fail(`side ${i}: bad lost`);
   });
   if (!isRecord(state.buildings) || !isRecord(state.units)) return [...problems, 'bad buildings or units'];
 
@@ -1115,6 +1222,7 @@ export function checkState(board, raw) {
     if (type.hp ? !(Number.isSafeInteger(b.hp) && b.hp >= 1 && b.hp <= type.hp * b.grade) : b.hp !== undefined) {
       fail(`building ${id}: bad hp`);
     }
+    if (b.mend !== undefined && !(type.hp && isCount(b.mend, REPAIR_WORK))) fail(`building ${id}: bad mend`);
     if (!Number.isSafeInteger(b.q) || !Number.isSafeInteger(b.r)) { fail(`building ${id}: bad cell`); continue; }
 
     for (const c of footprint(b.type, b.q, b.r)) {

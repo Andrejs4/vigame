@@ -105,6 +105,32 @@ export const MAX_HUNGER = 100;
 export const STARVE_CHANCE = 0.05;
 
 /**
+ * Fighting. Every COMBAT_PERIOD, each unit inside a building or a band
+ * strikes the nearest enemy in reach: close combat at MELEE_RANGE if there
+ * is one, else ranged at RANGED_RANGE plus the building's `reach`. A strike
+ * on a building takes its base damage plus the skill used off its hit
+ * points. Units inside a building are safe while it stands; one out in the
+ * open or in a band is killed by a strike with a chance of HIT_CHANCE plus a
+ * point per skill level of the striker, less a point per level of the
+ * target (a stand-in for the dice to come). The strike that brings down a
+ * building or kills a unit earns KILL_XP.
+ */
+export const COMBAT_PERIOD = TICKS_PER_SECOND;
+export const MELEE_RANGE = 1;
+export const RANGED_RANGE = 3;
+export const MELEE_DAMAGE = 6;
+export const RANGED_DAMAGE = 3;
+/** Percent. */
+export const HIT_CHANCE = 10;
+
+/**
+ * Repair: while a building is damaged, the units inside mend it instead of
+ * their usual work, a hit point for every REPAIR_WORK of work, which trains
+ * their building skill.
+ */
+export const REPAIR_WORK = 100;
+
+/**
  * @typedef {object} BuildingType
  * @property {string} name
  * @property {1 | 7} size Cells covered: 1, or 7 (a cell and its six neighbours).
@@ -129,16 +155,20 @@ export const STARVE_CHANCE = 0.05;
  * @property {number} [perDepth] Stone a pit yields for each grade of depth.
  * @property {number} [depth] A pit's last grade of depth. Once there it is
  *   dug out, and its crew goes home.
- * @property {number} [speed] Ticks per cell on open ground. Only moving buildings have one.
+ * @property {number} [speed] Ticks per cell on open ground. Only moving buildings have one;
+ *   a band goes at its slowest member's walking pace instead.
+ * @property {number} [reach] Cells it adds to its units' ranged reach.
  */
 
 /** @type {Record<string, BuildingType>} */
 export const BUILDING_TYPES = {
   castle: {
-    name: 'Castle', size: 7, capacity: 60, grades: 3, hp: 2000, build: false, cost: 0, upgrade: 200,
+    name: 'Castle', size: 7, capacity: 60, grades: 3, hp: 2000, build: false, cost: 0, upgrade: 200, reach: 1,
     skill: 'breeding', work: 12000, yields: 'unit',
   },
-  tower: { name: 'Tower', size: 1, capacity: 20, grades: 3, hp: 500, build: true, cost: 60, upgrade: 60, skill: 'ranged' },
+  tower: {
+    name: 'Tower', size: 1, capacity: 20, grades: 3, hp: 500, build: true, cost: 60, upgrade: 60, reach: 2, skill: 'ranged',
+  },
   wagon: {
     name: 'Wagon', size: 1, capacity: 10, grades: 1, hp: 300, build: true, cost: 0,
     skill: 'melee', speed: 2 * TICKS_PER_SECOND,

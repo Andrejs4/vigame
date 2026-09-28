@@ -147,7 +147,11 @@ export async function startGame(net, me) {
     const paused = !net.running();
 
     if (hud.time) {
-      hud.time.textContent = `${formatTime(view?.tick ?? 0)}${paused ? ' · paused' : ''}`;
+      const fallen = view?.players.find((p) => p.lost !== undefined);
+      const outcome = !fallen ? '' : seat === null
+        ? ` · ${SIDES[1 - fallen.id]?.name ?? ''} won`
+        : fallen.id === seat ? ' · you lost' : ' · you won';
+      hud.time.textContent = `${formatTime(view?.tick ?? 0)}${paused ? ' · paused' : ''}${outcome}`;
       hud.time.title = paused ? 'The game waits until both players are here' : '';
     }
     if (hud.seat) {
