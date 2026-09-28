@@ -1,7 +1,8 @@
 /**
  * The game server end to end: a real server on a free port, real Colyseus
  * clients, an in-memory database. One server for the whole file, because
- * Colyseus keeps its matchmaker in module state, one per process.
+ * Colyseus keeps its matchmaker in module state, one per process. Its clock
+ * runs ten times faster than a real game's, so tests don't wait on seconds.
  */
 
 import { after, before, test } from 'node:test';
@@ -13,8 +14,10 @@ import { Client } from '@colyseus/sdk';
 import { startGameServer } from '../server/app.js';
 import { playerId, replay, restoreGame } from '../server/room.js';
 import { BOARD_OPTIONS, createBoard } from '../src/board.js';
-import { applyCommand, createGame, reachable } from '../src/game.js';
-import { createServerNet, serialize } from '../src/net.js';
+import { advance, nearStanding, occupancy, publicView } from '../src/game.js';
+import { key } from '../src/hex.js';
+import { createServerNet } from '../src/net.js';
+import { TICKS_PER_SECOND } from '../src/rules.js';
 
 /** @type {Awaited<ReturnType<typeof startGameServer>>} */
 let server;
@@ -23,12 +26,17 @@ let base;
 /** Messages Colyseus would otherwise print, such as a write that fails on purpose. */
 const logged = [];
 const MONITOR_PASSWORD = 'test-monitor-password';
+const TICK_RATE = 10 * TICKS_PER_SECOND;
+
+const TOKENS = { a: 'a'.repeat(32), b: 'b'.repeat(32), c: 'c'.repeat(32) };
+const NAMES = { a: 'Ann', b: 'Bēla', c: 'Cai' };
 
 before(async () => {
   const quiet = (...args) => { logged.push(args.join(' ')); };
   server = await startGameServer({
     port: 0,
     monitorPassword: MONITOR_PASSWORD,
+    tickRate: TICK_RATE,
     logger: { debug() {}, info() {}, trace() {}, warn: quiet, error: quiet },
   });
   base = server.url.replace(/\/$/, '');
@@ -37,9 +45,6 @@ before(async () => {
 });
 
 after(() => server.close());
-
-const TOKENS = { a: 'a'.repeat(32), b: 'b'.repeat(32), c: 'c'.repeat(32) };
-const NAMES = { a: 'Ann', b: 'Bēla', c: 'Cai' };
 
 /**
  * POST JSON, the way the page does.
@@ -75,7 +80,7 @@ async function challenge() {
  */
 async function join(gameId, token) {
   const room = await new Client(base).joinOrCreate('game', { gameId, token });
-  await until(() => room.state?.toJSON?.().seed !== undefined);
+  await until(() => seen(room).seed !== undefined);
   return room;
 }
 
@@ -88,30 +93,28 @@ async function until(check, ms = 3000) {
   }
 }
 
-/** The game as a client sees it, in page (serialize) shape. */
+/** @param {number} ms */
+const sleep = (ms) => new Promise((res) => setTimeout(res, ms));
+
+/**
+ * The game as a client sees it: the room state's JSON strings parsed back
+ * into the core's view.
+ * @param {any} room
+ */
 function seen(room) {
   const s = room.state.toJSON();
-  return { seed: s.seed, turn: s.turn, currentPlayer: s.currentPlayer, units: Object.values(s.units) };
+  const parse = (/** @type {Record<string, string>} */ m) => Object.fromEntries(
+    Object.entries(m ?? {}).map(([k, v]) => [k, JSON.parse(v)]),
+  );
+  return { ...parse(s.fields), buildings: parse(s.buildings), units: parse(s.units), running: s.running };
 }
 
-/** Rebuild the page-side game for a state, to work out legal moves. */
-function local(state) {
-  const board = createBoard({ ...BOARD_OPTIONS, seed: state.seed });
-  const game = createGame(board);
-  game.units = new Map(state.units.map((u) => [u.id, { ...u }]));
-  game.turn = state.turn;
-  game.currentPlayer = state.currentPlayer;
-  return { board, game };
-}
-
-/** A legal move for the side to play: its first unit, to its first reachable hex. */
-function legalMove(state) {
-  const { board, game } = local(state);
-  const unit = [...game.units.values()].find((u) => u.owner === game.currentPlayer);
-  const [k] = reachable(board, game, unit).keys();
-  const [q, r] = k.split(',').map(Number);
-  return { unit: unit.id, q, r };
-}
+/**
+ * Give a command as the player in this room.
+ * @param {any} room
+ * @param {unknown} command
+ */
+const give = (room, command) => room.request('command', command);
 
 /** Whether a request was refused, and why. */
 async function refusal(promise) {
@@ -136,8 +139,29 @@ async function roomClosed(roomId) {
   const end = Date.now() + 3000;
   while ((await matchMaker.query({ name: 'game' })).some((r) => r.roomId === roomId)) {
     if (Date.now() > end) throw new Error(`room ${roomId} never closed`);
-    await new Promise((res) => setTimeout(res, 20));
+    await sleep(20);
   }
+}
+
+/**
+ * A cell where side 0 may build, in a view of the game.
+ * @param {any} view
+ */
+function buildSpot(view) {
+  const board = createBoard({ ...BOARD_OPTIONS, seed: view.seed });
+  const taken = occupancy(view).buildingAt;
+  const tile = board.list.find((t) => t.buildable && !taken.has(key(t.q, t.r)) && nearStanding(view, 0, t));
+  assert.ok(tile);
+  return { q: tile.q, r: tile.r };
+}
+
+/** Both players in a new game, with the clock running. */
+async function twoPlayers() {
+  const id = await startGame();
+  const a = await join(id, TOKENS.a);
+  const b = await join(id, TOKENS.b);
+  await until(() => seen(a).running && seen(b).running);
+  return { id, a, b };
 }
 
 // --- HTTP ------------------------------------------------------------------
@@ -150,20 +174,21 @@ test('the server serves the page with the Colyseus client loaded first', async (
   assert.match(await sdk.text(), /Colyseus/);
 });
 
-test('new games are stored and listed, and unknown ones are 404', async () => {
+test('new games are stored with a castle per side, and listed; unknown ones are 404', async () => {
   const id = await startGame();
   const game = await (await fetch(`${base}/api/games/${id}`)).json();
   assert.equal(game.id, id);
   assert.deepEqual(game.seats, [null, null]);
-  assert.equal(game.state.turn, 1);
-  assert.equal(game.state.units.length, 4);
+  assert.equal(game.seq, 0);
+  assert.equal(game.state.tick, 0);
+  assert.deepEqual(Object.values(game.state.buildings).map((b) => [b.owner, b.type]), [[0, 'castle'], [1, 'castle']]);
 
   const lobby = await (await fetch(`${base}/api/games`)).json();
-  assert.ok(lobby.some((g) => g.id === id && g.seatsTaken === 0));
-  assert.deepEqual(await (await fetch(`${base}/api/games/${id}/moves`)).json(), []);
+  assert.ok(lobby.some((g) => g.id === id && g.seatsTaken === 0 && g.tick === 0));
+  assert.deepEqual(await (await fetch(`${base}/api/games/${id}/commands`)).json(), []);
 
   assert.equal((await fetch(`${base}/api/games/nope`)).status, 404);
-  assert.equal((await fetch(`${base}/api/games/nope/moves`)).status, 404);
+  assert.equal((await fetch(`${base}/api/games/nope/commands`)).status, 404);
   assert.equal((await fetch(`${base}/api/games/${encodeURIComponent('../x')}`)).status, 404);
 });
 
@@ -270,106 +295,154 @@ test('a second room for an open game is refused', async () => {
   await leaveAll(a);
 });
 
-// --- playing ---------------------------------------------------------------
+// --- the clock -------------------------------------------------------------
 
-test('the server refuses moves out of turn, of the wrong units, or malformed', async () => {
+test('the clock runs only while both seated players are here', async () => {
   const id = await startGame();
   const a = await join(id, TOKENS.a);
+  const c = await join(id, TOKENS.c);
+  await sleep(100);
+  assert.deepEqual([seen(a).running, seen(a).tick], [false, 0], 'Blue alone: waiting for Crimson');
+
+  const b = await join(id, TOKENS.b);
+  await until(() => seen(a).tick >= 25);
+  assert.equal(seen(c).running, true, 'spectators see it too');
+  assert.ok(Object.keys(seen(a).units).length > 0, 'the castles are making units');
+
+  await b.leave();
+  await until(() => !seen(a).running);
+  const stopped = seen(a).tick;
+  await sleep(100);
+  assert.equal(seen(a).tick, stopped, 'paused while Crimson is away');
+  await leaveAll(a, c);
+});
+
+// --- commands --------------------------------------------------------------
+
+test('the server refuses commands from spectators, while paused, and that the rules refuse', async () => {
+  const id = await startGame();
+  const a = await join(id, TOKENS.a);
+  assert.equal(await refusal(give(a, { type: 'upgrade', building: 'b1' })), 'the game is paused');
+
   const b = await join(id, TOKENS.b);
   const c = await join(id, TOKENS.c);
-  const before = seen(a);
-  const blue = legalMove(before);
-  const crimsonUnit = before.units.find((u) => u.owner === 1);
+  await until(() => seen(a).running);
+  assert.equal(await refusal(give(c, { type: 'upgrade', building: 'b1' })), 'not seated');
+  assert.equal(await refusal(give(a, { type: 'upgrade', building: 'b2' })), 'not your building');
+  assert.equal(await refusal(give(a, { type: 'send', from: 'b1', to: 'b1', count: 1 })), 'same building');
+  assert.equal(await refusal(give(a, { type: 'launch' })), 'unknown command');
+  assert.equal(await refusal(give(a, 'north')), 'not a command');
+  assert.equal(await refusal(give(a, { type: 'build', kind: 'tower', q: { deep: 1 }, r: 0 })), 'not a command');
+  assert.equal(await refusal(give(a, { type: 'upgrade', building: 'b'.repeat(100) })), 'not a command');
 
-  assert.equal(await refusal(b.request('endTurn')), 'not your turn');
-  assert.equal(await refusal(b.request('move', blue)), 'not your turn');
-  assert.equal(await refusal(c.request('endTurn')), 'not seated');
-  assert.equal(await refusal(a.request('move', { unit: crimsonUnit.id, q: crimsonUnit.q + 1, r: crimsonUnit.r })), 'illegal move');
-  assert.equal(await refusal(a.request('move', { ...blue, q: blue.q + 30 })), 'illegal move');
-  assert.equal(await refusal(a.request('move', { ...blue, q: String(blue.q) })), 'illegal move');
-  assert.equal(await refusal(a.request('move', 'north')), 'illegal move');
-
-  assert.deepEqual(seen(a), before);
-  assert.deepEqual(server.storage.listMoves(id), []);
+  assert.deepEqual(server.storage.listCommands(id), []);
+  assert.equal(seen(a).buildings.b1.grade, 1);
   await leaveAll(a, b, c);
 });
 
-test('an accepted move is saved before any player sees it', async () => {
-  const id = await startGame();
-  const a = await join(id, TOKENS.a);
-  const b = await join(id, TOKENS.b);
-  const move = legalMove(seen(a));
+test('an accepted command is logged, with its tick, before any player sees it', async () => {
+  const { id, a, b } = await twoPlayers();
 
-  /** What was in the database at the moment Crimson first saw the move. */
+  /** How many commands were logged when Crimson first saw the upgrade. */
   let loggedWhenSeen = null;
-  b.onStateChange((state) => {
-    const unit = state.units.get(move.unit);
-    if (loggedWhenSeen === null && unit.q === move.q && unit.r === move.r) {
-      loggedWhenSeen = server.storage.listMoves(id).length;
+  b.onStateChange(() => {
+    if (loggedWhenSeen === null && seen(b).buildings.b1?.grade === 2) {
+      loggedWhenSeen = server.storage.listCommands(id).length;
     }
   });
 
-  assert.equal(await a.request('move', move), 1, 'answered with the move number');
+  const tickBefore = seen(a).tick;
+  assert.equal(await give(a, { type: 'upgrade', building: 'b1' }), 1, 'answered with the command number');
   await until(() => loggedWhenSeen !== null);
   assert.equal(loggedWhenSeen, 1);
-
-  assert.equal(await a.request('endTurn'), 2);
-  await until(() => seen(b).currentPlayer === 1);
-  assert.deepEqual(server.storage.listMoves(id).map((m) => m.command), [
-    { type: 'move', ...move },
-    { type: 'endTurn' },
-  ]);
-  assert.deepEqual(server.storage.loadGame(id).state, seen(b));
+  const [logged1] = server.storage.listCommands(id);
+  assert.deepEqual([logged1.player, logged1.command], [0, { type: 'upgrade', building: 'b1' }]);
+  assert.ok(logged1.tick >= tickBefore);
   await leaveAll(a, b);
 });
 
-test('a move whose write fails is refused and leaves the game as it was', async () => {
-  const id = await startGame();
-  const a = await join(id, TOKENS.a);
-  const before = seen(a);
-  const move = legalMove(before);
-
-  const { recordMove } = server.storage;
-  server.storage.recordMove = () => { throw new Error('disk full'); };
+test('a command whose write fails is refused and leaves the game as it was', async () => {
+  const { a, b } = await twoPlayers();
+  const { recordCommand } = server.storage;
+  server.storage.recordCommand = () => { throw new Error('disk full'); };
   try {
-    assert.ok(await refusal(a.request('move', move)));
+    assert.ok(await refusal(give(a, { type: 'upgrade', building: 'b1' })));
   } finally {
-    server.storage.recordMove = recordMove;
+    server.storage.recordCommand = recordCommand;
   }
   assert.ok(logged.some((line) => line.includes('disk full')), 'the failure is logged');
-  await new Promise((res) => setTimeout(res, 100)); // a patch would have gone out by now
-  assert.deepEqual(seen(a), before);
+  await sleep(50); // patches would have gone out by now
+  assert.equal(seen(a).buildings.b1.grade, 1);
 
-  assert.equal(await a.request('move', move), 1, 'the same move goes through once writes work');
-  await leaveAll(a);
+  assert.equal(await give(a, { type: 'upgrade', building: 'b1' }), 1, 'the same command goes through once writes work');
+  await leaveAll(a, b);
 });
 
-test('a game outlives its room: the next visitors find it as it was, seats included', async () => {
-  const id = await startGame();
-  let a = await join(id, TOKENS.a);
-  let b = await join(id, TOKENS.b);
-  await a.request('move', legalMove(seen(a)));
-  await a.request('endTurn');
-  await until(() => seen(a).currentPlayer === 1);
-  const played = seen(a);
+test('units sent out march through the server, one cell of their route at a time', async () => {
+  const { a, b } = await twoPlayers();
+  await until(() => (occupancy(seen(a)).inside.get('b1')?.length ?? 0) >= 4);
+  const spot = buildSpot(seen(a));
+  assert.equal(typeof await give(a, { type: 'build', kind: 'tower', ...spot }), 'number');
+  await until(() => Object.values(seen(b).buildings).some((x) => x.type === 'tower'));
+  const tower = /** @type {any} */ (Object.values(seen(b).buildings).find((x) => x.type === 'tower'));
+
+  await give(a, { type: 'send', from: 'b1', to: tower.id, count: 4 });
+  await until(() => Object.values(seen(b).units).some((u) => u.to === tower.id));
+  for (const u of Object.values(seen(b).units).filter((x) => x.to === tower.id && x.path)) {
+    assert.equal(u.path.length, 1, 'players see only the next cell of a route');
+  }
+  await until(() => (occupancy(seen(b)).inside.get(tower.id)?.length ?? 0) === 4);
+  await leaveAll(a, b);
+});
+
+// --- keeping games -----------------------------------------------------------
+
+test('a game outlives its room: its snapshot comes back exactly, and its log rebuilds it', async () => {
+  const { id, a, b } = await twoPlayers();
+  await until(() => (occupancy(seen(a)).inside.get('b1')?.length ?? 0) >= 3);
+  await give(a, { type: 'upgrade', building: 'b1' });
+  await give(a, { type: 'build', kind: 'wagon', ...buildSpot(seen(a)) });
+  await until(() => Object.keys(seen(a).buildings).length === 3);
+  const wagon = /** @type {any} */ (Object.values(seen(a).buildings).find((x) => x.type === 'wagon'));
+  await give(a, { type: 'send', from: 'b1', to: wagon.id, count: 3 });
+  await give(b, { type: 'upgrade', building: 'b2' });
+  await sleep(100);
   const firstRoom = a.roomId;
   await leaveAll(a, b);
   await roomClosed(firstRoom);
 
-  // Crimson comes back first and is still Crimson.
-  b = await join(id, TOKENS.b);
-  assert.notEqual(b.roomId, firstRoom, 'a new room');
-  assert.deepEqual(seen(b), played);
-  await until(() => b.state.toJSON().viewers[b.sessionId]?.seat === 1);
-  a = await join(id, TOKENS.a);
-  await until(() => b.state.toJSON().viewers[a.sessionId]?.seat === 0);
-  await leaveAll(a, b);
+  // The room saved a snapshot as it closed; the next room starts from it.
+  const saved = server.storage.loadGame(id);
+  assert.equal(saved.seq, 4, 'the snapshot includes all four commands');
+  const b2 = await join(id, TOKENS.b);
+  assert.notEqual(b2.roomId, firstRoom, 'a new room');
+  const { running, ...view } = seen(b2);
+  assert.deepEqual(view, JSON.parse(JSON.stringify(publicView(saved.state))));
+  await until(() => b2.state.toJSON().viewers[b2.sessionId]?.seat === 1, 3000);
+
+  // Without the snapshot, the log alone rebuilds the same game: the core is
+  // deterministic, so replaying the commands at their ticks and running the
+  // clock on to the snapshot's tick lands on the very same state.
+  const rebuilt = restoreGame({ ...saved, state: { garbage: true } }, (after) => server.storage.listCommands(id, { after }));
+  while (rebuilt.game.tick < /** @type {any} */ (saved.state).tick) advance(rebuilt.board, rebuilt.game);
+  assert.deepEqual(rebuilt.game, saved.state);
+  assert.equal(rebuilt.seq, 4);
+  await leaveAll(b2);
+});
+
+test('replaying refuses a log that does not fit the game', () => {
+  const board = createBoard({ ...BOARD_OPTIONS, seed: 5 });
+  const saved = {
+    id: 'x', seed: 5, seq: 0, seats: [], createdAt: 0, updatedAt: 0,
+    state: { garbage: true },
+  };
+  const { game } = restoreGame(saved, () => []);
+  assert.throws(() => replay(board, game, [{ seq: 1, tick: 3, player: 0, command: { type: 'upgrade', building: 'b2' }, at: 0 }]), /command 1 does not replay: not your building/);
+  assert.throws(() => replay(board, game, [{ seq: 2, tick: 1, player: 0, command: {}, at: 0 }]), /command 2 is from tick 1, before 3/);
 });
 
 test('a dropped connection comes back as the same viewer, in the same seat', async () => {
-  const id = await startGame();
-  const a = await join(id, TOKENS.a);
-  const b = await join(id, TOKENS.b);
+  const { a, b } = await twoPlayers();
   // The client only reconnects rooms that have been up a while (5 s by default).
   a.reconnection.minUptime = 0;
   let dropped = false;
@@ -383,9 +456,10 @@ test('a dropped connection comes back as the same viewer, in the same seat', asy
 
   await until(() => dropped);
   assert.ok(b.state.toJSON().viewers[a.sessionId], 'the viewer is kept while they reconnect');
+  assert.equal(seen(b).running, true, 'and the game goes on');
   await until(() => back);
   assert.equal(b.state.toJSON().viewers[a.sessionId]?.seat, 0);
-  assert.equal(await a.request('endTurn'), 1, 'and can play on');
+  assert.equal(await give(a, { type: 'upgrade', building: 'b1' }), 1, 'and can play on');
   await leaveAll(a, b);
 });
 
@@ -426,28 +500,6 @@ test('selections are shared, but only for hexes on the board', async () => {
   await leaveAll(a, c);
 });
 
-// --- restoring -------------------------------------------------------------
-
-test('replaying the move log rebuilds the saved game', async () => {
-  const id = await startGame();
-  const a = await join(id, TOKENS.a);
-  const b = await join(id, TOKENS.b);
-  await a.request('move', legalMove(seen(a)));
-  await a.request('endTurn');
-  await until(() => seen(b).currentPlayer === 1);
-  await b.request('move', legalMove(seen(b)));
-  await leaveAll(a, b);
-
-  const saved = server.storage.loadGame(id);
-  const { board, game } = replay(saved.seed, server.storage.listMoves(id));
-  assert.deepEqual(serialize(board, game), saved.state);
-
-  // Restoring prefers the saved state, and falls back to the log.
-  const restored = restoreGame({ ...saved, state: { garbage: true } }, () => server.storage.listMoves(id));
-  assert.deepEqual(serialize(restored.board, restored.game), saved.state);
-  assert.throws(() => replay(saved.seed, [{ seq: 1, player: 1, command: { type: 'endTurn' } }]), /move 1/);
-});
-
 // --- the page's transport --------------------------------------------------
 
 test('the page transport plays through the server and follows it', async () => {
@@ -456,48 +508,40 @@ test('the page transport plays through the server and follows it', async () => {
   const crimson = await createServerNet({ client: new Client(base), gameId: id, token: TOKENS.b });
   await Promise.all([blue.ready(), crimson.ready()]);
 
-  await until(() => blue.seat() === 0 && crimson.seat() === 1 && blue.viewers() === 2);
+  await until(() => blue.seat() === 0 && crimson.seat() === 1 && blue.viewers() === 2 && blue.running());
   assert.equal(blue.mode, 'online');
   assert.equal(blue.connected(), true);
   assert.equal(crimson.canClaimSeat(), false, 'no seat free');
 
   /** @type {any[]} */
   const crimsonSaw = [];
-  crimson.onState((s) => crimsonSaw.push(s));
-  const start = crimsonSaw.at(-1);
-  assert.equal(start.currentPlayer, 0, 'a late subscriber gets the current state');
+  crimson.onState((view) => crimsonSaw.push(view));
+  assert.equal(crimsonSaw.length, 1, 'a late subscriber gets the current game');
+  assert.deepEqual(Object.keys(crimsonSaw[0].buildings), ['b1', 'b2']);
+  await until(() => crimsonSaw.at(-1).tick > crimsonSaw[0].tick);
+  const now = crimson.clock();
+  assert.ok(now >= crimsonSaw.at(-1).tick && now <= crimsonSaw.at(-1).tick + 1, 'the clock runs between ticks');
 
-  // Blue plays the way the page does: apply locally, then commit.
-  const { board, game } = local(start);
-  const move = { type: 'move', ...legalMove(start) };
-  assert.ok(applyCommand(board, game, 0, move));
-  await blue.commit(serialize(board, game), move);
-  await until(() => crimsonSaw.at(-1).units.find((u) => u.id === move.unit).q === move.q);
+  assert.deepEqual(await blue.send({ type: 'upgrade', building: 'b1' }), { ok: true });
+  await until(() => crimsonSaw.at(-1).buildings.b1.grade === 2);
+  assert.deepEqual(await crimson.send({ type: 'upgrade', building: 'b1' }), { ok: false, reason: 'not your building' });
 
-  // Crimson tries to move out of turn; the server refuses and Crimson's page
-  // is handed the server's state to put back.
-  const count = crimsonSaw.length;
-  await crimson.commit(serialize(board, game), { type: 'endTurn' });
-  assert.equal(crimsonSaw.length, count + 1);
-  assert.equal(crimsonSaw.at(-1).currentPlayer, 0);
-
-  // Selections reach the other side as peers.
+  // Picks reach the other side as peers, with names.
   /** @type {any[]} */
   let peers = [];
   crimson.onPeers((list) => { peers = list; });
-  blue.select({ q: move.q, r: move.r });
-  await until(() => peers.some((p) => !p.isMe && p.seat === 0 && p.sel?.q === move.q));
+  blue.select({ q: 2, r: 3 });
+  await until(() => peers.some((p) => !p.isMe && p.seat === 0 && p.sel?.q === 2));
   assert.equal(peers.filter((p) => p.isMe).length, 1);
   assert.equal(peers.find((p) => p.seat === 0)?.name, 'Ann');
   assert.equal(peers.find((p) => p.isMe)?.name, 'Bēla');
   assert.notEqual(peers[0].color, peers[1].color);
 
-  // Blue gives up the seat; Crimson's page sees a seat it could not take
-  // (it holds one), and Blue's page offers it back.
+  // Blue gives up the seat, which pauses the game, and takes it back.
   await blue.releaseSeat();
-  await until(() => blue.seat() === null && blue.canClaimSeat());
+  await until(() => blue.seat() === null && blue.canClaimSeat() && !crimson.running());
   await blue.claimSeat();
-  await until(() => blue.seat() === 0);
+  await until(() => blue.seat() === 0 && crimson.running());
 
   await blue.leave();
   await crimson.leave();

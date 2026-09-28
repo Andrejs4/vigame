@@ -2,7 +2,7 @@
   "name": "vigame",
   "version": "0.1.0",
   "private": true,
-  "description": "Turn-based hex strategy prototype: canvas board, hotseat play, online play through a Colyseus game server or the claude.ai Artifact runtime.",
+  "description": "Real-time hex strategy prototype: a deterministic game core, a canvas page, and a Colyseus game server.",
   "license": "SEE LICENSE IN LICENSE",
   "type": "module",
   "engines": {

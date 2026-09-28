@@ -1,8 +1,68 @@
 # Architecture
 
-This covers how Vigame is built: the page, its three ways of playing, and the
-game server with the decisions behind it. The README covers commands, the
+This covers how Vigame is built: the game core, the page, and the game
+server, with the decisions behind them. The README covers commands, the
 module list and the data formats in more detail.
+
+## The game core
+
+The core is `src/game.js`, with its numbers in `src/rules.js` and the map in
+`src/board.js`. It is the whole game as one plain JSON object, plus the
+functions that change it:
+
+- `newGame(board)`: the opening position, a castle per side.
+- `applyCommand(board, state, side, command)`: what a player does. It checks
+  everything first and either changes the state or refuses with a reason.
+- `advance(board, state)`: one tick of time (production, marching, wagons).
+- `occupancy(state)`: what is where, worked out from the state.
+- `checkState(board, state)`: every broken invariant, if any.
+- `publicView(state)`: what players are shown.
+
+### Decisions
+
+- **Plain data, no framework.** The state has no classes, Maps or cycles, so
+  it is saved, sent, copied and compared as it is. The core doesn't know
+  about Colyseus, the database or the screen. Colyseus only carries a copy
+  of it (see below). The same core runs in the page, in the server, and in
+  tests or a simulation harness with no players at all.
+- **Each fact stored once.** A unit records where it is: inside a building
+  (`in`) or on a cell (`q`, `r`). A building records its anchor cell; the
+  cells it covers follow from its type (a castle is a cell and its six
+  neighbours). Who is inside a building and what stands on a cell are
+  derived by `occupancy`, never stored, so they can't disagree with the
+  facts. A wagon carries its units for free: they only say they are inside
+  it. The derived lookups are rebuilt whenever needed, which takes
+  microseconds for a few hundred units; they can become incremental later
+  if a profile says so.
+- **Deterministic.** The core never reads the clock or `Math.random`.
+  Durations are whole ticks; dice come from a seeded generator whose state is
+  part of the game (`random(state)`). The same seed and the same commands at
+  the same ticks always give the same game. This is what makes saving cheap
+  (log the commands, replay them) and simulations trustworthy.
+- **Ten ticks a second.** One second per cell is the fastest movement, but
+  the clock runs finer so commands take effect within a tenth of a second and
+  speeds can be any number of tenths. This is the usual pattern for a
+  server-run strategy game: a fixed simulation step, with clients drawing
+  smooth motion between steps.
+- **Movement as routes, not positions.** A moving unit stores its route, the
+  tick it left its cell and the tick it reaches the next. Its record changes
+  once per cell, not every tick, so a few hundred marching units cost little
+  to send, and a screen draws each one between cells from the clock.
+- **Wagons hold two cells while rolling**, the one they leave and the one
+  they enter, and only roll into a cell no building holds. So no two
+  buildings ever share a cell, and wagons can't pass each other.
+- **Invariants are checked, not hoped for.** `checkState` knows the rules the
+  state must keep. The tests play long games of random commands from both
+  sides and check after every tick, and replay games through a JSON round
+  trip to prove determinism.
+
+### Simulations
+
+A harness needs nothing new from the core: create a board and a state, then
+call `applyCommand` and `advance` in a loop. `test/game.test.js` already does
+this with random commands. What's missing is the harness itself: bots
+(functions from a state to a command), a way to list a side's sensible
+commands, and reports (win rates, game length, balance per unit type).
 
 ## The page
 
@@ -11,48 +71,26 @@ The modules in `src/` form layers, each depending only on the ones above it:
 | Module | Role |
 | --- | --- |
 | `hex.js` | Hex-grid math. Pure. |
-| `board.js` | Terrain generated from a seed, so every client builds the same map. Pure. |
-| `game.js` | Rules: units, turns, movement, and `applyCommand`. Pure, with no DOM: the game server runs it unchanged. |
-| `camera.js`, `render.js` | Pan and zoom, and canvas drawing. The renderer sits behind a small interface so PixiJS can replace it. |
+| `board.js` | Terrain and castle sites from a seed, so every client builds the same map. Pure. |
+| `rules.js` | The numbers. Pure data. |
+| `game.js` | The game core, above. Pure. |
 | `player.js` | Player-name rules, checked on the page and again on the server. Pure. |
-| `net.js` | The networking seam: one interface, three transports. |
-| `main.js` | Input, HUD, and the switch to online play. The only module that touches the page. |
+| `camera.js`, `render.js` | Pan and zoom, and canvas drawing. The renderer sits behind a small interface so PixiJS can replace it. |
+| `net.js` | The networking seam: one interface, two transports. |
+| `main.js` | Input, HUD, sign-in, and the switch to the server. The only module that touches the page. |
 
-`net.js` has three transports:
+`net.js` has two transports:
 
-- **Local**: two players take turns in one browser.
+- **Local**: the core runs in the page on its own clock, and the one person
+  at the screen commands either side.
 - **Game server**: play through the Vigame server below. Used when that
   server served the page, which it signals by loading the Colyseus client
-  first.
-- **Artifact**: online play through the claude.ai Artifact runtime. The whole
-  game lives in one shared document (`game/state`), seats in another
-  (`game/seats`), and each viewer's picked hex is shared as presence.
+  first. The page shows what the server sends; it doesn't predict. A command
+  takes effect on the server's next tick, a tenth of a second at most, which
+  is normal for a strategy game.
 
-Every change to a game in play is a command, `{ type: 'move', unit, q, r }`
-or `{ type: 'endTurn' }`, applied with `applyCommand(board, game, player,
-command)`. The page applies a command itself first so play feels instant,
-then hands it to the transport with the state it produced. The Artifact
-transport stores that state; the server transport sends only the command.
-
-### Why the Artifact runtime isn't a real server
-
-It stores shared documents and relays messages, but it runs no code of its
-own. So:
-
-- **No rule enforcement.** Anyone who can write can save any state. Every
-  client validates what it reads (`sanitizeState`), but a cheater's own copy
-  can still differ.
-- **No hidden information.** Fog of war needs something that sees everything
-  and shows each player only part of it.
-- **No work without players.** Turn timers and AI opponents only run while
-  someone has the page open.
-- **Organization only.** Only signed-in members of the owner's claude.ai
-  organization can write or join the live channel; anyone else can only watch.
-- **Small limits.** At most 5,000 documents of 256 KB each, no transactions,
-  last write wins.
-
-It's fine for an in-organization prototype. Opening the game to the public
-needs the game server.
+Either way the page gets a view with the shape of the core's state, and uses
+the core's own `occupancy` on it.
 
 ## Game server
 
@@ -61,17 +99,27 @@ needs the game server.
 ### Shape
 
 - **Server**: Node 22 running [Colyseus](https://colyseus.io/) 0.18, with one
-  room per game (`GameRoom`). The room holds the real game in memory and
-  checks every command with `game.js`.
-- **Connection**: WebSocket. Clients send only what they want to do (`move`,
-  `endTurn`, `claimSeat`, `releaseSeat`, `select`), as Colyseus requests
+  room per game (`GameRoom`). The room is an adapter: it holds the core's
+  state in memory, runs `advance` on a fixed timestep
+  (`setFixedTimestep`), and passes players' commands to `applyCommand`. It
+  has no game rules of its own.
+- **The clock** runs only while every seat is held by a player who is here,
+  so a game waits for an absent player instead of playing on without them.
+- **Connection**: WebSocket. Clients send only what they want to do
+  (`command`, `claimSeat`, `releaseSeat`, `select`), as Colyseus requests
   that the room answers or refuses. Clients never send game state.
-- **State**: the room state is Colyseus Schema (`server/schema.js`), a copy of
-  the `game.js` objects that the room updates after each change. Colyseus
-  sends clients only the fields that changed.
+- **Sync**: the room mirrors `publicView` into the Colyseus state
+  (`server/schema.js`) after every tick and command. The mirror is generic:
+  each building and unit is one JSON string keyed by its id, and each other
+  field of the view one more. Colyseus sends only the entries that changed.
+  A new field in the core needs no change to the server or the page. Typed
+  Colyseus schemas would send a little less, at the cost of describing every
+  field twice; that trade can be revisited if bandwidth ever matters.
+- **Hidden information**: `publicView` is where fog of war would go, per
+  side. Colyseus can then send each client its own view (`StateView`).
 - **REST**: only around the game itself: signing in, starting a game, the
-  game list (for a lobby) and each game's move history. Colyseus provides the HTTP
-  endpoints for joining rooms.
+  game list (for a lobby) and each game's command log. Colyseus provides the
+  HTTP endpoints for joining rooms.
 - **Players**: no accounts. Each browser keeps a random token in
   `localStorage` and sends it when joining; the room knows the player by it
   and shows other viewers only a hash. Before a token may start or join a
@@ -87,21 +135,25 @@ needs the game server.
 
 ### Storage
 
-The server keeps each game in memory and uses the database as its durable
-copy.
+The server keeps each game in memory and uses the database to rebuild it.
 
 - **Database**: SQLite through better-sqlite3. Node 22's built-in
   `node:sqlite` would avoid the dependency, but it is still experimental.
-- **Tables**: `games` holds each game's seed, current state (JSON, the same
-  shape the page uses) and seats. `moves` is an append-only log of every
-  accepted command, so any game can be replayed, checked and debugged.
-  `players` maps each signed-in player's public id to their name; the token
-  itself is never stored.
-- **Storage module**: all database access goes through `server/storage.js`
-  (`createGame`, `loadGame`, `recordMove`, `saveSeats`, `listMoves`,
-  `listGames`, `savePlayer`, `loadPlayer`), so moving to Postgres later changes one file. The schema
-  version lives in SQLite's `user_version`; the module creates or upgrades
-  the tables when it opens the database.
+- **Commands, not states**: the state changes ten times a second, far too
+  often to write. Because the core is deterministic, the server saves what
+  it takes to rebuild the game instead: every accepted command with the tick
+  it was applied at (`commands`), written before the command takes effect,
+  and a snapshot of the state (`games.state`) every ten seconds and when the
+  room closes, with the last command it includes (`games.seq`).
+- **Rebuilding**: a room opening a game loads the snapshot and replays the
+  commands after it, each at its tick. If the snapshot is unreadable (it
+  fails `checkState`, say after the state's shape changed), it replays the
+  whole log from the opening position. A crash can lose the game time since
+  the last snapshot or command, never a command.
+- **Storage module**: all database access goes through `server/storage.js`,
+  so moving to Postgres later changes one file. The schema version lives in
+  SQLite's `user_version`; the module creates or upgrades the tables when it
+  opens the database.
 - **Write-ahead logging** (`journal_mode=WAL`): on.
   - It isn't needed for crash safety: SQLite's default journal is equally safe.
   - It lets reads and writes run without blocking each other, and makes
@@ -112,23 +164,17 @@ copy.
 - **Hosting**: needs a persistent disk; many free tiers wipe the filesystem on
   restart. The database must not sit on a network drive.
 
-### Handling an action
+### Handling a command
 
-Moves are rare in a turn-based game, so each accepted command is saved at
-once rather than in periodic snapshots. A crash can then never lose a move the
-players already saw.
+1. Apply it to a copy of the in-memory state with `applyCommand`. A refusal
+   goes back to the player with the core's reason.
+2. Log it, with the current tick, in one transaction.
+3. Adopt the copy and mirror it. Colyseus sends the change with its next
+   patch.
 
-1. Check the command against a copy of the in-memory game with
-   `applyCommand`.
-2. Apply it to the copy.
-3. Write it to the database in one transaction: a row in `moves`, plus the
-   new state in `games`.
-4. Adopt the copy and update the room state. Colyseus sends the change to
-   every client with its next patch.
-
-If step 3 fails, the request is refused and the live game is untouched, so no
-client ever sees a move the database doesn't have. Seat changes are saved the
-same way before they take effect.
+If step 2 fails, the command is refused and the live game is untouched, so
+nothing happens that the log doesn't have. Seat changes are saved the same
+way before they take effect.
 
 ### Room lifecycle
 
@@ -138,12 +184,13 @@ same way before they take effect.
 - **The first two players** take the seats. A seat belongs to the player,
   not the connection: it survives reloads, leaving, and the room closing,
   until the player releases it.
-- **A dropped connection** keeps its place for 20 seconds, and the Colyseus
-  client reconnects by itself. Closing or reloading the page leaves at once.
-- **Nobody in the game**: the room shuts down and frees its memory; the game
-  lives only in the database.
-- **A player returns**: a new room loads the state from `games`, or rebuilds
-  it by replaying `moves` if the saved state is unreadable.
+- **A dropped connection** keeps its place, and the clock keeps running, for
+  20 seconds while the Colyseus client reconnects by itself. Closing or
+  reloading the page leaves at once, which pauses the game.
+- **Nobody in the game**: the room saves a snapshot, shuts down and frees its
+  memory; the game lives only in the database.
+- **A player returns**: a new room rebuilds the game from the snapshot and
+  the log.
 - **Lobby and history**: read straight from the database, never from rooms.
 
 ### When to move off SQLite
@@ -163,18 +210,18 @@ database.
   automatically.
 - **Colyseus tools**, each a separate npm package:
   - `@colyseus/playground`: a browser page for joining rooms as test clients,
-    sending messages such as `move` by hand, and watching the state change.
-    Served at `/playground` by `npm run server:dev` only.
+    sending messages such as `command` by hand, and watching the state
+    change. Served at `/playground` by `npm run server:dev` only.
   - `@colyseus/monitor`: a web panel listing live rooms, their clients, and
     each room's current state. Served at `/monitor` only when
     `MONITOR_PASSWORD` is set.
   - `@colyseus/testing` and `@colyseus/loadtest` are not used: the tests run
     a real server with the Colyseus client (`test/server.test.js`), and load
     hasn't mattered yet.
-- **Rules without a server**: `game.js` is pure, so most rule bugs reproduce
-  in a plain unit test.
-- **Replays**: the `moves` log (`GET /api/games/:id/moves`) rebuilds any game
-  command by command, up to the point where it went wrong; `replay()` in
+- **Rules without a server**: the core is pure, so most rule bugs reproduce
+  in a plain unit test, and `checkState` says which invariant broke first.
+- **Replays**: the command log (`GET /api/games/:id/commands`) rebuilds any
+  game tick by tick, up to the point where it went wrong; `replay()` in
   `server/room.js` does it.
 - **Production**: the playground is for development only. The monitor shows
   every game's full state, and its API can call any method on a live room,
@@ -183,29 +230,3 @@ database.
 Stepping through code happens on a local machine. A Claude Code cloud session
 can run the server, drive it with test clients and read its logs, but an editor
 can't attach a debugger to it.
-
-## Keeping real-time possible
-
-The in-memory authoritative room carries over to real-time play unchanged, and
-Colyseus is built for it. Four things would change:
-
-- **Saving**: per-action writes don't work at 10–60 updates a second. Switch
-  to periodic snapshots plus the final result, accepting a few seconds' loss
-  on a crash. Player commands are small and can still be logged for replays.
-- **Rules**: `game.js` works in discrete moves and movement points. Real-time
-  needs a simulation that advances every tick (orders like "move to", travel
-  over time, cooldowns). `hex.js` and `board.js` carry over.
-- **Networking**: clients still send commands, never positions. The server
-  broadcasts changes every tick; Colyseus sends only what changed. Clients
-  smooth motion between server updates. Predicting your own moves locally is
-  only needed if actions feel laggy. WebSocket suits strategy-paced play, not
-  twitch action.
-- **Scaling**: rooms across several processes means Postgres, as above.
-
-Two choices already keep this open:
-
-1. The room state is Colyseus Schema, so change-only updates need no
-   rewrite.
-2. The rules take commands (`applyCommand`). A real-time version adds
-   `tick(state, dt)` beside it; turn-based play is then the case where the
-   clock only advances on end turn.

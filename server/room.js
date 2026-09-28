@@ -1,16 +1,20 @@
 /**
- * One Colyseus room per game. The room holds the real game in memory, checks
- * every command with game.js, and saves each accepted one before anyone sees
- * its result:
+ * One Colyseus room per game. The room is a thin adapter around the game
+ * core (src/game.js): it runs the core's clock, feeds it players' commands,
+ * saves what it takes to rebuild the game, and mirrors the core's state into
+ * the room state that Colyseus syncs to every client.
  *
- *   1. check the command against the game          (applyCommand, on a copy)
- *   2. apply it                                    (the copy)
- *   3. write it to the database                    (storage.recordMove)
- *   4. adopt the copy and sync it to the room state; Colyseus sends the
- *      change to every client with its next patch
+ * A command from a player:
  *
- * If step 3 fails the live game is untouched, so no client ever sees a move
- * the database doesn't have.
+ *   1. check and apply it on a copy of the game   (applyCommand)
+ *   2. log it, with its tick                      (storage.recordCommand)
+ *   3. adopt the copy and mirror it               (syncGame)
+ *
+ * If step 2 fails the live game is untouched, so nothing happens that the
+ * log doesn't have. The clock ticks ten times a second, only while every
+ * seated player is here; a snapshot of the state is saved every ten seconds
+ * and when the room closes. Since the core is deterministic, the latest
+ * snapshot plus the commands logged after it rebuild the game exactly.
  *
  * A room lives while someone is connected. When the last viewer leaves it is
  * disposed, and the next viewer's room loads the game back from the database.
@@ -18,11 +22,11 @@
 
 import { createHash } from 'node:crypto';
 
-import { ErrorCode, Room, ServerError } from '@colyseus/core';
+import { ErrorCode, Room, ServerError, logger } from '@colyseus/core';
 
 import { BOARD_OPTIONS, createBoard, tileAt } from '../src/board.js';
-import { PLAYERS, applyCommand, createGame } from '../src/game.js';
-import { applyState, sanitizeState, serialize } from '../src/net.js';
+import { advance, applyCommand, checkState, newGame, publicView } from '../src/game.js';
+import { SIDES, TICKS_PER_SECOND } from '../src/rules.js';
 import { GameState, ViewerState, syncGame, syncSeats } from './schema.js';
 
 /** What a player token must look like: long, random, URL-safe. */
@@ -30,6 +34,9 @@ const TOKEN = /^[\w-]{16,128}$/;
 
 /** How long a dropped connection may take to come back as the same viewer. */
 const RECONNECT_SECONDS = 20;
+
+/** How often a running game's state is saved, in ticks. */
+const SNAPSHOT_TICKS = 10 * TICKS_PER_SECOND;
 
 /**
  * Games with a live room in this process. Matchmaking already routes
@@ -50,45 +57,41 @@ export function playerId(token) {
 }
 
 /**
- * Rebuild a game by replaying its move log from the opening position.
- * @param {number} seed
- * @param {Array<{ seq: number, player: number, command: unknown }>} moves
+ * Play logged commands onto a game, each at the tick it was given, advancing
+ * the clock in between.
+ * @param {import('../src/board.js').Board} board
+ * @param {import('../src/game.js').GameState} game Changed in place.
+ * @param {import('./storage.js').SavedCommand[]} commands
+ * @param {number} [seq] The last command the game already includes.
+ * @returns {number} The last command it includes now.
  */
-export function replay(seed, moves) {
-  const board = createBoard({ ...BOARD_OPTIONS, seed });
-  const game = createGame(board);
-  for (const move of moves) {
-    if (!applyCommand(board, game, move.player, move.command)) {
-      throw new Error(`move ${move.seq} does not replay`);
-    }
+export function replay(board, game, commands, seq = 0) {
+  let last = seq;
+  for (const c of commands) {
+    if (c.tick < game.tick) throw new Error(`command ${c.seq} is from tick ${c.tick}, before ${game.tick}`);
+    while (game.tick < c.tick) advance(board, game);
+    const outcome = applyCommand(board, game, c.player, c.command);
+    if (!outcome.ok) throw new Error(`command ${c.seq} does not replay: ${outcome.reason}`);
+    last = c.seq;
   }
-  return { board, game };
+  return last;
 }
 
 /**
- * The game as saved, or rebuilt from its moves if the saved state is
- * unreadable.
+ * The game as saved: its snapshot plus the commands logged after it, or its
+ * whole log from the opening position if the snapshot is unsound. It resumes
+ * at the snapshot's tick or the last command's, whichever is later.
  * @param {import('./storage.js').SavedGame} saved
- * @param {() => import('./storage.js').SavedMove[]} moves
+ * @param {(after: number) => import('./storage.js').SavedCommand[]} commandsAfter
  */
-export function restoreGame(saved, moves) {
-  const state = sanitizeState(saved.state);
-  if (!state || state.seed !== saved.seed) return replay(saved.seed, moves());
-
+export function restoreGame(saved, commandsAfter) {
   const board = createBoard({ ...BOARD_OPTIONS, seed: saved.seed });
-  const game = createGame(board);
-  applyState(game, state);
-  return { board, game };
-}
-
-/**
- * A copy of the game that can be changed without touching the original.
- * @template {{ units: Map<string, object> }} G
- * @param {G} game
- * @returns {G}
- */
-function cloneGame(game) {
-  return { ...game, units: new Map([...game.units].map(([id, unit]) => [id, { ...unit }])) };
+  if (checkState(board, saved.state).length === 0) {
+    const game = /** @type {import('../src/game.js').GameState} */ (saved.state);
+    return { board, game, seq: replay(board, game, commandsAfter(saved.seq), saved.seq) };
+  }
+  const game = newGame(board);
+  return { board, game, seq: replay(board, game, commandsAfter(0)) };
 }
 
 /**
@@ -100,6 +103,21 @@ function fields(message) {
   return message && typeof message === 'object' && !Array.isArray(message)
     ? /** @type {Record<string, unknown>} */ (message)
     : {};
+}
+
+/**
+ * A command as it will be logged, or null. The room doesn't know what
+ * commands exist (the core does), only that they are small, flat objects of
+ * short strings and numbers, so nothing large or nested reaches the log.
+ * @param {unknown} message
+ * @returns {Record<string, string | number> | null}
+ */
+function flatCommand(message) {
+  const entries = Object.entries(fields(message));
+  if (!entries.length || entries.length > 8) return null;
+  const small = entries.every(([k, v]) => k.length <= 32
+    && ((typeof v === 'string' && v.length <= 64) || (typeof v === 'number' && Number.isFinite(v))));
+  return small ? /** @type {Record<string, string | number>} */ (Object.fromEntries(entries)) : null;
 }
 
 /**
@@ -158,11 +176,12 @@ export class GameRoom extends Room {
   }
 
   /**
-   * @param {{ gameId?: unknown, storage: import('./storage.js').Storage }} options
-   *   `storage` comes from the room definition, which overrides anything a
-   *   client sends under that name.
+   * @param {{ gameId?: unknown, storage: import('./storage.js').Storage, tickRate?: number }} options
+   *   `storage` and `tickRate` come from the room definition, which overrides
+   *   anything a client sends under those names. `tickRate` is ticks per real
+   *   second: TICKS_PER_SECOND, unless tests speed the clock up.
    */
-  async onCreate({ gameId, storage }) {
+  async onCreate({ gameId, storage, tickRate = TICKS_PER_SECOND }) {
     if (typeof gameId === 'string' && liveGames.has(gameId)) {
       // A closing room leaves matchmaking a moment before its onDispose lets
       // go of the game. Someone joining in between must not be turned away.
@@ -180,53 +199,86 @@ export class GameRoom extends Room {
 
     this.storage = storage;
     this.gameId = saved.id;
-    const { board, game } = restoreGame(saved, () => storage.listMoves(saved.id));
+    const { board, game, seq } = restoreGame(saved, (after) => storage.listCommands(saved.id, { after }));
     this.board = board;
     this.game = game;
+    /** The last logged command the live game includes. */
+    this.seq = seq;
+    this.snapshotAt = game.tick;
     /** @type {Array<string | null>} */
-    this.seats = PLAYERS.map((_, i) => saved.seats[i] ?? null);
+    this.seats = SIDES.map((_, i) => saved.seats[i] ?? null);
 
     const state = new GameState();
-    syncGame(state, board, game);
+    syncGame(state, publicView(game));
     syncSeats(state, this.seats);
     this.setState(state);
 
-    this.onMessage('move', (client, message, ctx) => {
-      const { unit, q, r } = fields(message);
-      return this.play(client, { type: 'move', unit, q, r }, ctx);
-    });
-    this.onMessage('endTurn', (client, _message, ctx) => this.play(client, { type: 'endTurn' }, ctx));
+    this.onMessage('command', (client, message, ctx) => this.play(client, message, ctx));
     this.onMessage('claimSeat', (client, _message, ctx) => {
       const seat = this.takeSeat(client.auth.pid);
       return seat === null ? ctx?.reject('no free seat') : seat;
     });
     this.onMessage('releaseSeat', (client) => { this.releaseSeat(client.auth.pid); });
     this.onMessage('select', (client, message) => this.select(client, message));
+
+    // Patches go out once per tick, after the tick has changed things.
+    this.patchRate = 1000 / tickRate;
+    this.setFixedTimestep(() => this.step(), tickRate);
+  }
+
+  /** Whether the clock runs: only while every seat is held by someone here. */
+  everyoneHere() {
+    const here = new Set([...this.state.viewers.values()].map((v) => v.pid));
+    return this.seats.every((pid) => pid !== null && here.has(pid));
+  }
+
+  /** One tick of the game clock. */
+  step() {
+    const running = this.everyoneHere();
+    if (this.state.running !== running) this.state.running = running;
+    if (!running) return;
+    advance(this.board, this.game);
+    if (this.game.tick - this.snapshotAt >= SNAPSHOT_TICKS) this.snapshot();
+    syncGame(this.state, publicView(this.game));
   }
 
   /**
-   * Check, apply, save, then share one command from a seated player.
+   * Save the game's state. A failed save loses nothing the log doesn't have,
+   * so it is logged and the game goes on; the next one is due in ten seconds.
+   */
+  snapshot() {
+    this.snapshotAt = this.game.tick;
+    try {
+      this.storage.saveSnapshot(this.gameId, { state: this.game, seq: this.seq });
+    } catch (e) {
+      logger.error(`game ${this.gameId}: saving a snapshot failed`, e);
+    }
+  }
+
+  /**
+   * Check, log, then apply one command from a seated player.
    * @param {import('@colyseus/core').Client} client
-   * @param {import('../src/game.js').Command} command
+   * @param {unknown} message
    * @param {import('@colyseus/core').MessageContext | undefined} ctx
    */
-  play(client, command, ctx) {
+  play(client, message, ctx) {
     const seat = this.seatOf(client.auth.pid);
     if (seat === null) return ctx?.reject('not seated');
-    if (seat !== this.game.currentPlayer) return ctx?.reject('not your turn');
+    if (!this.state.running) return ctx?.reject('the game is paused');
+    const command = flatCommand(message);
+    if (!command) return ctx?.reject('not a command');
 
-    const next = cloneGame(this.game);
-    if (!applyCommand(this.board, next, seat, command)) return ctx?.reject('illegal move');
+    const next = structuredClone(this.game);
+    const outcome = applyCommand(this.board, next, seat, command);
+    if (!outcome.ok) return ctx?.reject(outcome.reason);
 
     // Throws if the write fails; the request is then answered with an error
     // and the live game is left as it was.
-    const seq = this.storage.recordMove(this.gameId, {
-      player: seat, command, state: serialize(this.board, next),
-    });
+    this.seq = this.storage.recordCommand(this.gameId, { tick: this.game.tick, player: seat, command });
 
     this.game = next;
-    syncGame(this.state, this.board, next);
-    return seq;
+    syncGame(this.state, publicView(next));
+    return this.seq;
   }
 
   /**
@@ -259,7 +311,7 @@ export class GameRoom extends Room {
   }
 
   /**
-   * Seats are saved before they change, like moves: a seat the database
+   * Seats are saved before they change, like commands: a seat the database
    * doesn't have is not handed out.
    * @param {Array<string | null>} seats
    */
@@ -287,7 +339,7 @@ export class GameRoom extends Room {
   }
 
   /**
-   * The first two players in take the seats, as on the published page.
+   * The first two players in take the seats.
    * @param {import('@colyseus/core').Client} client
    */
   onJoin(client) {
@@ -298,8 +350,8 @@ export class GameRoom extends Room {
 
   /**
    * A connection dropped without saying goodbye: keep the viewer for a while
-   * so a flaky network doesn't reshuffle anything. Colyseus calls `onLeave`
-   * if they don't come back in time.
+   * so a flaky network doesn't reshuffle anything, or pause the game.
+   * Colyseus calls `onLeave` if they don't come back in time.
    * @param {import('@colyseus/core').Client} client
    */
   onDrop(client) {
@@ -308,7 +360,7 @@ export class GameRoom extends Room {
 
   /**
    * The viewer is gone. Their seat is not: it stays theirs until they release
-   * it, however long they are away.
+   * it, however long they are away, and the game waits for them.
    * @param {import('@colyseus/core').Client} client
    */
   onLeave(client) {
@@ -317,6 +369,8 @@ export class GameRoom extends Room {
 
   onDispose() {
     // onDispose also runs when onCreate threw, before the game was ever opened.
-    if (this.gameId) liveGames.delete(this.gameId);
+    if (!this.gameId) return;
+    if (this.game) this.snapshot();
+    liveGames.delete(this.gameId);
   }
 }

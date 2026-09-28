@@ -7,8 +7,8 @@
  *   POST /api/players           sign in: { token, name, challenge, answer } -> { pid, name }
  *   POST /api/games             start a game: { token } -> 201 { id }
  *   GET  /api/games             recently active games (a lobby)
- *   GET  /api/games/:id         one game's state and seats
- *   GET  /api/games/:id/moves   its move log (history, replays)
+ *   GET  /api/games/:id         one game's snapshot and seats
+ *   GET  /api/games/:id/commands  its command log (history, replays)
  *   /monitor                    Colyseus monitor, only with a monitor password
  *   /playground                 Colyseus playground, only in dev mode
  *   /matchmake/…                Colyseus matchmaking (joinOrCreate etc.)
@@ -25,9 +25,9 @@ import express from 'express';
 
 import { build } from '../scripts/build.js';
 import { BOARD_OPTIONS, createBoard } from '../src/board.js';
-import { PLAYERS, createGame } from '../src/game.js';
-import { serialize } from '../src/net.js';
+import { newGame } from '../src/game.js';
 import { cleanPlayerName } from '../src/player.js';
+import { SIDES, TICKS_PER_SECOND } from '../src/rules.js';
 import { createChallenges } from './challenge.js';
 import { gameRoom, isToken, playerId, signedIn } from './room.js';
 import { openStorage } from './storage.js';
@@ -44,15 +44,10 @@ const GAME_ID = /^[\w-]{1,64}$/;
  * @param {{ seed?: number }} [options]
  * @returns {string} The new game's id.
  */
-export function newGame(storage, { seed = randomInt(1, 2 ** 31) } = {}) {
+export function startGame(storage, { seed = randomInt(1, 2 ** 31) } = {}) {
   const id = randomBytes(6).toString('base64url');
-  const board = createBoard({ ...BOARD_OPTIONS, seed });
-  storage.createGame({
-    id,
-    seed,
-    state: serialize(board, createGame(board)),
-    seats: PLAYERS.map(() => null),
-  });
+  const state = newGame(createBoard({ ...BOARD_OPTIONS, seed }));
+  storage.createGame({ id, seed, state, seats: SIDES.map(() => null) });
   return id;
 }
 
@@ -76,6 +71,7 @@ function page() {
  * @param {boolean} [options.dev=false] Rebuild the page on every request and mount /playground.
  * @param {boolean} [options.handleSignals=false] Shut down gracefully on SIGINT/SIGTERM.
  * @param {object} [options.logger] Where Colyseus logs; console by default.
+ * @param {number} [options.tickRate] Game ticks per real second. Tests speed it up.
  */
 export async function startGameServer({
   port = 2567,
@@ -85,6 +81,7 @@ export async function startGameServer({
   dev = false,
   handleSignals = false,
   logger,
+  tickRate = TICKS_PER_SECOND,
 } = {}) {
   const storage = openStorage(db);
   const challenges = createChallenges();
@@ -126,7 +123,7 @@ export async function startGameServer({
 
       app.post('/api/games', (req, res) => {
         if (!signedIn(storage, req.body?.token)) return void res.status(401).json({ error: 'sign in first' });
-        res.status(201).json({ id: newGame(storage) });
+        res.status(201).json({ id: startGame(storage) });
       });
       app.get('/api/games', (_req, res) => { res.json(storage.listGames()); });
       app.get('/api/games/:id', (req, res) => {
@@ -134,10 +131,10 @@ export async function startGameServer({
         if (!saved) return void res.status(404).json({ error: 'no such game' });
         res.json(saved);
       });
-      app.get('/api/games/:id/moves', (req, res) => {
+      app.get('/api/games/:id/commands', (req, res) => {
         const saved = GAME_ID.test(req.params.id) ? storage.loadGame(req.params.id) : null;
         if (!saved) return void res.status(404).json({ error: 'no such game' });
-        res.json(storage.listMoves(saved.id));
+        res.json(storage.listCommands(saved.id));
       });
       // Express's own error page carries a stack trace. A malformed request
       // gets a short answer instead, and a fault is logged here, not sent.
@@ -158,7 +155,7 @@ export async function startGameServer({
     },
   });
 
-  server.define('game', gameRoom(storage), { storage }).filterBy(['gameId']);
+  server.define('game', gameRoom(storage), { storage, tickRate }).filterBy(['gameId']);
   // Runs once every room is disposed, whether shutdown came from close() or,
   // with handleSignals, from Ctrl-C.
   server.onShutdown(() => storage.close());

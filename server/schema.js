@@ -1,25 +1,20 @@
 /**
  * The room state Colyseus keeps in sync with every client.
  *
- * It mirrors the game (`game.js` objects), which stays the source of truth:
- * the room changes the game, then copies it here. Colyseus sends clients only
- * the fields that changed, so real-time play later needs no new format.
+ * It is a display copy of the game core's state (`publicView` in
+ * src/game.js), which stays the only real copy: the room changes the core's
+ * state, then mirrors it here. The mirror knows nothing about the game's
+ * fields. Each building and unit travels as its own JSON string, keyed by id,
+ * and every other top-level field of the view as a JSON string of its own.
+ * Colyseus sends only the entries that changed, so a unit costs bandwidth
+ * when it crosses into a new cell, not every tick, and a new field in the
+ * core needs no change here or on the page.
  *
  * Clients learn these definitions from the server when they join, so the
  * page needs no copy of this file.
  */
 
 import { schema, t } from '@colyseus/schema';
-
-export const UnitState = schema({
-  id: t.string(),
-  owner: t.uint8(),
-  q: t.int32(),
-  r: t.int32(),
-  move: t.number(),
-  moveMax: t.number(),
-  name: t.string(),
-}, 'Unit');
 
 /** One connected browser tab. */
 export const ViewerState = schema({
@@ -36,40 +31,52 @@ export const ViewerState = schema({
 }, 'Viewer');
 
 export const GameState = schema({
-  seed: t.number(),
-  turn: t.number(),
-  currentPlayer: t.uint8(),
-  /** Keyed by unit id. */
-  units: t.map(UnitState),
+  /** The view's top-level fields other than the collections (seed, tick, players…), as JSON. */
+  fields: t.map('string'),
+  /** Each building as JSON, by id. */
+  buildings: t.map('string'),
+  /** Each unit as JSON, by id. */
+  units: t.map('string'),
+  /** Whether the game clock is running: only while every seated player is here. */
+  running: t.boolean().default(false),
   /** Player id per seat, '' when free. */
   seats: t.array('string'),
   /** Keyed by session id. */
   viewers: t.map(ViewerState),
 }, 'GameState');
 
-/**
- * Copy the game into the synced state, touching only what differs.
- * @param {InstanceType<typeof GameState>} state
- * @param {{ seed: number }} board
- * @param {{ units: Map<string, import('../src/game.js').Unit>, turn: number, currentPlayer: number }} game
- */
-export function syncGame(state, board, game) {
-  if (state.seed !== board.seed) state.seed = board.seed;
-  if (state.turn !== game.turn) state.turn = game.turn;
-  if (state.currentPlayer !== game.currentPlayer) state.currentPlayer = game.currentPlayer;
+/** The view's fields that are collections of entities keyed by id. */
+const COLLECTIONS = /** @type {const} */ (['buildings', 'units']);
 
-  for (const id of [...state.units.keys()]) {
-    if (!game.units.has(id)) state.units.delete(id);
+/**
+ * Make a string map hold exactly these entries, touching only what differs.
+ * @param {Map<string, string>} synced A Colyseus MapSchema of strings.
+ * @param {Record<string, unknown>} entries
+ */
+function mirror(synced, entries) {
+  for (const id of [...synced.keys()]) {
+    if (!Object.hasOwn(entries, id)) synced.delete(id);
   }
-  for (const unit of game.units.values()) {
-    let synced = state.units.get(unit.id);
-    if (!synced) {
-      synced = new UnitState();
-      state.units.set(unit.id, synced);
-    }
-    for (const field of /** @type {const} */ (['id', 'owner', 'q', 'r', 'move', 'moveMax', 'name'])) {
-      if (synced[field] !== unit[field]) synced[field] = /** @type {never} */ (unit[field]);
-    }
+  for (const [id, value] of Object.entries(entries)) {
+    const json = JSON.stringify(value);
+    if (synced.get(id) !== json) synced.set(id, json);
+  }
+}
+
+/**
+ * Copy a view of the game into the synced state.
+ * @param {InstanceType<typeof GameState>} state
+ * @param {Record<string, unknown>} view `publicView(game)`.
+ */
+export function syncGame(state, view) {
+  /** @type {Record<string, unknown>} */
+  const fields = {};
+  for (const [name, value] of Object.entries(view)) {
+    if (!COLLECTIONS.includes(/** @type {any} */ (name))) fields[name] = value;
+  }
+  mirror(/** @type {any} */ (state.fields), fields);
+  for (const name of COLLECTIONS) {
+    mirror(/** @type {any} */ (state[name]), /** @type {Record<string, unknown>} */ (view[name] ?? {}));
   }
 }
 

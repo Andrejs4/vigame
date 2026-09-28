@@ -2,27 +2,32 @@
  * Durable storage for games and players: SQLite through better-sqlite3.
  *
  * All database access goes through this module, so moving to Postgres later
- * changes this file and nothing else. Calls are synchronous: a turn-based game
- * writes rarely, and a synchronous write means a move is on disk before the
- * room goes on to send it to anyone.
+ * changes this file and nothing else. Calls are synchronous: a command is on
+ * disk before the room applies it.
  *
- * Tables:
- *   games    one row per game: its seed, its current state and its seats.
- *   moves    every accepted command, in order, never updated or deleted, so
- *            any game can be replayed from its seed.
- *   players  everyone who has signed in: their public player id and name.
- *            The secret token behind the id is never stored.
+ * A game runs in real time, so its state changes ten times a second: far too
+ * often to write each change. Instead the database keeps what it takes to
+ * rebuild the game exactly, since the game core is deterministic:
+ *
+ *   games     one row per game: its seed, its seats, and a snapshot of its
+ *             state, taken every few seconds and when the game closes, with
+ *             `seq`, the last command the snapshot includes.
+ *   commands  every accepted command with the tick it was applied at, in
+ *             order, never updated or deleted. The snapshot plus the commands
+ *             after it rebuild the game up to the last command.
+ *   players   everyone who has signed in: their public player id and name.
+ *             The secret token behind the id is never stored.
  */
 
 import Database from 'better-sqlite3';
 
 /** Bump when the tables change, and add the upgrade step to `migrate`. */
-const SCHEMA_VERSION = 2;
+const SCHEMA_VERSION = 3;
 
 /**
- * @typedef {{ id: string, seed: number, state: unknown, seats: Array<string | null>,
+ * @typedef {{ id: string, seed: number, state: unknown, seq: number, seats: Array<string | null>,
  *   createdAt: number, updatedAt: number }} SavedGame
- * @typedef {{ seq: number, player: number, command: unknown, at: number }} SavedMove
+ * @typedef {{ seq: number, tick: number, player: number, command: unknown, at: number }} SavedCommand
  * @typedef {{ pid: string, name: string, createdAt: number, updatedAt: number }} SavedPlayer
  */
 
@@ -41,31 +46,30 @@ export function openStorage(file = ':memory:') {
   migrate(db);
 
   const insertGame = db.prepare(`
-    INSERT INTO games (id, seed, state, seats, created_at, updated_at)
-    VALUES (@id, @seed, @state, @seats, @now, @now)`);
+    INSERT INTO games (id, seed, state, seq, seats, created_at, updated_at)
+    VALUES (@id, @seed, @state, 0, @seats, @now, @now)`);
   const selectGame = db.prepare('SELECT * FROM games WHERE id = ?');
-  const updateState = db.prepare('UPDATE games SET state = ?, updated_at = ? WHERE id = ?');
+  const updateSnapshot = db.prepare('UPDATE games SET state = ?, seq = ?, updated_at = ? WHERE id = ?');
   const updateSeats = db.prepare('UPDATE games SET seats = ?, updated_at = ? WHERE id = ?');
-  const insertMove = db.prepare(`
-    INSERT INTO moves (game_id, seq, player, command, at)
-    VALUES (@id, (SELECT COALESCE(MAX(seq), 0) + 1 FROM moves WHERE game_id = @id), @player, @command, @now)
+  const touchGame = db.prepare('UPDATE games SET updated_at = ? WHERE id = ?');
+  const insertCommand = db.prepare(`
+    INSERT INTO commands (game_id, seq, tick, player, command, at)
+    VALUES (@id, (SELECT COALESCE(MAX(seq), 0) + 1 FROM commands WHERE game_id = @id), @tick, @player, @command, @now)
     RETURNING seq`);
-  const selectMoves = db.prepare('SELECT seq, player, command, at FROM moves WHERE game_id = ? ORDER BY seq');
+  const selectCommands = db.prepare(`
+    SELECT seq, tick, player, command, at FROM commands WHERE game_id = ? AND seq > ? ORDER BY seq`);
   const selectRecent = db.prepare(`
-    SELECT id, seats, created_at, updated_at,
-           json_extract(state, '$.turn') AS turn,
-           json_extract(state, '$.currentPlayer') AS current_player
+    SELECT id, seats, created_at, updated_at, json_extract(state, '$.tick') AS tick
     FROM games ORDER BY updated_at DESC, id LIMIT ?`);
   const upsertPlayer = db.prepare(`
     INSERT INTO players (pid, name, created_at, updated_at) VALUES (@pid, @name, @now, @now)
     ON CONFLICT (pid) DO UPDATE SET name = excluded.name, updated_at = excluded.updated_at`);
   const selectPlayer = db.prepare('SELECT * FROM players WHERE pid = ?');
 
-  /** One move and the state it led to land together or not at all. */
-  const recordMoveTx = db.transaction((/** @type {string} */ id, /** @type {any} */ row) => {
-    const { seq } = /** @type {{ seq: number }} */ (insertMove.get(row));
-    if (updateState.run(row.state, row.now, id).changes !== 1) throw new Error(`no game "${id}"`);
-    return seq;
+  /** A command is logged, and its game marked active, together or not at all. */
+  const recordCommandTx = db.transaction((/** @type {string} */ id, /** @type {any} */ row) => {
+    if (touchGame.run(row.now, id).changes !== 1) throw new Error(`no game "${id}"`);
+    return /** @type {{ seq: number }} */ (insertCommand.get(row)).seq;
   });
 
   return {
@@ -88,6 +92,7 @@ export function openStorage(file = ':memory:') {
         id: row.id,
         seed: row.seed,
         state: parse(row.state),
+        seq: row.seq,
         seats: parseSeats(row.seats),
         createdAt: row.created_at,
         updatedAt: row.updated_at,
@@ -95,16 +100,22 @@ export function openStorage(file = ':memory:') {
     },
 
     /**
-     * Append an accepted command to the log and store the state it produced,
-     * in one transaction.
+     * Append an accepted command to the log.
      * @param {string} id
-     * @param {{ player: number, command: unknown, state: unknown }} move
-     * @returns {number} The move's sequence number, from 1.
+     * @param {{ tick: number, player: number, command: unknown }} entry
+     * @returns {number} The command's sequence number, from 1.
      */
-    recordMove(id, { player, command, state }) {
-      return recordMoveTx(id, {
-        id, player, command: JSON.stringify(command), state: JSON.stringify(state), now: Date.now(),
-      });
+    recordCommand(id, { tick, player, command }) {
+      return recordCommandTx(id, { id, tick, player, command: JSON.stringify(command), now: Date.now() });
+    },
+
+    /**
+     * Store a snapshot of the game's state.
+     * @param {string} id
+     * @param {{ state: unknown, seq: number }} snapshot `seq`: the last command it includes.
+     */
+    saveSnapshot(id, { state, seq }) {
+      if (updateSnapshot.run(JSON.stringify(state), seq, Date.now(), id).changes !== 1) throw new Error(`no game "${id}"`);
     },
 
     /**
@@ -116,12 +127,14 @@ export function openStorage(file = ':memory:') {
     },
 
     /**
+     * The game's commands in order, optionally only those after `after`.
      * @param {string} id
-     * @returns {SavedMove[]}
+     * @param {{ after?: number }} [options]
+     * @returns {SavedCommand[]}
      */
-    listMoves(id) {
-      return selectMoves.all(id).map((/** @type {any} */ row) => ({
-        seq: row.seq, player: row.player, command: parse(row.command), at: row.at,
+    listCommands(id, { after = 0 } = {}) {
+      return selectCommands.all(id, after).map((/** @type {any} */ row) => ({
+        seq: row.seq, tick: row.tick, player: row.player, command: parse(row.command), at: row.at,
       }));
     },
 
@@ -132,8 +145,7 @@ export function openStorage(file = ':memory:') {
     listGames({ limit = 50 } = {}) {
       return selectRecent.all(limit).map((/** @type {any} */ row) => ({
         id: row.id,
-        turn: row.turn,
-        currentPlayer: row.current_player,
+        tick: row.tick,
         seatsTaken: parseSeats(row.seats).filter(Boolean).length,
         createdAt: row.created_at,
         updatedAt: row.updated_at,
@@ -177,23 +189,17 @@ function migrate(db) {
     throw new Error(`database schema v${version} is newer than this server understands (v${SCHEMA_VERSION})`);
   }
   if (version < 1) {
+    // The turn-based prototype's tables. Version 3 replaces them; they are
+    // created here only so every database upgrades along the same steps.
     db.transaction(() => db.exec(`
       CREATE TABLE games (
-        id         TEXT PRIMARY KEY,
-        seed       INTEGER NOT NULL,
-        state      TEXT NOT NULL,              -- JSON: { seed, turn, currentPlayer, units }
-        seats      TEXT NOT NULL DEFAULT '[]', -- JSON: player id per seat, null when free
-        created_at INTEGER NOT NULL,           -- ms since the epoch
-        updated_at INTEGER NOT NULL
+        id TEXT PRIMARY KEY, seed INTEGER NOT NULL, state TEXT NOT NULL,
+        seats TEXT NOT NULL DEFAULT '[]', created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
       );
       CREATE INDEX games_by_update ON games (updated_at);
       CREATE TABLE moves (
-        game_id TEXT NOT NULL REFERENCES games (id),
-        seq     INTEGER NOT NULL,              -- 1, 2, 3… within a game
-        player  INTEGER NOT NULL,              -- the seat that sent it
-        command TEXT NOT NULL,                 -- JSON: a game.js Command
-        at      INTEGER NOT NULL,
-        PRIMARY KEY (game_id, seq)
+        game_id TEXT NOT NULL REFERENCES games (id), seq INTEGER NOT NULL, player INTEGER NOT NULL,
+        command TEXT NOT NULL, at INTEGER NOT NULL, PRIMARY KEY (game_id, seq)
       );
       PRAGMA user_version = 1;
     `))();
@@ -207,6 +213,34 @@ function migrate(db) {
         updated_at INTEGER NOT NULL
       );
       PRAGMA user_version = 2;
+    `))();
+  }
+  if (version < 3) {
+    // Real time. Games saved by the turn-based prototype can't be played by
+    // these rules, so they are dropped; players keep their names.
+    db.transaction(() => db.exec(`
+      DROP TABLE moves;
+      DROP TABLE games;
+      CREATE TABLE games (
+        id         TEXT PRIMARY KEY,
+        seed       INTEGER NOT NULL,
+        state      TEXT NOT NULL,              -- JSON snapshot: a src/game.js GameState
+        seq        INTEGER NOT NULL DEFAULT 0, -- the last command the snapshot includes
+        seats      TEXT NOT NULL DEFAULT '[]', -- JSON: player id per seat, null when free
+        created_at INTEGER NOT NULL,           -- ms since the epoch
+        updated_at INTEGER NOT NULL
+      );
+      CREATE INDEX games_by_update ON games (updated_at);
+      CREATE TABLE commands (
+        game_id TEXT NOT NULL REFERENCES games (id),
+        seq     INTEGER NOT NULL,              -- 1, 2, 3… within a game
+        tick    INTEGER NOT NULL,              -- the game tick it was applied at
+        player  INTEGER NOT NULL,              -- the seat that gave it
+        command TEXT NOT NULL,                 -- JSON: a src/game.js Command
+        at      INTEGER NOT NULL,              -- ms since the epoch
+        PRIMARY KEY (game_id, seq)
+      );
+      PRAGMA user_version = 3;
     `))();
   }
 }

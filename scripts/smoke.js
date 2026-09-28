@@ -1,11 +1,8 @@
 /**
  * Headless browser check of the real page: it boots without errors, draws the
- * board, and plays — hotseat on desktop and touch, online across three
- * browsers sharing a fake Artifact runtime, and through the real game server.
- *
- * The Artifact part runs test/fake-runtime.js in Node and bridges it into each
- * page as `window.claude`, so every page talks to one shared store, lease
- * table and room, the way viewers of the published artifact do.
+ * board, and plays: on one screen (desktop and touch), and through the real
+ * game server with three browsers, directly and under a subfolder behind a
+ * proxy.
  *
  * Usage: node scripts/smoke.js   (screenshots land in smoke-output/)
  */
@@ -20,7 +17,6 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { chromium } from 'playwright';
 
 import { startGameServer } from '../server/app.js';
-import { createFakeRuntime } from '../test/fake-runtime.js';
 import { build } from './build.js';
 import { startServer } from './serve.js';
 
@@ -83,6 +79,9 @@ async function clickHex(page, q, r, { touch = false } = {}) {
   else await page.mouse.click(p.x, p.y);
 }
 
+/** Click or tap a button. */
+const press = (page, selector, { touch = false } = {}) => (touch ? page.tap(selector) : page.click(selector));
+
 const text = (page, selector) => page.locator(selector).textContent();
 
 const waitText = (page, selector, value, timeout = 5000) => page.waitForFunction(
@@ -91,46 +90,63 @@ const waitText = (page, selector, value, timeout = 5000) => page.waitForFunction
   { timeout },
 );
 
-/** The current player's unit with this name. */
-const ownUnit = (page, name) => page.evaluate((name) => {
-  const v = /** @type {any} */ (window).__vigame;
-  const u = [...v.game.units.values()].find((u) => u.owner === v.game.currentPlayer && u.name === name);
-  return u && { ...u };
-}, name);
+const waitMatch = (page, selector, pattern, timeout = 5000) => page.waitForFunction(
+  ([s, source]) => new RegExp(source).test(document.querySelector(s)?.textContent ?? ''),
+  [selector, pattern.source],
+  { timeout },
+);
+
+/** The page's game: buildings as a list. */
+const buildings = (page) => page.evaluate(() => Object.values(/** @type {any} */ (window).__vigame.view?.buildings ?? {}));
+
+/** @param {number} owner */
+const castleOf = async (page, owner) => (await buildings(page)).find((b) => b.type === 'castle' && b.owner === owner);
+
+/** How many units are inside a building, as the page sees it. */
+const insideOf = (page, id) => page.evaluate((id) => /** @type {any} */ (window).__vigame.occ?.inside.get(id)?.length ?? 0, id);
+
+const waitInside = (page, id, n, timeout = 15000) => page.waitForFunction(
+  ([id, n]) => (/** @type {any} */ (window).__vigame.occ?.inside.get(id)?.length ?? 0) >= n, [id, n], { timeout },
+);
 
 /**
- * Select the current player's unit and move it to the most expensive
- * reachable hex that is not under a HUD panel.
- * @returns {Promise<{ id: string, q: number, r: number, cost: number, moveMax: number }>}
+ * The first of these cells that the HUD doesn't cover.
+ * @param {Array<[number, number]>} cells
  */
-async function selectAndMove(page, name, { touch = false } = {}) {
-  const unit = await ownUnit(page, name);
-  assert.ok(unit, `no ${name} for the current player`);
-  await clickHex(page, unit.q, unit.r, { touch });
-  await page.waitForFunction((id) => /** @type {any} */ (window).__vigame.game.selectedUnitId === id, unit.id);
+async function openCell(page, cells) {
+  for (const [q, r] of cells) if ((await hexPoint(page, q, r)).open) return { q, r };
+  throw new Error('every cell is under the HUD');
+}
 
-  const target = await page.evaluate(() => {
-    const v = /** @type {any} */ (window).__vigame;
-    const canvas = document.getElementById('board');
-    const rect = canvas.getBoundingClientRect();
-    let best = null;
-    for (const [k, cost] of v.reach) {
-      const [q, r] = k.split(',').map(Number);
-      const size = v.board.hexSize;
-      const s = v.camera.toScreen(size * Math.sqrt(3) * (q + r / 2), size * 1.5 * r);
-      if (document.elementFromPoint(rect.left + s.x, rect.top + s.y) !== canvas) continue;
-      if (!best || cost > best.cost) best = { q, r, cost };
-    }
-    return best;
-  });
-  assert.ok(target, `${name} has nowhere to go`);
+/**
+ * Build with the Build buttons: pick the kind, then a highlighted cell.
+ * @returns {Promise<any>} The new building.
+ */
+async function buildWith(page, kind, { touch = false } = {}) {
+  const before = (await buildings(page)).length;
+  await press(page, `#build-${kind}`, { touch });
+  await page.waitForFunction(() => /** @type {any} */ (window).__vigame.highlights.length > 0);
+  const keys = await page.evaluate(() => /** @type {any} */ (window).__vigame.highlights);
+  const spot = await openCell(page, keys.map((k) => k.split(',').map(Number)));
+  await clickHex(page, spot.q, spot.r, { touch });
+  await page.waitForFunction((n) => Object.keys(/** @type {any} */ (window).__vigame.view.buildings).length === n, before + 1);
+  assert.equal(await page.evaluate(() => /** @type {any} */ (window).__vigame.placing), null, 'out of build mode');
+  return (await buildings(page)).find((b) => b.q === spot.q && b.r === spot.r);
+}
 
-  await clickHex(page, target.q, target.r, { touch });
-  await page.waitForFunction(([id, q, r]) => {
-    const u = /** @type {any} */ (window).__vigame.game.units.get(id);
-    return u && u.q === q && u.r === r;
-  }, [unit.id, target.q, target.r]);
-  return { id: unit.id, q: target.q, r: target.r, cost: target.cost, moveMax: unit.moveMax };
+/** Select a building by clicking it, unless it already is. */
+async function selectBuilding(page, b, { touch = false } = {}) {
+  if (await page.evaluate(() => /** @type {any} */ (window).__vigame.selected) === b.id) return;
+  await clickHex(page, b.q, b.r, { touch });
+  await page.waitForFunction((id) => /** @type {any} */ (window).__vigame.selected === id, b.id);
+}
+
+/** Send units from one building to another: select the first, click the second. */
+async function sendUnits(page, from, to, { touch = false } = {}) {
+  await selectBuilding(page, from, { touch });
+  await clickHex(page, to.q, to.r, { touch });
+  await page.waitForFunction((id) => Object.values(/** @type {any} */ (window).__vigame.view.units)
+    .some((u) => u.to === id), to.id);
 }
 
 /** RGB of the canvas pixel under page point (x, y). */
@@ -142,28 +158,26 @@ const pixelAt = (page, x, y) => page.evaluate(([x, y]) => {
   return [d[0], d[1], d[2]];
 }, [x, y]);
 
-const hex = (c) => [1, 3, 5].map((i) => parseInt(c.slice(i, i + 2), 16));
-const close = (a, b, tol = 24) => a.every((v, i) => Math.abs(v - b[i]) <= tol);
+const waitGame = (page) => page.waitForFunction(() => /** @type {any} */ (window).__vigame?.view, null, { timeout: 10000 });
 
-// --- scenarios -------------------------------------------------------------
+// --- one screen ----------------------------------------------------------------
 
-async function hotseatDesktop(browser) {
-  const page = await openPage(browser, 'hotseat');
+async function localDesktop(browser) {
+  const page = await openPage(browser, 'local');
   await page.goto(pathToFileURL(BUNDLE).href);
-  await page.waitForFunction(() => /** @type {any} */ (window).__vigame);
+  await waitGame(page);
   await frames(page);
 
-  const game = await page.evaluate(() => {
-    const g = /** @type {any} */ (window).__vigame.game;
-    return { units: g.units.size, selected: g.selectedUnitId, turn: g.turn, player: g.currentPlayer };
-  });
-  assert.deepEqual(game, { units: 4, selected: null, turn: 1, player: 0 }, 'fresh page state');
-  assert.equal(await text(page, '#turn'), '1');
-  assert.equal(await text(page, '#player'), 'Blue');
-  assert.equal(await page.locator('#seat-row').isHidden(), true, 'no seat row in hotseat');
-  assert.equal(await page.locator('#seat-button').isHidden(), true);
+  const blue = await castleOf(page, 0);
+  const crimson = await castleOf(page, 1);
+  assert.ok(blue && crimson, 'a castle per side');
+  assert.equal(await text(page, '#seat'), 'Blue');
+  assert.equal(await text(page, '#seat-button'), 'Play Crimson');
+  assert.equal(await page.locator('#viewers-row').isHidden(), true);
+  await waitMatch(page, '#time', /^0:0[1-9]$/);
 
-  // The board is drawn: many distinct colours, and Blue's scout is blue.
+  // The board is drawn, and each castle in its side's colour: the cell below
+  // and left of its centre is the castle's, and clear of its labels.
   const colours = await page.evaluate(() => {
     const c = /** @type {HTMLCanvasElement} */ (document.getElementById('board'));
     const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
@@ -172,29 +186,15 @@ async function hotseatDesktop(browser) {
     return seen.size;
   });
   assert.ok(colours > 20, `board looks blank (${colours} colours)`);
-  const scout = await ownUnit(page, 'Scout');
-  const at = await hexPoint(page, scout.q, scout.r);
-  const radius = await page.evaluate(() => {
-    const v = /** @type {any} */ (window).__vigame;
-    return v.board.hexSize * 0.52 * v.camera.zoom;
-  });
-  const px = await pixelAt(page, at.x + radius * 0.7, at.y);
-  assert.ok(close(px, hex('#3d7fd8')), `scout pixel ${px} is not Blue`);
-  await page.screenshot({ path: join(OUT, 'hotseat-start.png') });
-
-  // Blue cannot pick up Crimson's units.
-  const crimson = await page.evaluate(() => {
-    const u = [.../** @type {any} */ (window).__vigame.game.units.values()].find((u) => u.owner === 1);
-    return { ...u };
-  });
-  await clickHex(page, crimson.q, crimson.r);
-  assert.equal(await page.evaluate(() => /** @type {any} */ (window).__vigame.game.selectedUnitId), null);
-
-  // Select and move the scout; movement is spent.
-  const moved = await selectAndMove(page, 'Scout');
-  assert.equal(await text(page, '#selection'), `Scout — ${moved.moveMax - moved.cost}/${moved.moveMax} MP`);
-  await frames(page);
-  await page.screenshot({ path: join(OUT, 'hotseat-moved.png') });
+  const tint = async (b) => {
+    const p = await hexPoint(page, b.q - 1, b.r + 1);
+    return pixelAt(page, p.x, p.y);
+  };
+  const [br, , bb] = await tint(blue);
+  const [cr, , cb] = await tint(crimson);
+  assert.ok(bb > br + 25, `Blue's castle is not blue (${br}, ${bb})`);
+  assert.ok(cr > cb + 25, `Crimson's castle is not red (${cr}, ${cb})`);
+  await page.screenshot({ path: join(OUT, 'local-start.png') });
 
   // A drag pans rather than clicks.
   const camBefore = await page.evaluate(() => ({ .../** @type {any} */ (window).__vigame.camera }));
@@ -206,34 +206,68 @@ async function hotseatDesktop(browser) {
   assert.ok(Math.abs(camAfter.x - camBefore.x) > 10, 'drag did not pan');
   await page.click('#recenter');
 
-  // Two turn ends make a round; the scout's movement comes back.
-  await page.click('#end-turn');
-  assert.equal(await text(page, '#player'), 'Crimson');
-  assert.equal(await text(page, '#turn'), '1');
-  await page.click('#end-turn');
-  assert.equal(await text(page, '#player'), 'Blue');
-  assert.equal(await text(page, '#turn'), '2');
-  assert.equal((await ownUnit(page, 'Scout')).move, moved.moveMax);
+  // Build a tower, and send units to it once the castle has made some.
+  const tower = await buildWith(page, 'tower');
+  assert.deepEqual([tower.owner, tower.grade], [0, 1]);
+  await waitInside(page, blue.id, 2);
+  await sendUnits(page, blue, tower);
+  await waitMatch(page, '#selection', /^Castle \(grade 1\) · \d+\/60$/);
+  await frames(page);
+  await page.screenshot({ path: join(OUT, 'local-marching.png') });
+  await waitInside(page, tower.id, 1);
 
+  // Upgrade the tower.
+  await page.keyboard.press('Escape');
+  await selectBuilding(page, tower);
+  await waitMatch(page, '#selection', /^Tower \(grade 1\)/);
+  await page.click('#upgrade');
+  await waitMatch(page, '#selection', /^Tower \(grade 2\)/);
+
+  // Building far from your own buildings is refused, and the page says why.
+  await page.keyboard.press('Escape');
+  await page.click('#build-tower');
+  const far = await openCell(page, [[crimson.q, crimson.r + 2], [crimson.q, crimson.r - 2], [crimson.q + 2, crimson.r - 2]]);
+  await clickHex(page, far.q, far.r);
+  await waitText(page, '#message', "Can't build there: too far from your buildings.");
+  assert.equal(await page.locator('#build-tower').getAttribute('aria-pressed'), 'true', 'still placing');
+  await page.keyboard.press('Escape');
+
+  // Play Crimson: build a wagon, load it, and drive it; its units ride along.
+  await page.click('#seat-button');
+  await waitText(page, '#seat', 'Crimson');
+  await waitInside(page, crimson.id, 1);
+  const wagon = await buildWith(page, 'wagon');
+  await sendUnits(page, crimson, wagon);
+  await waitInside(page, wagon.id, 1);
+  const riders = await insideOf(page, wagon.id);
+  await page.keyboard.press('Escape');
+  await selectBuilding(page, wagon);
+  const goal = await page.evaluate(({ id }) => {
+    const v = /** @type {any} */ (window).__vigame;
+    const w = v.view.buildings[id];
+    const d = (t) => (Math.abs(t.q - w.q) + Math.abs(t.r - w.r) + Math.abs(t.q + t.r - w.q - w.r)) / 2;
+    return v.board.list
+      .filter((t) => t.passable && !v.occ.buildingAt.has(`${t.q},${t.r}`) && d(t) === 2)
+      .map((t) => [t.q, t.r]);
+  }, wagon);
+  const dest = await openCell(page, goal);
+  await clickHex(page, dest.q, dest.r);
+  await page.waitForFunction(({ id, q, r }) => {
+    const w = /** @type {any} */ (window).__vigame.view.buildings[id];
+    return w.q !== q || w.r !== r;
+  }, wagon, { timeout: 6000 });
+  assert.equal(await insideOf(page, wagon.id), riders, 'the units rode along');
+  await frames(page);
+  await page.screenshot({ path: join(OUT, 'local-wagon.png') });
   await page.context().close();
-
-  // The '#select' dev aid still works when asked for. (A fresh page: going to
-  // the same URL plus a hash would not reload it.)
-  const dev = await openPage(browser, 'select-hash');
-  await dev.goto(pathToFileURL(BUNDLE).href + '#select');
-  await dev.waitForFunction(() => /** @type {any} */ (window).__vigame);
-  assert.notEqual(await dev.evaluate(() => /** @type {any} */ (window).__vigame.game.selectedUnitId), null);
-  await frames(dev);
-  await dev.screenshot({ path: join(OUT, 'hotseat-select-hash.png') });
-  await dev.context().close();
 }
 
-async function hotseatTouch(browser) {
+async function localTouch(browser) {
   const page = await openPage(browser, 'touch', {
     viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true,
   });
   await page.goto(pathToFileURL(BUNDLE).href);
-  await page.waitForFunction(() => /** @type {any} */ (window).__vigame);
+  await waitGame(page);
   await frames(page);
 
   const layout = await page.evaluate(() => {
@@ -253,9 +287,12 @@ async function hotseatTouch(browser) {
   assert.ok(layout.controls.top > layout.status.bottom, 'controls overlap the status panel');
   assert.equal(layout.legendShown, false);
 
-  await selectAndMove(page, 'Infantry', { touch: true });
+  const blue = await castleOf(page, 0);
+  await selectBuilding(page, blue, { touch: true });
   // With no hover on a touch screen, the last tapped hex is the tile readout.
   assert.notEqual(await text(page, '#tile'), '—', 'tile readout cleared after a tap');
+  await page.evaluate(() => { /** @type {any} */ (window).__vigame.forceDraw(); });
+  await buildWith(page, 'tower', { touch: true });
   await frames(page);
   await page.screenshot({ path: join(OUT, 'touch.png') });
   await page.context().close();
@@ -264,212 +301,11 @@ async function hotseatTouch(browser) {
 async function modulesOverHttp(browser, url) {
   const page = await openPage(browser, 'modules');
   await page.goto(url);
-  await page.waitForFunction(() => /** @type {any} */ (window).__vigame, null, { timeout: 5000 });
-  assert.equal(await page.evaluate(() => /** @type {any} */ (window).__vigame.game.units.size), 4);
-  await selectAndMove(page, 'Scout');
+  await waitGame(page);
+  assert.equal((await buildings(page)).length, 2);
+  await page.waitForFunction(() => /** @type {any} */ (window).__vigame.view.tick > 3);
   await page.context().close();
 }
-
-// --- online ----------------------------------------------------------------
-
-/**
- * Runs in the page before its own scripts: `window.claude` backed by the
- * Node-side fake runtime through the `__fakeRuntime` binding.
- */
-function runtimeShim({ uid }) {
-  const w = /** @type {any} */ (window);
-  const call = (op, ...args) => w.__fakeRuntime(op, ...args)
-    .then((r) => (r && r.error ? Promise.reject(r.error) : r?.value));
-  const toSnap = (s) => Object.freeze({
-    id: s.id,
-    exists: s.exists,
-    data: () => (s.exists ? s.data : undefined),
-    metadata: Object.freeze({ fromCache: s.fromCache, hasPendingWrites: false }),
-  });
-
-  const handlers = new Map();
-  let seq = 0;
-  w.__fakeDeliver = (id, s) => handlers.get(id)?.(toSnap(s));
-
-  const db = Object.freeze({
-    doc: (path) => Object.freeze({
-      id: path.split('/').pop(),
-      path,
-      get: () => call('db.get', path).then(toSnap),
-      set: (data) => call('db.set', path, data),
-      acquire: (opts) => call('db.acquire', path, opts),
-      onSnapshot(next) {
-        const id = ++seq;
-        handlers.set(id, next);
-        call('db.subscribe', path, id);
-        return () => { handlers.delete(id); call('db.unsubscribe', id); };
-      },
-    }),
-  });
-
-  let peers = Object.freeze([]);
-  const peerHandlers = new Set();
-  w.__fakePeers = (list) => {
-    peers = Object.freeze(list);
-    for (const fn of peerHandlers) fn({ peers, joined: [], left: [], updated: [] });
-  };
-  const room = Object.freeze({
-    presence: (patch) => call('room.presence', patch),
-    peers: () => peers,
-    onPeers(fn) { peerHandlers.add(fn); return () => peerHandlers.delete(fn); },
-    onConnection(fn) { setTimeout(() => fn(true), 0); return () => {}; },
-    connected: () => true,
-  });
-
-  const user = Object.freeze({
-    id: async () => uid,
-    can: async () => true,
-    canEdit: async () => false,
-    isOwner: async () => false,
-  });
-
-  const caps = { db, room, user };
-  let joined = false;
-  w.claude = Object.freeze({
-    use(name) {
-      if (name === 'room' && !joined) { joined = true; call('room.join'); }
-      // Namespaces arrive later than the page's first synchronous run.
-      return new Promise((res) => setTimeout(() => res(caps[name] ?? null), 30));
-    },
-  });
-}
-
-/**
- * Open the bundle as one viewer of a shared fake artifact.
- * @param {import('playwright').Browser} browser
- * @param {ReturnType<typeof createFakeRuntime>} rt
- * @param {string} uid
- */
-async function openOnline(browser, rt, uid) {
-  const tab = rt.viewer({ uid });
-  const page = await openPage(browser, uid);
-  const unsubs = new Map();
-
-  const wire = (snap) => ({
-    id: snap.id, exists: snap.exists, data: snap.data() ?? null, fromCache: snap.metadata.fromCache,
-  });
-  const push = (fn, arg) => page.evaluate(fn, arg).catch(() => {});
-
-  await page.exposeFunction('__fakeRuntime', async (op, ...args) => {
-    try {
-      switch (op) {
-        case 'db.get': return { value: wire(await tab.db.doc(args[0]).get()) };
-        case 'db.set': return { value: await tab.db.doc(args[0]).set(args[1]) };
-        case 'db.acquire': return { value: await tab.db.doc(args[0]).acquire(args[1]) };
-        case 'db.subscribe': {
-          const [path, id] = args;
-          unsubs.set(id, tab.db.doc(path).onSnapshot((snap) => push(
-            ([id, s]) => /** @type {any} */ (window).__fakeDeliver(id, s), [id, wire(snap)],
-          )));
-          return { value: null };
-        }
-        case 'db.unsubscribe': unsubs.get(args[0])?.(); return { value: null };
-        case 'room.join': {
-          const send = () => push((list) => /** @type {any} */ (window).__fakePeers(list), tab.room.peers());
-          tab.room.onPeers(send);
-          send();
-          return { value: null };
-        }
-        case 'room.presence': return { value: await tab.room.presence(args[0]) };
-        default: return { error: { code: 'invalid_argument', message: `unknown op ${op}` } };
-      }
-    } catch (e) {
-      return { error: { code: e?.code ?? 'unavailable', message: String(e?.message ?? e) } };
-    }
-  });
-  await page.addInitScript(runtimeShim, { uid });
-  await page.goto(pathToFileURL(BUNDLE).href);
-  await page.waitForFunction(() => /** @type {any} */ (window).__vigame?.net.mode === 'online');
-  page.on('close', () => tab.leave());
-  return page;
-}
-
-const endTurnEnabled = (page, timeout = 5000) => page.waitForFunction(
-  () => !(/** @type {HTMLButtonElement} */ (document.getElementById('end-turn')).disabled), null, { timeout },
-);
-
-async function online(browser) {
-  const rt = createFakeRuntime();
-
-  const a = await openOnline(browser, rt, 'u_a');
-  await waitText(a, '#seat', 'Blue');
-  await endTurnEnabled(a);
-  assert.equal(await a.locator('#seat-button').textContent(), 'Release seat');
-
-  // B arrives while A's lease on the seat table may still be running, and
-  // must wait it out rather than end up spectating.
-  const b = await openOnline(browser, rt, 'u_b');
-  await waitText(b, '#seat', 'Crimson', 15000);
-  assert.equal(await b.locator('#end-turn').isDisabled(), true);
-  assert.equal(await b.locator('#end-turn').getAttribute('title'), 'Waiting for Blue');
-
-  // A's move reaches B, and so does the hex A picked.
-  const moved = await selectAndMove(a, 'Scout');
-  await b.waitForFunction(({ id, q, r }) => {
-    const u = /** @type {any} */ (window).__vigame.game.units.get(id);
-    return u && u.q === q && u.r === r;
-  }, moved);
-  await b.waitForFunction(({ q, r }) => /** @type {any} */ (window).__vigame.peers
-    .some((p) => !p.isMe && p.sel && p.sel.q === q && p.sel.r === r), moved);
-
-  // B cannot move A's units, and nothing B clicks changes the game.
-  await clickHex(b, moved.q, moved.r);
-  assert.equal(await b.evaluate(() => /** @type {any} */ (window).__vigame.game.selectedUnitId), null);
-
-  // Turn passes to B.
-  await a.click('#end-turn');
-  await endTurnEnabled(b);
-  await waitText(a, '#player', 'Crimson');
-  assert.equal(await a.locator('#end-turn').isDisabled(), true);
-  await frames(b);
-  await b.screenshot({ path: join(OUT, 'online-crimson.png') });
-
-  // A latecomer sees the game as it stands, not the opening position, and
-  // spectates because both seats are taken.
-  const c = await openOnline(browser, rt, 'u_c');
-  await c.waitForFunction(({ id, q, r }) => {
-    const v = /** @type {any} */ (window).__vigame;
-    const u = v.game.units.get(id);
-    return u && u.q === q && u.r === r && v.game.currentPlayer === 1;
-  }, moved, { timeout: 15000 });
-  await waitText(c, '#seat', 'Spectator');
-  await waitText(a, '#viewers', '3');
-  assert.equal(await c.locator('#seat-button').isHidden(), true);
-  assert.equal(await c.locator('#end-turn').getAttribute('title'), 'Spectating — both seats are taken');
-  assert.deepEqual(rt.docs.get('game/state').units.find((u) => u.id === moved.id),
-    { ...(await ownUnitById(c, moved.id)) }, 'store and latecomer disagree');
-
-  // A gives the seat up; C is offered it and takes it; A does not grab it back.
-  await a.click('#seat-button');
-  await waitText(a, '#seat', 'Spectator', 15000);
-  await c.waitForSelector('#seat-button:not([hidden])');
-  assert.equal(await c.locator('#seat-button').textContent(), 'Take seat');
-  assert.equal(await c.locator('#end-turn').getAttribute('title'), 'Take a seat to play');
-  await c.click('#seat-button');
-  await waitText(c, '#seat', 'Blue', 15000);
-  await a.waitForTimeout(1500);
-  assert.equal(await text(a, '#seat'), 'Spectator');
-  assert.equal(await text(b, '#seat'), 'Crimson');
-  await frames(c);
-  await c.screenshot({ path: join(OUT, 'online-latecomer.png') });
-
-  // B moves for Crimson and ends the turn; C now plays Blue.
-  await selectAndMove(b, 'Infantry');
-  await b.click('#end-turn');
-  await endTurnEnabled(c);
-  await waitText(c, '#turn', '2');
-
-  for (const p of [a, b, c]) await p.context().close();
-}
-
-const ownUnitById = (page, id) => page.evaluate((id) => ({
-  .../** @type {any} */ (window).__vigame.game.units.get(id),
-}), id);
 
 // --- game server -------------------------------------------------------------
 
@@ -490,6 +326,9 @@ async function signIn(page, name) {
   await page.waitForSelector('#signin', { state: 'hidden' });
 }
 
+const online = (page) => page.waitForFunction(() => /** @type {any} */ (window).__vigame?.net.mode === 'online'
+  && /** @type {any} */ (window).__vigame.view, null, { timeout: 10000 });
+
 /**
  * Open a page from the game server as a new browser (its own storage, so its
  * own player token), and sign in.
@@ -502,7 +341,7 @@ async function openServerPage(browser, url, label, name) {
   const page = await openPage(browser, label);
   await page.goto(url);
   await signIn(page, name);
-  await page.waitForFunction(() => /** @type {any} */ (window).__vigame?.net.mode === 'online', null, { timeout: 10000 });
+  await online(page);
   return page;
 }
 
@@ -531,46 +370,46 @@ async function gameServer(browser, url) {
   await signIn(a, 'Ann');
 
   // Opening the bare address starts a game, and the address becomes its link.
-  await a.waitForFunction(() => /** @type {any} */ (window).__vigame?.net.mode === 'online', null, { timeout: 10000 });
+  // Alone, Blue waits: the clock runs only while both players are here.
+  await online(a);
   const link = a.url();
   assert.match(link, /\?game=[\w-]+$/);
-  await waitText(a, '#seat', 'Ann \u00b7 Blue');
-  await endTurnEnabled(a);
+  await waitText(a, '#seat', 'Ann · Blue');
+  await waitText(a, '#time', '0:00 · paused');
+  assert.equal(await a.locator('#build-tower').isDisabled(), true);
 
-  const b = await openServerPage(browser, link, 'server-b', 'B\u0113la');
-  await waitText(b, '#seat', 'B\u0113la \u00b7 Crimson');
-  await waitText(b, '#player', 'Blue \u00b7 Ann');
-  assert.equal(await b.locator('#end-turn').getAttribute('title'), 'Waiting for Blue');
+  const b = await openServerPage(browser, link, 'server-b', 'Bēla');
+  await waitText(b, '#seat', 'Bēla · Crimson');
+  await waitMatch(a, '#time', /^0:0[1-9]$/);
+  assert.equal(await a.locator('#build-tower').isDisabled(), false);
 
-  // Blue's move and pick reach Crimson through the server.
-  const moved = await selectAndMove(a, 'Scout');
-  const at = ({ id, q, r }) => {
-    const u = /** @type {any} */ (window).__vigame.game.units.get(id);
-    return u && u.q === q && u.r === r;
-  };
-  await b.waitForFunction(at, moved);
+  // Blue builds and sends units; Crimson sees them march, and Blue's pick.
+  const blue = await castleOf(a, 0);
+  const tower = await buildWith(a, 'tower');
+  await b.waitForFunction((id) => /** @type {any} */ (window).__vigame.view.buildings[id], tower.id);
+  await waitInside(a, blue.id, 2);
+  await sendUnits(a, blue, tower);
+  await b.waitForFunction((id) => Object.values(/** @type {any} */ (window).__vigame.view.units)
+    .some((u) => u.to === id && u.path?.length === 1), tower.id);
   await b.waitForFunction(({ q, r }) => /** @type {any} */ (window).__vigame.peers
-    .some((p) => !p.isMe && p.sel && p.sel.q === q && p.sel.r === r), moved);
-
-  await a.click('#end-turn');
-  await endTurnEnabled(b);
-  await waitText(a, '#player', 'Crimson \u00b7 B\u0113la');
+    .some((p) => !p.isMe && p.sel && p.sel.q === q && p.sel.r === r), tower);
+  await frames(b);
+  await b.screenshot({ path: join(OUT, 'server-crimson.png') });
+  await waitInside(b, tower.id, 1);
 
   // Crimson reloads: same seat (the token is kept), same game (the server
   // has it), and no sign-in (the server knows the token).
   await b.reload();
-  await b.waitForFunction(() => /** @type {any} */ (window).__vigame?.net.mode === 'online');
+  await online(b);
   assert.equal(await b.locator('#signin[open]').count(), 0);
-  await waitText(b, '#seat', 'B\u0113la \u00b7 Crimson');
-  await b.waitForFunction(at, moved);
-  await endTurnEnabled(b);
-  await frames(b);
-  await b.screenshot({ path: join(OUT, 'server-crimson.png') });
+  await waitText(b, '#seat', 'Bēla · Crimson');
+  await b.waitForFunction((id) => /** @type {any} */ (window).__vigame.view.buildings[id], tower.id);
 
-  // A third browser watches.
+  // A third browser watches, and can't give commands.
   const c = await openServerPage(browser, link, 'server-c', 'Cai');
-  await waitText(c, '#seat', 'Cai \u00b7 Spectator');
+  await waitText(c, '#seat', 'Cai · Spectator');
   await waitText(a, '#viewers', '3');
+  assert.equal(await c.locator('#build-tower').isDisabled(), true);
 
   // A link to a game that doesn't exist says so, and the page still works.
   // (Chromium logs the refused join request itself as a console error.)
@@ -649,10 +488,9 @@ const games = await startGameServer({ port: 0 });
 const proxied = /** @type {{ url: string, close: () => Promise<unknown> }} */ (await startPrefixProxy(games.url, '/vigame'));
 const browser = await chromium.launch();
 const scenarios = [
-  ['hotseat on desktop', () => hotseatDesktop(browser)],
-  ['hotseat on a touch phone', () => hotseatTouch(browser)],
+  ['one screen, desktop', () => localDesktop(browser)],
+  ['one screen, touch phone', () => localTouch(browser)],
   ['ES modules over HTTP', () => modulesOverHttp(browser, server.url)],
-  ['online, three browsers', () => online(browser)],
   ['game server, three browsers', () => gameServer(browser, games.url)],
   ['game server under a subfolder, behind a proxy', () => gameServer(browser, proxied.url)],
 ];

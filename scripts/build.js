@@ -1,8 +1,8 @@
 /**
  * Bundle the ES modules in src/ into one self-contained HTML file.
  *
- * The output is the shape the claude.ai Artifact is published in: index.html
- * with its module <script> replaced by every module, in dependency order,
+ * The output is index.html with its module <script> replaced by every module,
+ * in dependency order,
  * inside one IIFE. Imports are dropped and `export` keywords stripped, so all
  * modules share one scope — which is why duplicate top-level names across
  * modules are a build error rather than a silent shadowing bug.
@@ -111,31 +111,13 @@ export function build({ preamble = '' } = {}) {
   return template.slice(0, at) + preamble + script + template.slice(at + MODULE_TAG.length);
 }
 
-/**
- * The page content without its document skeleton, for publishing as a
- * claude.ai Artifact: the Artifact tool wraps what it is given in its own
- * skeleton, so the file handed to it starts at <title>.
- * @param {string} html A full document from {@link build}.
- * @returns {string}
- */
-export function artifactBody(html) {
-  const open = html.match(/^<!doctype html><html><head>[\s\S]*?<\/head><body>\n?/i);
-  const close = html.match(/\n*<\/body><\/html>\s*$/i);
-  if (!open || !close) throw new Error(`${TEMPLATE} must open with the Artifact skeleton and end with </body></html>`);
-  return html.slice(open[0].length, close.index) + '\n';
-}
-
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  // Standalone: open it from disk or any static host, and it plays on that
+  // screen. The game server serves its own build (server/app.js).
   const outDir = resolve(ROOT, process.argv[2] ?? 'dist');
   const html = build();
-  const outputs = [
-    ['vigame.html', html],             // standalone: open it from disk or any static host
-    ['artifact.html', artifactBody(html)], // what to publish to claude.ai
-  ];
+  const out = join(outDir, 'vigame.html');
   mkdirSync(outDir, { recursive: true });
-  for (const [name, body] of outputs) {
-    const out = join(outDir, name);
-    writeFileSync(out, body);
-    console.log(`wrote ${relative(process.cwd(), out)} (${(Buffer.byteLength(body) / 1024).toFixed(1)} KiB)`);
-  }
+  writeFileSync(out, html);
+  console.log(`wrote ${relative(process.cwd(), out)} (${(Buffer.byteLength(html) / 1024).toFixed(1)} KiB)`);
 }

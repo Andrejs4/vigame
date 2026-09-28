@@ -1,18 +1,19 @@
 /**
- * Entry point: wires board, game, camera, renderer, input and networking.
+ * Entry point: wires board, camera, renderer, input and networking around the
+ * game core.
  *
- * Runs in three modes. Served by the Vigame game server (which loads the
+ * Runs in two modes. Served by the Vigame game server (which loads the
  * Colyseus client first), it plays the game named in `?game=` through that
- * server. Inside claude.ai it syncs through the Artifact runtime: game state
- * in a shared document, everyone's selection as presence. Anywhere else it is
- * hotseat: one browser, two players, everything local.
+ * server. Anywhere else it runs the game core itself, and the one person at
+ * the screen can play either side.
  */
 
 import { bounds, key, pixelToAxial } from './hex.js';
 import { BOARD_OPTIONS, TERRAIN, createBoard, tileAt } from './board.js';
-import { PLAYERS, applyCommand, createGame, reachable, unitAt } from './game.js';
+import { capacityOf, nearStanding, newGame, occupancy } from './game.js';
+import { BUILDING_TYPES, SIDES, TICKS_PER_SECOND, UNIT_LIMIT } from './rules.js';
 import { Camera } from './camera.js';
-import { applyState, createArtifactNet, createLocalNet, createServerNet, serialize } from './net.js';
+import { createLocalNet, createServerNet } from './net.js';
 import { PLAYER_NAME_MAX, cleanPlayerName } from './player.js';
 import { BoardRenderer } from './render.js';
 
@@ -20,162 +21,239 @@ const SEED = 1337;
 
 const canvas = /** @type {HTMLCanvasElement} */ (document.getElementById('board'));
 const hud = {
-  turn: document.getElementById('turn'),
-  player: document.getElementById('player'),
+  time: document.getElementById('time'),
+  seat: document.getElementById('seat'),
+  units: document.getElementById('units'),
   selection: document.getElementById('selection'),
   tile: document.getElementById('tile'),
-  seat: document.getElementById('seat'),
   viewers: document.getElementById('viewers'),
 };
-const endTurnButton = /** @type {HTMLButtonElement | null} */ (document.getElementById('end-turn'));
-const seatRow = document.getElementById('seat-row');
 const viewersRow = document.getElementById('viewers-row');
 const seatButton = document.getElementById('seat-button');
+const upgradeButton = /** @type {HTMLButtonElement | null} */ (document.getElementById('upgrade'));
+const sendAmountButton = document.getElementById('send-amount');
+const buildButtons = /** @type {HTMLButtonElement[]} */ ([...document.querySelectorAll('button[data-kind]')]);
 const notice = document.getElementById('notice');
+const message = document.getElementById('message');
 const signinDialog = /** @type {HTMLDialogElement | null} */ (document.getElementById('signin'));
 
 let board = createBoard({ ...BOARD_OPTIONS, seed: SEED });
-let game = createGame(board);
 const camera = new Camera();
 let renderer = new BoardRenderer(canvas, board);
 
+/** The game as last reported by the transport. */
+/** @type {import('./net.js').GameView | null} */
+let view = null;
+/** What is where in `view`. */
+/** @type {import('./game.js').Occupancy | null} */
+let occ = null;
+/** Whether anything is on the move, so the board must be redrawn every frame. */
+let moving = false;
+
 /** @type {{ q: number, r: number } | null} */
 let hover = null;
-/** @type {Map<string, number>} */
-let reach = new Map();
 /** @type {Array<import('./net.js').NetPeer>} */
 let peers = [];
+/** The selected building's id. */
+/** @type {string | null} */
+let selected = null;
+/** The kind of building being placed, while in build mode. */
+/** @type {string | null} */
+let placing = null;
+/** Whether a send takes every unit inside, or half. */
+let sendAll = false;
+/** @type {Set<string>} */
+let highlights = new Set();
+let showCoords = false;
 let needsDraw = true;
 
-/** The transport. Starts as hotseat and is replaced if the runtime answers. */
-let net = createLocalNet();
+/** Until the game server answers, or when there is none, the game runs here. */
+const local = createLocalNet({ board, state: newGame(board) });
+/** @type {ReturnType<typeof createLocalNet> | Awaited<ReturnType<typeof createServerNet>>} */
+let net = local;
 
-// --- board / state ---------------------------------------------------------
+// --- state -----------------------------------------------------------------
 
 /**
  * Rebuild the board for a different seed, keeping the camera where it is.
- * Only happens online, when the shared state was seeded by someone else.
  * @param {number} seed
  */
 function rebuildBoard(seed) {
   board = createBoard({ ...BOARD_OPTIONS, seed });
   renderer = new BoardRenderer(canvas, board);
   renderer.showCoords = showCoords;
+}
+
+/**
+ * Take in the game as the transport reports it.
+ * @param {import('./net.js').GameView} next
+ */
+function onState(next) {
+  if (next.seed !== board.seed) rebuildBoard(next.seed);
+  view = next;
+  occ = occupancy(next);
+  moving = Object.values(next.units).some((u) => u.path) || Object.values(next.buildings).some((b) => b.path);
+  if (selected && !next.buildings[selected]) selected = null;
+  refreshHighlights();
+  updateHud();
   needsDraw = true;
 }
 
-let showCoords = false;
+/** Whether this viewer can give commands right now. */
+function canCommand() {
+  return net.seat() !== null && net.running();
+}
 
 /**
- * Online, whether the shared game has arrived. Until it has, the board shows
- * the local opening position, and a move made on that would be committed over
- * the real game.
+ * Whether a building is this viewer's own.
+ * @param {string | null} id
  */
-let synced = false;
-
-/**
- * Whether this viewer may act right now. Hotseat always may; online, only the
- * player whose turn it is, and only if they hold that seat.
- */
-function canAct() {
-  if (net.mode === 'local') return true;
+function isMine(id) {
   const seat = net.seat();
-  return synced && seat !== null && seat === game.currentPlayer;
+  return id !== null && seat !== null && view?.buildings[id]?.owner === seat;
 }
 
-/** Why End turn is disabled, for its tooltip. */
-function waitingReason() {
-  if (net.mode === 'online' && !synced) return 'Connecting\u2026';
-  if (net.seat() === null) {
-    return net.canClaimSeat() ? 'Take a seat to play' : 'Spectating \u2014 both seats are taken';
+/** In build mode, light up the cells where the building could go. */
+function refreshHighlights() {
+  const seat = net.seat();
+  highlights = new Set();
+  if (placing && view && occ && seat !== null) {
+    for (const t of board.list) {
+      const k = key(t.q, t.r);
+      if (t.buildable && !occ.buildingAt.has(k) && nearStanding(/** @type {any} */ (view), seat, t)) highlights.add(k);
+    }
   }
-  return `Waiting for ${PLAYERS[game.currentPlayer].name}`;
+  needsDraw = true;
 }
 
-/**
- * Hand a command this page has just applied to the transport, along with the
- * state it produced.
- * @param {import('./game.js').Command} command
- */
-function commit(command) {
-  net.commit(serialize(board, game), command);
-}
-
-function refreshReach() {
-  const unit = game.selectedUnitId ? game.units.get(game.selectedUnitId) : null;
-  reach = unit && unit.owner === game.currentPlayer && canAct()
-    ? reachable(board, game, unit)
-    : new Map();
-}
-
-/**
- * The name of whoever holds `seat`, while they are here and have one.
- * @param {number} seat
- */
-function seatHolderName(seat) {
-  return peers.find((p) => p.seat === seat && p.name)?.name ?? '';
+/** @param {number} tick */
+function formatTime(tick) {
+  const s = Math.floor(tick / TICKS_PER_SECOND);
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 }
 
 function updateHud() {
-  const player = PLAYERS[game.currentPlayer];
-  if (hud.turn) hud.turn.textContent = String(game.turn);
-  if (hud.player) {
-    const holder = seatHolderName(game.currentPlayer);
-    hud.player.textContent = holder ? `${player.name} \u00b7 ${holder}` : player.name;
-    hud.player.style.color = player.accent;
+  const seat = net.seat();
+  const online = net.mode === 'online';
+
+  if (hud.time) {
+    const paused = online && !net.running();
+    hud.time.textContent = `${formatTime(view?.tick ?? 0)}${paused ? ' · paused' : ''}`;
+    hud.time.title = paused ? 'The game waits until both players are here' : '';
+  }
+  if (hud.seat) {
+    const role = seat === null ? 'Spectator' : SIDES[seat].name;
+    const me = peers.find((p) => p.isMe)?.name;
+    hud.seat.textContent = me ? `${me} · ${role}` : role;
+    hud.seat.style.color = seat === null ? '' : SIDES[seat].accent;
+  }
+  if (hud.units) {
+    hud.units.textContent = seat !== null && occ ? `${occ.unitCount[seat] ?? 0} / ${UNIT_LIMIT}` : '—';
   }
   if (hud.selection) {
-    const unit = game.selectedUnitId ? game.units.get(game.selectedUnitId) : null;
-    hud.selection.textContent = unit
-      ? `${unit.name} \u2014 ${unit.move}/${unit.moveMax} MP`
-      : 'none';
+    const b = selected ? view?.buildings[selected] : null;
+    if (b && occ) {
+      const type = BUILDING_TYPES[b.type];
+      const inside = occ.inside.get(b.id)?.length ?? 0;
+      hud.selection.textContent = `${type.name} (grade ${b.grade}) · ${inside}/${capacityOf(b)}`;
+      hud.selection.style.color = SIDES[b.owner]?.accent ?? '';
+    } else {
+      hud.selection.textContent = 'none';
+      hud.selection.style.color = '';
+    }
   }
   if (hud.tile) {
     const t = hover ? tileAt(board, hover.q, hover.r) : null;
-    hud.tile.textContent = t
-      ? `${TERRAIN[t.terrain].label} (${t.q}, ${t.r})${t.passable ? '' : ' \u2014 impassable'}`
-      : '\u2014';
+    const rule = t && !t.passable ? ' — impassable' : t && !t.buildable ? ' — no building' : '';
+    hud.tile.textContent = t ? `${TERRAIN[t.terrain].label} (${t.q}, ${t.r})${rule}` : '—';
   }
 
-  const online = net.mode === 'online';
-  if (seatRow) seatRow.hidden = !online;
   if (viewersRow) viewersRow.hidden = !online;
+  if (hud.viewers) hud.viewers.textContent = net.connected() ? String(net.viewers()) : 'offline';
+
   if (seatButton) {
-    const seated = net.seat() !== null;
-    seatButton.hidden = !online || (!seated && !net.canClaimSeat());
-    seatButton.textContent = seated ? 'Release seat' : 'Take seat';
-  }
-
-  if (online) {
-    const seat = net.seat();
-    if (hud.seat) {
-      const role = seat === null ? 'Spectator' : PLAYERS[seat].name;
-      const me = peers.find((p) => p.isMe)?.name;
-      hud.seat.textContent = me ? `${me} \u00b7 ${role}` : role;
-      hud.seat.style.color = seat === null ? '' : PLAYERS[seat].accent;
-    }
-    if (hud.viewers) {
-      const n = net.viewers();
-      hud.viewers.textContent = net.connected() ? String(n) : 'offline';
-      hud.viewers.title = peers.map((p) => p.name).filter(Boolean).join(', ');
+    if (!online) {
+      seatButton.hidden = false;
+      seatButton.textContent = `Play ${SIDES[((seat ?? 0) + 1) % SIDES.length].name}`;
+    } else {
+      seatButton.hidden = seat === null && !net.canClaimSeat();
+      seatButton.textContent = seat === null ? 'Take seat' : 'Release seat';
     }
   }
 
-  if (endTurnButton) {
-    const allowed = canAct();
-    endTurnButton.disabled = !allowed;
-    endTurnButton.title = allowed ? '' : waitingReason();
+  const can = canCommand();
+  for (const button of buildButtons) {
+    button.disabled = !can;
+    button.setAttribute('aria-pressed', String(placing === button.dataset.kind));
   }
+  if (upgradeButton) {
+    const b = selected ? view?.buildings[selected] : null;
+    upgradeButton.disabled = !(can && b && isMine(selected) && b.grade < BUILDING_TYPES[b.type].grades);
+  }
+  if (sendAmountButton) sendAmountButton.textContent = sendAll ? 'Send all' : 'Send half';
+}
+
+/** @type {ReturnType<typeof setTimeout> | undefined} */
+let messageTimer;
+
+/**
+ * Say briefly why something didn't happen.
+ * @param {string} text
+ */
+function flash(text) {
+  if (!message) return;
+  message.textContent = text;
+  message.hidden = false;
+  clearTimeout(messageTimer);
+  messageTimer = setTimeout(() => { message.hidden = true; }, 3000);
 }
 
 /**
- * Adopt authoritative state from the transport.
- * @param {import('./net.js').GameState} state
+ * Give a command, and say so if it is refused.
+ * @param {Record<string, unknown>} cmd
+ * @param {string} what What it was, for the message: "Can't {what}: {reason}."
  */
-function onRemoteState(state) {
-  if (typeof state.seed === 'number' && state.seed !== board.seed) rebuildBoard(state.seed);
-  applyState(game, state);
-  refreshReach();
+async function give(cmd, what) {
+  const outcome = await net.send(cmd);
+  if (!outcome.ok) flash(`Can't ${what}: ${outcome.reason}.`);
+  return outcome.ok;
+}
+
+/**
+ * The player clicked or tapped a cell.
+ *
+ * - In build mode: build there.
+ * - With one of your buildings selected, on another of yours: send units
+ *   there (half of those inside, or all).
+ * - On any building: select it, or unselect it.
+ * - With one of your wagons selected, anywhere else: drive it there.
+ * - Anywhere else: unselect.
+ * @param {{ q: number, r: number }} at
+ */
+async function act(at) {
+  if (!view || !occ) return;
+  if (placing) {
+    if (!canCommand()) return;
+    if (await give({ type: 'build', kind: placing, q: at.q, r: at.r }, 'build there')) placing = null;
+    refreshHighlights();
+    updateHud();
+    return;
+  }
+
+  const here = occ.buildingAt.get(key(at.q, at.r)) ?? null;
+  if (selected && here && here !== selected && isMine(selected) && isMine(here) && canCommand()) {
+    const inside = occ.inside.get(selected)?.length ?? 0;
+    await give({ type: 'send', from: selected, to: here, count: Math.max(1, sendAll ? inside : Math.ceil(inside / 2)) }, 'send units');
+    return;
+  }
+  if (here) {
+    selected = here === selected ? null : here;
+  } else if (selected && isMine(selected) && BUILDING_TYPES[view.buildings[selected].type].speed && canCommand()) {
+    await give({ type: 'move', building: selected, q: at.q, r: at.r }, 'go there');
+    return;
+  } else {
+    selected = null;
+  }
   updateHud();
   needsDraw = true;
 }
@@ -254,27 +332,9 @@ canvas.addEventListener('pointerup', (e) => {
   // described in the HUD's Tile row.
   if (e.pointerType !== 'mouse') hover = { q: h.q, r: h.r };
 
-  // Everyone shares what they picked, including spectators and the player
-  // whose turn it is not. Highlights are not a lock.
+  // Everyone shares what they picked, spectators included.
   net.select({ q: h.q, r: h.r });
-
-  const clicked = unitAt(game, h.q, h.r);
-  /** @type {import('./game.js').Command | null} */
-  let command = null;
-
-  if (clicked && clicked.owner === game.currentPlayer && canAct()) {
-    game.selectedUnitId = clicked.id === game.selectedUnitId ? null : clicked.id;
-  } else if (game.selectedUnitId && canAct() && reach.has(key(h.q, h.r))) {
-    command = { type: 'move', unit: game.selectedUnitId, q: h.q, r: h.r };
-    if (!applyCommand(board, game, game.currentPlayer, command)) command = null;
-  } else if (!clicked) {
-    game.selectedUnitId = null;
-  }
-
-  refreshReach();
-  updateHud();
-  needsDraw = true;
-  if (command) commit(command);
+  act(h);
 });
 
 // The browser took the pointer over (a system gesture, a palm): end the drag
@@ -299,20 +359,35 @@ canvas.addEventListener('wheel', (e) => {
   needsDraw = true;
 }, { passive: false });
 
-endTurnButton?.addEventListener('click', () => {
-  if (!canAct()) return;
-  /** @type {import('./game.js').Command} */
-  const command = { type: 'endTurn' };
-  applyCommand(board, game, game.currentPlayer, command);
-  net.select(null);
-  refreshReach();
+addEventListener('keydown', (e) => {
+  if (e.key !== 'Escape' || (!placing && !selected)) return;
+  placing = null;
+  selected = null;
+  refreshHighlights();
   updateHud();
-  needsDraw = true;
-  commit(command);
+});
+
+for (const button of buildButtons) {
+  button.addEventListener('click', () => {
+    const kind = button.dataset.kind ?? null;
+    placing = placing === kind ? null : kind;
+    refreshHighlights();
+    updateHud();
+  });
+}
+
+upgradeButton?.addEventListener('click', () => {
+  if (selected) give({ type: 'upgrade', building: selected }, 'upgrade');
+});
+
+sendAmountButton?.addEventListener('click', () => {
+  sendAll = !sendAll;
+  updateHud();
 });
 
 seatButton?.addEventListener('click', () => {
-  if (net.seat() !== null) net.releaseSeat();
+  if (net === local) local.switchSide();
+  else if (net.seat() !== null) net.releaseSeat();
   else net.claimSeat();
 });
 
@@ -352,15 +427,16 @@ resize();
   const rect = canvas.getBoundingClientRect();
   camera.fit(bounds(board.list, board.hexSize), rect.width, rect.height);
 }
-updateHud();
+local.onState(onState);
+local.onSeat(() => { selected = null; refreshHighlights(); updateHud(); });
 
 function frame() {
   // Queue the next frame first, so one frame that throws cannot stop the
   // board from ever redrawing again.
   requestAnimationFrame(frame);
-  if (!needsDraw) return;
+  if (!needsDraw && !moving) return;
   needsDraw = false;
-  renderer.draw({ camera, game, hover, reachable: reach, peers });
+  renderer.draw({ camera, view, clock: net.clock(), selected, highlights, hover, peers });
 }
 requestAnimationFrame(frame);
 
@@ -450,7 +526,7 @@ function signIn(token) {
   async function newQuestion() {
     challenge = null;
     answerInput.value = '';
-    question.textContent = 'Loading the question\u2026';
+    question.textContent = 'Loading the question…';
     try {
       const res = await fetch(new URL('api/challenge', serverBase()), { cache: 'no-store' });
       if (!res.ok) throw new Error(String(res.status));
@@ -474,7 +550,7 @@ function signIn(token) {
       if (submit.disabled) return;
       const name = cleanPlayerName(nameInput.value);
       if (!name) {
-        error.textContent = `Use 1\u2013${PLAYER_NAME_MAX} letters or digits. Spaces and - _ . ' may go between them.`;
+        error.textContent = `Use 1–${PLAYER_NAME_MAX} letters or digits. Spaces and - _ . ' may go between them.`;
         nameInput.focus();
         return;
       }
@@ -494,7 +570,7 @@ function signIn(token) {
           return;
         }
         const why = (await res.json().catch(() => ({}))).error;
-        error.textContent = why === 'wrong answer' ? 'That\u2019s not it. Try this one.' : `The server said no (${why ?? res.status}).`;
+        error.textContent = why === 'wrong answer' ? 'That’s not it. Try this one.' : `The server said no (${why ?? res.status}).`;
       } catch {
         error.textContent = 'Could not reach the game server.';
       } finally {
@@ -552,92 +628,66 @@ async function joinServerGame(Client) {
 }
 
 /**
- * Join through the claude.ai Artifact runtime.
- * @param {any} claude
- */
-async function joinArtifactGame(claude) {
-  const [db, room, user] = await Promise.all([
-    claude.use('db').catch(() => null),
-    claude.use('room').catch(() => null),
-    claude.use('user').catch(() => null),
-  ]);
-  if (!db) return null; // without shared state there is no online game
-  return createArtifactNet({ db, room, user, initial: serialize(board, game) });
-}
-
-/**
- * Try to upgrade to online play. The page is already fully playable by the
- * time this runs; if no transport answers, it stays hotseat.
+ * Switch to the game server's game, when the game server served this page.
+ * Until then, and if that fails, the game runs on this screen.
  */
 async function goOnline() {
   const g = /** @type {any} */ (globalThis);
-  let online = null;
-  if (g.Colyseus?.Client) {
-    try {
-      online = await joinServerGame(g.Colyseus.Client);
-      const leaving = online;
-      // Closing or reloading the page is leaving, not a dropped connection
-      // the server should hold a place open for.
-      addEventListener('pagehide', () => { leaving.leave(); });
-      // A page restored from the back-forward cache has lost its connection.
-      addEventListener('pageshow', (e) => { if (e.persisted) location.reload(); });
-    } catch (e) {
-      const missing = /no game/.test(String(/** @type {any} */ (e)?.message));
-      showNotice(
-        `${missing ? 'There is no game at this address.' : 'Could not reach the game server.'} Playing on this screen only.`,
-        { href: serverBase().pathname, text: 'Start a new game' },
-      );
-      return;
-    }
-  } else if (g.claude?.use) {
-    online = await joinArtifactGame(g.claude);
+  if (!g.Colyseus?.Client) return;
+  /** @type {Awaited<ReturnType<typeof createServerNet>>} */
+  let online;
+  try {
+    online = await joinServerGame(g.Colyseus.Client);
+  } catch (e) {
+    const missing = /no game/.test(String(/** @type {any} */ (e)?.message));
+    showNotice(
+      `${missing ? 'There is no game at this address.' : 'Could not reach the game server.'} Playing on this screen only.`,
+      { href: serverBase().pathname, text: 'Start a new game' },
+    );
+    return;
   }
-  if (!online) return;
+  // Closing or reloading the page is leaving, not a dropped connection the
+  // server should hold a place open for.
+  addEventListener('pagehide', () => { online.leave(); });
+  // A page restored from the back-forward cache has lost its connection.
+  addEventListener('pageshow', (e) => { if (e.persisted) location.reload(); });
 
+  local.stop();
   net = online;
-  online.onState(onRemoteState);
+  view = null;
+  occ = null;
+  selected = null;
+  placing = null;
+  online.onState(onState);
   online.onPeers((list) => {
     peers = list;
     needsDraw = true;
     updateHud();
   });
-  online.onSeat(() => { refreshReach(); updateHud(); needsDraw = true; });
-
+  online.onSeat(() => { refreshHighlights(); updateHud(); });
   await online.ready();
-  synced = true;
-  refreshReach();
   updateHud();
-  needsDraw = true;
 
-  // Keep the viewer count honest as people come and go.
-  setInterval(updateHud, 4000);
+  // Keep the viewer count and paused state honest as people come and go.
+  setInterval(updateHud, 1000);
 }
 
-goOnline().catch(() => { /* stay hotseat */ });
-
-// Dev aid: '#select' preselects the current player's first unit, so the
-// movement-range overlay can be verified in a headless screenshot.
-if (location.hash === '#select') {
-  const first = [...game.units.values()].find((u) => u.owner === game.currentPlayer);
-  if (first) {
-    game.selectedUnitId = first.id;
-    hover = { q: first.q, r: first.r };
-    refreshReach();
-    updateHud();
-  }
-}
+goOnline().catch(() => { /* stay on this screen */ });
 
 // Exposed for console poking and for the headless render check.
 Object.assign(globalThis, {
   __vigame: {
     get board() { return board; },
-    get game() { return game; },
+    get view() { return view; },
+    get occ() { return occ; },
     get net() { return net; },
-    get reach() { return reach; },
+    get selected() { return selected; },
+    get placing() { return placing; },
+    get highlights() { return [...highlights]; },
     get peers() { return peers; },
     camera,
     forceDraw: () => { needsDraw = true; },
     /** Inject fake peers to check the shared-selection rendering offline. */
-    setPeers(list) { peers = list; needsDraw = true; },
+    setPeers(/** @type {any} */ list) { peers = list; needsDraw = true; },
   },
 });
