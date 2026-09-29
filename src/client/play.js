@@ -103,6 +103,9 @@ export async function startGame(net, me) {
   /** The building whose target is being chosen, after pressing Attack. */
   /** @type {string | null} */
   let aiming = null;
+  /** The building the open crew chooser is for (null for a new one). */
+  /** @type {string | null} */
+  let crewTarget = null;
   /** @type {Set<string>} */
   let highlights = new Set();
   let showCoords = false;
@@ -131,7 +134,8 @@ export async function startGame(net, me) {
       minimap = new Minimap(mapCanvas, mapFrame, board);
       recenter();
     }
-    effects.update(view, next, performance.now());
+    const fresh = effects.update(view, next, performance.now());
+    if (view) letGo(view, next, fresh);
     view = next;
     minimap.show(next);
     occ = occupancy(next);
@@ -140,6 +144,28 @@ export async function startGame(net, me) {
     refreshHighlights();
     updateHud();
     needsDraw = true;
+  }
+
+  /**
+   * When the building the player has selected, is aiming with, or is
+   * choosing a crew for is gone, let go of it (the selection itself clears
+   * in onState) and say what became of it.
+   * @param {import('./net.js').GameView} prev
+   * @param {import('./net.js').GameView} next
+   * @param {import('./effects.js').Effect[]} fresh What the effects made of the change.
+   */
+  function letGo(prev, next, fresh) {
+    const held = [selected, aiming, crewDialog.open ? crewTarget : null];
+    const gone = held.find((id) => id !== null && prev.buildings[id] && !next.buildings[id]);
+    if (!gone) return;
+    if (aiming !== null && !next.buildings[aiming]) aiming = null;
+    if (crewDialog.open && crewTarget !== null && !next.buildings[crewTarget]) crewDialog.close('');
+    const b = prev.buildings[gone];
+    const type = BUILDING_TYPES[b.type];
+    const side = sideOf(prev, b.owner).name;
+    const whose = b.owner === net.seat() ? 'Your' : `${side}${side.endsWith('s') ? "'" : "'s"}`;
+    const fate = fresh.some((e) => e.kind === 'fall' && e.building?.id === gone) ? 'was destroyed' : type.band ? 'broke up' : 'is gone';
+    flash(`${whose} ${type.name.toLowerCase()} ${fate}.`);
   }
 
   /** Whether this viewer can give commands right now. */
@@ -347,9 +373,11 @@ export async function startGame(net, me) {
     sync();
 
     crewDialog.returnValue = '';
+    crewTarget = target;
     crewDialog.showModal();
     return new Promise((resolve) => {
       crewDialog.addEventListener('close', () => {
+        crewTarget = null;
         resolve(crewDialog.returnValue === 'ok' ? units.filter((u) => chosen.has(u.id)).map((u) => u.id) : null);
       }, { once: true });
     });
@@ -699,6 +727,7 @@ export async function startGame(net, me) {
       get selected() { return selected; },
       get placing() { return placing; },
       get aiming() { return aiming; },
+      get crewTarget() { return crewTarget; },
       get highlights() { return [...highlights]; },
       get peers() { return peers; },
       get minimap() { return minimap; },

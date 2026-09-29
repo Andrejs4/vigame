@@ -493,6 +493,22 @@ async function threeBrowsers(browser, url, { full, label }) {
     .some((u) => u.to === id || u.in === id), pit.id);
   await a.keyboard.press('Escape');
 
+  // A building gone while the page holds it: Ann starts another pit, aims
+  // it, opens its crew chooser, and meanwhile (as from another tab) gives it
+  // up. The page lets go of it all and says so.
+  const site = await buildWith(a, 'pit', blue, { crew: 1 });
+  await selectBuilding(a, site);
+  await a.click('#attack-button');
+  await a.click('#crew-button');
+  await a.waitForSelector('#crew[open]');
+  assert.deepEqual(await a.evaluate(() => /** @type {any} */ (window).__vigame.net.send({ type: 'abort', building: /** @type {any} */ (window).__vigame.crewTarget })), { ok: true });
+  await a.waitForSelector('#crew', { state: 'hidden' });
+  await waitText(a, '#message', 'Your pit is gone.');
+  assert.deepEqual(await a.evaluate(() => {
+    const v = /** @type {any} */ (window).__vigame;
+    return [v.selected, v.aiming, v.crewTarget];
+  }), [null, null, null], 'the page let go of the pit');
+
   // Bēla forms a band next to her castle (who goes is chosen as it forms),
   // then leads it; its members go along inside.
   const before = (await buildings(b)).length;

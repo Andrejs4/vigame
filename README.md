@@ -178,6 +178,10 @@ Run `npm start` and open http://127.0.0.1:2567.
   when several die inside a building). The page works these out by comparing
   each update from the server with the one before, so they are its best
   guess: the server doesn't say who struck whom.
+- When the building you have selected, are aiming with or are choosing a
+  crew for is destroyed or given up, the page lets go of it (closing the
+  crew chooser) and says so. A command that still names it is refused with
+  "that building is gone".
 
 ## Working on it
 

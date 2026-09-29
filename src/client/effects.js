@@ -83,12 +83,14 @@ export class Effects {
    * @param {GameView | null} prev
    * @param {GameView} next
    * @param {number} now performance.now()
+   * @returns {Effect[]} The effects it started.
    */
   update(prev, next, now) {
     if (!prev || prev.seed !== next.seed || next.tick < prev.tick || next.tick - prev.tick > JUMP) {
       this.hitAt.clear();
-      return;
+      return [];
     }
+    const first = this.seq;
     const tick = next.tick;
     for (const b of Object.values(next.buildings)) {
       const before = prev.buildings[b.id]?.hp;
@@ -112,6 +114,7 @@ export class Effects {
     for (const [id, count] of inside) {
       this.add('death', now, tick, { building: next.buildings[id] ?? prev.buildings[id], count });
     }
+    return this.list.filter((e) => e.seq >= first);
   }
 
   /**

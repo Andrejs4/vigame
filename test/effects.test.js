@@ -24,14 +24,15 @@ const kinds = (/** @type {Effects} */ fx) => fx.list.map((e) => e.kind);
 
 test('a building with fewer hit points than before was hit, and flashes briefly', () => {
   const fx = new Effects();
-  fx.update(viewAt(10, [{ id: 'b1', type: 'tower', hp: 500 }]), viewAt(11, [{ id: 'b1', type: 'tower', hp: 470 }]), 1000);
+  const started = fx.update(viewAt(10, [{ id: 'b1', type: 'tower', hp: 500 }]), viewAt(11, [{ id: 'b1', type: 'tower', hp: 470 }]), 1000);
+  assert.deepEqual(started, fx.list);
   assert.deepEqual(fx.list.map(({ kind, damage, building }) => ({ kind, damage, id: building?.id })), [{ kind: 'hit', damage: 30, id: 'b1' }]);
   assert.equal(fx.flash('b1', 1000), 1);
   assert.equal(fx.flash('b1', 1000 + FLASH_TIME), 0);
   assert.equal(fx.flash('b2', 1000), 0);
 
   // Repairs and upgrades add hit points, which is nothing to show.
-  fx.update(viewAt(11, [{ id: 'b1', type: 'tower', hp: 470 }]), viewAt(12, [{ id: 'b1', type: 'tower', hp: 471 }]), 1100);
+  assert.deepEqual(fx.update(viewAt(11, [{ id: 'b1', type: 'tower', hp: 470 }]), viewAt(12, [{ id: 'b1', type: 'tower', hp: 471 }]), 1100), []);
   assert.equal(fx.list.length, 1);
 });
 

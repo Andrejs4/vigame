@@ -474,7 +474,7 @@ test('replaying refuses a log that does not fit the game', () => {
     state: { garbage: true },
   };
   const { game } = restoreGame(saved, () => []);
-  assert.throws(() => replay(board, game, [{ seq: 1, tick: 3, player: 0, command: { type: 'upgrade', building: 'b2' }, at: 0 }]), /command 1 does not replay: not your building/);
+  assert.throws(() => replay(board, game, [{ seq: 1, tick: 3, player: 0, command: { type: 'upgrade', building: 'b2' }, at: 0 }]), /command 1 does not replay: that building is gone/);
   assert.throws(() => replay(board, game, [{ seq: 2, tick: 1, player: 0, command: {}, at: 0 }]), /command 2 is from tick 1, before 3/);
 });
 

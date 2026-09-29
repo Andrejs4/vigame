@@ -666,6 +666,17 @@ function ownBuilding(state, player, id) {
 }
 
 /**
+ * Why a command can't use the building it names. One that is gone may have
+ * fallen, or been given up, after the player's page last showed it.
+ * @param {GameState} state
+ * @param {unknown} id
+ * @returns {Outcome}
+ */
+function notYours(state, id) {
+  return refuse(typeof id === 'string' && Object.hasOwn(state.buildings, id) ? 'not your building' : 'that building is gone');
+}
+
+/**
  * The cell a command names, if it names one.
  * @param {Record<string, unknown>} cmd
  * @returns {Axial | null}
@@ -715,7 +726,9 @@ export function applyCommand(board, state, player, command) {
  */
 function unitList(state, player, list) {
   if (!Array.isArray(list) || list.some((id) => typeof id !== 'string') || new Set(list).size !== list.length) return 'bad units';
-  if (list.some((id) => !Object.hasOwn(state.units, id) || state.units[id].owner !== player)) return 'not your unit';
+  // A unit may have died after the player's page last showed it.
+  if (list.some((id) => !Object.hasOwn(state.units, id))) return 'one of those units is gone';
+  if (list.some((id) => state.units[id].owner !== player)) return 'not your unit';
   return list;
 }
 
@@ -763,7 +776,7 @@ function setCrew(board, state, occ, b, ids) {
  */
 function crew(board, state, occ, player, cmd) {
   const b = ownBuilding(state, player, cmd.building);
-  if (!b) return refuse('not your building');
+  if (!b) return notYours(state, cmd.building);
   if (b.type === 'castle') return refuse('the castle is home to every unit');
   if (isDugOut(b)) return refuse('dug out');
   const ids = unitList(state, player, cmd.units);
@@ -780,7 +793,7 @@ function crew(board, state, occ, player, cmd) {
  */
 function aim(state, player, cmd) {
   const b = ownBuilding(state, player, cmd.building);
-  if (!b) return refuse('not your building');
+  if (!b) return notYours(state, cmd.building);
   if (cmd.target === '') {
     delete b.target;
     return { ok: true };
@@ -887,7 +900,7 @@ export function upgradeCost(b) {
  */
 function upgrade(state, player, cmd) {
   const b = ownBuilding(state, player, cmd.building);
-  if (!b) return refuse('not your building');
+  if (!b) return notYours(state, cmd.building);
   const type = BUILDING_TYPES[b.type];
   if (isRising(b)) return refuse('still going up');
   if (b.upgrading !== undefined) return refuse('already upgrading');
@@ -913,7 +926,7 @@ function upgrade(state, player, cmd) {
  */
 function abort(board, state, occ, player, cmd) {
   const b = ownBuilding(state, player, cmd.building);
-  if (!b) return refuse('not your building');
+  if (!b) return notYours(state, cmd.building);
   if (!isRising(b)) return refuse('it already stands');
   sendHome(board, state, occ, b);
   delete state.buildings[b.id];
@@ -932,7 +945,7 @@ function abort(board, state, occ, player, cmd) {
  */
 function moveBuilding(board, state, occ, player, cmd) {
   const b = ownBuilding(state, player, cmd.building);
-  if (!b) return refuse('not your building');
+  if (!b) return notYours(state, cmd.building);
   if (!BUILDING_TYPES[b.type].speed) return refuse('cannot move');
   if (isRising(b)) return refuse('still going up');
   const goal = commandCell(cmd);
