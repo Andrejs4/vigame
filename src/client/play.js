@@ -34,6 +34,9 @@ function percent(part, whole) {
   return `${String(Math.floor((100 * part) / whole)).padStart(3, '\u2007')}%`;
 }
 
+/** Where the browser keeps whether "How to play" is open. */
+const HOW_TO_KEY = 'vigame.howToPlay';
+
 /** @typedef {import('../core/game.js').Building} Building */
 
 /**
@@ -703,6 +706,21 @@ export async function startGame(net, me) {
   muteButton.addEventListener('click', () => {
     sounds.setMuted(!sounds.muted);
     muteButton.setAttribute('aria-pressed', String(sounds.muted));
+  });
+
+  // "How to play" stays as the player last left it, open or closed, in this browser.
+  const howTo = /** @type {HTMLDetailsElement} */ (document.getElementById('how-to-play'));
+  try {
+    if (localStorage.getItem(HOW_TO_KEY) === 'closed') howTo.open = false;
+  } catch {
+    // Open, then.
+  }
+  howTo.addEventListener('toggle', () => {
+    try {
+      localStorage.setItem(HOW_TO_KEY, howTo.open ? 'open' : 'closed');
+    } catch {
+      // Not remembered, then.
+    }
   });
 
   seatButton.addEventListener('click', () => {

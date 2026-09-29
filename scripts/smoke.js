@@ -438,6 +438,11 @@ async function threeBrowsers(browser, url, { full, label }) {
     assert.equal(await a.evaluate(() => /** @type {any} */ (window).__vigame.sounds.muted), muted);
     assert.equal(await a.getAttribute('#mute-button', 'aria-pressed'), String(muted));
   }
+  // "How to play" folds away and back.
+  for (const open of [false, true]) {
+    await a.click('#how-to-play summary');
+    assert.equal(await a.evaluate(() => /** @type {HTMLDetailsElement} */ (document.getElementById('how-to-play')).open), open);
+  }
 
   // A drag pans rather than clicks.
   const camBefore = await a.evaluate(() => ({ .../** @type {any} */ (window).__vigame.camera }));

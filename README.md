@@ -25,7 +25,7 @@ Run `npm start` and open http://127.0.0.1:2567.
   logged in across visits.
 - **The lobby** lists your games and games with a free seat; **New game**
   starts one for 1 to 8 players (2 by default), on a map that grows with
-  them (24 × 16 cells for two, 48 × 32 for eight), castles in a ring
+  them (29 × 20 cells for two, 59 × 39 for eight), castles in a ring
   around the middle, out of reach of the lair and of each other. A game's address (`?game=…`) is also the link to send
   someone. Players who join take the seats in order (Blue, Crimson, Green,
   Gold, Teal, Orange, Rose, Silver); once they are full, visitors watch.
@@ -178,7 +178,8 @@ Run `npm start` and open http://127.0.0.1:2567.
   in the corner shows the whole board and a frame around what you see;
   press or drag on it to look there.
   **Coordinates** shows axial `q,r` labels. Escape cancels building and
-  clears the selection.
+  clears the selection. **How to play**, in the legend, folds away; this
+  browser remembers whether it is open.
 - Every viewer's picked hex shows as a ring: solid for yours, dashed for
   others.
 - Buildings and units are round tokens in their side's colour, with a
@@ -446,9 +447,9 @@ comes next.
   and the game waits for them.
 - The lobby lists only the 50 most recently active games.
 - Games of 5 to 8 players are untested at scale: up to 2400 units on a
-  48 × 32 map make route-finding and fighting costlier, and nobody has
+  59 × 39 map make route-finding and fighting costlier, and nobody has
   measured how much.
-- On a phone, the 24 × 16 board is wider than the screen even at minimum
+- On a phone, the 29 × 20 board is wider than the screen even at minimum
   zoom. Pinch-to-zoom and keyboard play are not wired up.
 
 ## License
