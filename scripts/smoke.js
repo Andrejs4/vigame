@@ -413,7 +413,7 @@ async function threeBrowsers(browser, url, { full, label }) {
     const castle = Object.values(view.buildings).find((b) => b.type === 'castle' && b.owner === 1);
     const prev = {
       ...view,
-      buildings: { ...view.buildings, ghost: { id: 'ghost', type: 'tower', owner: 1, grade: 1, hp: 0, q: castle.q + 3, r: castle.r } },
+      buildings: { ...view.buildings, ghost: { id: 'ghost', type: 'tower', owner: 1, grade: 1, hp: 0, q: castle.q - 3, r: castle.r + 2 } },
       units: { ...view.units, ghost: { id: 'ghost', owner: 0, name: 'Ghost', level: 1, q: castle.q - 3, r: castle.r } },
     };
     const next = { ...view, buildings: { ...view.buildings, [castle.id]: { ...castle, hp: castle.hp - 40 } } };
@@ -421,7 +421,7 @@ async function threeBrowsers(browser, url, { full, label }) {
     return g.effects.list.map((e) => e.kind).sort();
   });
   assert.deepEqual(played, ['death', 'fall', 'hit']);
-  await a.waitForTimeout(250);
+  await a.waitForTimeout(100);
   await a.screenshot({ path: join(OUT, 'effects.png') });
   await a.waitForTimeout(1200);
   await frames(a);
