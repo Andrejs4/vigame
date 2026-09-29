@@ -437,6 +437,25 @@ test('a building going up adds no reach, covers nobody, and can be neither upgra
   assert.equal(farm.buildings.b1.hp, BUILDING_TYPES.farm.hp / 2);
 });
 
+test('a building going up can be given up: its crew, inside or on the way, goes home, and its cost is lost', () => {
+  const board = openBoard(5);
+  const state = stateWith(
+    [{ id: 'b1', type: 'castle' }, { id: 'b2', q: 3, r: 0, raised: 100 }],
+    [...unitsIn('b2', 2, 10), ...unitsIn('b1', 1, 20)],
+  );
+  const crew = ['u10', 'u11', 'u20'];
+  assert.deepEqual(applyCommand(board, state, 0, { type: 'crew', building: 'b2', units: crew }), OK);
+  run(board, state, 3);
+  assert.equal(state.units.u20.to, 'b2', 'one on the way');
+  const stone = state.players[0].stone;
+  assert.deepEqual(applyCommand(board, state, 0, { type: 'abort', building: 'b1' }), { ok: false, reason: 'it already stands' });
+  assert.deepEqual(applyCommand(board, state, 0, { type: 'abort', building: 'b2' }), OK);
+  assert.equal(state.buildings.b2, undefined);
+  assert.equal(state.players[0].stone, stone, 'nothing back');
+  assert.deepEqual(crew.map((id) => state.units[id].to), ['b1', 'b1', 'b1']);
+  runUntil(board, state, () => crew.every((id) => state.units[id].in === 'b1'));
+});
+
 test('a strike that brings a building down earns a killing blow; its units are left outside', () => {
   const board = openBoard(4);
   const state = stateWith([{ id: 'b1', q: 0, r: 0 }, { id: 'b2', owner: 1, q: 1, r: 0, hp: 1 }], [

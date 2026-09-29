@@ -45,7 +45,7 @@ Run `npm start` and open http://127.0.0.1:2567.
   your side has lost. It is every unit's home, and starts with 12. The units at
   home raise new ones: the more of them, and the better they breed, the
   sooner. With nobody at home it still raises one every two minutes by
-  itself, even while damaged. It takes in all its units, however many, but
+  itself, even while damaged or upgraded. It takes in all its units, however many, but
   stops breeding while it holds more than its room.
 - **Units** each have a medieval name, a level from 1 to 100, and six
   skills: breeding, ranged attack, close combat, building (which covers
@@ -81,7 +81,8 @@ Run `npm start` and open http://127.0.0.1:2567.
   unskilled unit alone: a pit 15 s, a farm 30 s, a wagon 45 s, a tower 60 s).
   A site has half its hit points, gives its units no cover and a tower no
   extra reach, and doesn't work, move or take upgrades. It's drawn pale,
-  with a dashed outline.
+  with a dashed outline. **Abort** gives it up: its crew, inside or on the
+  way, goes home, and what it cost is lost.
 - **Pits**: the crew, up to 8, digs stone, faster the more of them and the
   better they build; every 20 stone the pit is a grade deeper. At depth 5 it
   is dug out and the crew goes home.
@@ -100,7 +101,9 @@ Run `npm start` and open http://127.0.0.1:2567.
   instead of their usual work, which trains their building skill: each grade
   takes as long again as the one before (a tower as long as raising it, a
   castle three times that). Once done, it holds as many units again and
-  takes as many hits again.
+  takes as many hits again. An upgrade can't be called off. Meanwhile the
+  crew still fights, and mends the building first when it's damaged, but a
+  castle's units don't breed (the castle's own slow breeding goes on).
 - **Hit points**: every building has them, a castle 2000 and a pit 800. At
   none left it collapses at once, and whoever was inside is left standing
   there. While a building is damaged, the units inside mend it instead of
@@ -289,12 +292,14 @@ http://127.0.0.1:2567;` with the same headers.
   refuses with a reason and changes nothing:
   - `{ type: 'build', kind, q, r, units? }`: a tower, wagon, pit, farm or band, with a crew if `units` lists one;
   - `{ type: 'crew', building, units }`: that building's whole crew (`[]` sends them all home);
-  - `{ type: 'upgrade', building }`;
+  - `{ type: 'upgrade', building }`: paid now, then worked on by its crew;
+  - `{ type: 'abort', building }`: gives up a building still going up;
   - `{ type: 'move', building, q, r }`: a wagon or band;
   - `{ type: 'target', building, target }`: an enemy building or band to go for (`''` clears it).
 - `advance(board, state)` runs one tick: every second a round of fighting,
-  collapses, every minute food and a meal, empty bands breaking up, mending
-  and work in castles, pits and farms, wagons and bands, walking.
+  collapses, every minute food and a meal, empty bands breaking up, mending,
+  raising and upgrading, work in castles, pits and farms, wagons and bands,
+  walking.
 - The core never reads the clock or `Math.random`; dice come from `rng`. The
   same commands at the same ticks always give the same game, which the
   server's saves and a future simulation harness rely on.

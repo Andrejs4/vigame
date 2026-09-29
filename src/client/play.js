@@ -49,6 +49,7 @@ export async function startGame(net, me) {
   const upgradeButton = /** @type {HTMLButtonElement} */ (document.getElementById('upgrade'));
   const crewButton = /** @type {HTMLButtonElement} */ (document.getElementById('crew-button'));
   const returnButton = /** @type {HTMLButtonElement} */ (document.getElementById('return-button'));
+  const abortButton = /** @type {HTMLButtonElement} */ (document.getElementById('abort-button'));
   const attackButton = /** @type {HTMLButtonElement} */ (document.getElementById('attack-button'));
   const crewDialog = /** @type {HTMLDialogElement} */ (document.getElementById('crew'));
   const crewParts = {
@@ -227,6 +228,7 @@ export async function startGame(net, me) {
     const crewed = Boolean(mine && b && b.type !== 'castle' && !isDugOut(b));
     crewButton.disabled = !crewed;
     returnButton.disabled = !(crewed && view && b && crewOf(view, b.id).length > 0);
+    abortButton.disabled = !(mine && b && isRising(b));
     attackButton.disabled = !mine;
     attackButton.setAttribute('aria-pressed', String(aiming !== null && aiming === selected));
   }
@@ -612,6 +614,10 @@ export async function startGame(net, me) {
     aiming = aiming ? null : selected;
     if (aiming) flash('Click an enemy building to attack; anywhere else clears the target.');
     updateHud();
+  });
+
+  abortButton.addEventListener('click', () => {
+    if (selected) give({ type: 'abort', building: selected }, 'give it up');
   });
 
   returnButton.addEventListener('click', () => {

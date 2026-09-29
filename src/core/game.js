@@ -126,6 +126,7 @@ import {
  *   | { type: 'crew', building: string, units: string[] }
  *   | { type: 'target', building: string, target: string }
  *   | { type: 'upgrade', building: string }
+ *   | { type: 'abort', building: string }
  *   | { type: 'move', building: string, q: number, r: number }} Command
  * @typedef {{ ok: true } | { ok: false, reason: string }} Outcome
  */
@@ -684,6 +685,7 @@ export function applyCommand(board, state, player, command) {
     case 'crew': return crew(board, state, occ, player, cmd);
     case 'target': return aim(state, player, cmd);
     case 'upgrade': return upgrade(state, player, cmd);
+    case 'abort': return abort(board, state, occ, player, cmd);
     case 'move': return moveBuilding(board, state, occ, player, cmd);
     default: return refuse('unknown command');
   }
@@ -880,6 +882,26 @@ function upgrade(state, player, cmd) {
   if (stock.stone < cost) return refuse('not enough stone');
   stock.stone -= cost;
   b.upgrading = 0;
+  return { ok: true };
+}
+
+/**
+ * Give up a building that is still going up: it is gone, and so is what it
+ * cost. Its crew, inside or on the way, goes home. An upgrade, once paid
+ * for, can't be given up.
+ * @param {Board} board
+ * @param {GameState} state
+ * @param {Occupancy} occ
+ * @param {number} player
+ * @param {Record<string, unknown>} cmd
+ * @returns {Outcome}
+ */
+function abort(board, state, occ, player, cmd) {
+  const b = ownBuilding(state, player, cmd.building);
+  if (!b) return refuse('not your building');
+  if (!isRising(b)) return refuse('it already stands');
+  sendHome(board, state, occ, b);
+  delete state.buildings[b.id];
   return { ok: true };
 }
 
@@ -1285,9 +1307,10 @@ function bandTicks(board, state, occ, b, cell) {
  * units, and more skilled ones, get there sooner. The work trains them. A
  * castle's units raise a new unit while it has room and its side is under
  * the unit limit, and it does a little of that work by itself, even with
- * nobody at home or while damaged; a pit's crew digs a stone, and goes home
- * once the pit is dug out; a farm's crew grows a food. Nothing is worked
- * while a building goes up or is upgraded.
+ * nobody at home, while damaged or while upgraded; a pit's crew digs a
+ * stone, and goes home once the pit is dug out; a farm's crew grows a food.
+ * A crew raising or upgrading its building does no other work, though it
+ * still mends it first, and fights.
  * @param {Board} board
  * @param {GameState} state
  * @param {Occupancy} occ
@@ -1297,11 +1320,13 @@ function work(board, state, occ) {
   const busy = raise(state, occ); // a crew that just finished starts next tick
   for (const b of Object.values(state.buildings)) {
     const type = BUILDING_TYPES[b.type];
-    if (type.work === undefined || isRising(b) || b.upgrading !== undefined || busy.has(b.id) || isDugOut(b)) continue;
+    if (type.work === undefined || isRising(b) || isDugOut(b)) continue;
     const inside = /** @type {string[]} */ (occ.inside.get(b.id));
     if (type.yields === 'unit' && (inside.length >= capacityOf(b) || occ.unitCount[b.owner] >= UNIT_LIMIT)) continue;
-    // While a building is damaged, its units mend it instead.
-    const workers = b.hp !== undefined && b.hp < maxHp(b) ? [] : inside;
+    // Its units mend it while it is damaged and work on an upgrade while
+    // there is one; what it does by itself goes on.
+    const elsewhere = b.upgrading !== undefined || busy.has(b.id) || (b.hp !== undefined && b.hp < maxHp(b));
+    const workers = elsewhere ? [] : inside;
     if (!workers.length && !type.idleWork) continue;
 
     let done = /** @type {number} */ (b.work) + (type.idleWork ?? 0);
