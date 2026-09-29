@@ -99,6 +99,7 @@ commands.
 | `client/camera.js`, `render.js` | Pan and zoom, and canvas drawing. The renderer sits behind a small interface so PixiJS can replace it. |
 | `client/minimap.js` | The whole board at a few pixels a cell; pressing it moves the camera. |
 | `client/effects.js` | Hits, falls and deaths, inferred by comparing each update with the one before: the server sends states, not events. |
+| `client/sounds.js` | Gentle synthesized sounds (Web Audio, no files) for the player's commands and for what updates show, heard only on screen for fighting. |
 | `client/tokens.js`, `client/art/` | Buildings and units as round tokens in side colours, with one-colour SVG pictures (game-icons.net, CC BY 3.0) painted once per colour and size. |
 
 - **No prediction.** A command takes effect on the server's next tick, a

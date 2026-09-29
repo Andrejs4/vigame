@@ -180,6 +180,15 @@ Run `npm start` and open http://127.0.0.1:2567.
   when several die inside a building). The page works these out by comparing
   each update from the server with the one before, so they are its best
   guess: the server doesn't say who struck whom.
+- Gentle sounds, made on the spot like an old MIDI synth (no sound files):
+  a blip when a command is taken and a low buzz when it's refused, a tick
+  on selecting, a thud when your building is hit and a click when a unit
+  dies (both only on screen), a falling run of notes when your building
+  falls and a chord when an enemy's does on screen, a fanfare when yours
+  is finished or upgraded, a chime for a new unit, a horn when the horde
+  comes out, and a jingle when the game is won or lost. They start at your
+  first click or key in a game, as browsers require. **Mute** silences
+  them; this browser remembers it.
 - When the building you have selected, are aiming with or are choosing a
   crew for is destroyed or given up, the page lets go of it (closing the
   crew chooser) and says so. A command that still names it is refused with
@@ -231,6 +240,7 @@ have one, install it with `npx playwright install chromium`.
 | `src/client/camera.js`, `render.js` | Pan and zoom, and the canvas renderer: terrain, buildings, marching units between cells, picks, hover. |
 | `src/client/minimap.js` | The minimap: a few pixels a cell, repainted at most twice a second and only when a pixel changes. |
 | `src/client/effects.js` | Hits, falls and deaths, worked out from each update and the one before, for the renderer to play. |
+| `src/client/sounds.js` | Sounds: which ones an update calls for, and a small synthesizer that plays them. |
 | `src/client/tokens.js`, `art/` | The pictures (SVG, credited in `art/CREDITS.md`) and the tokens made of them, painted once per colour and size. |
 | `server/app.js` | The game server: Colyseus, the HTTP API, the page's files, the monitor. |
 | `server/room.js` | `GameRoom`, one per game: runs the core's clock, logs and applies commands, snapshots. |

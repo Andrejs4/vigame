@@ -430,6 +430,15 @@ async function threeBrowsers(browser, url, { full, label }) {
   await frames(a);
   assert.equal(await a.evaluate(() => /** @type {any} */ (window).__vigame.effects.list.length), 0, 'effects did not stop');
 
+  // Sounds: Ann's accepted build was heard, and Mute toggles them.
+  const log = await a.evaluate(() => /** @type {any} */ (window).__vigame.sounds.log);
+  assert.ok(log.includes('ok'), `no sound for an accepted command (heard: ${log.join(', ')})`);
+  for (const muted of [true, false]) {
+    await a.click('#mute-button');
+    assert.equal(await a.evaluate(() => /** @type {any} */ (window).__vigame.sounds.muted), muted);
+    assert.equal(await a.getAttribute('#mute-button', 'aria-pressed'), String(muted));
+  }
+
   // A drag pans rather than clicks.
   const camBefore = await a.evaluate(() => ({ .../** @type {any} */ (window).__vigame.camera }));
   await a.mouse.move(640, 420);

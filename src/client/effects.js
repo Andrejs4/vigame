@@ -54,6 +54,17 @@ const MAX_EFFECTS = 200;
  */
 
 /**
+ * Whether two updates are too far apart to play out what happened between
+ * them: the first one, another game, or a jump in time.
+ * @param {GameView | null} prev
+ * @param {GameView} next
+ * @returns {boolean}
+ */
+export function jumped(prev, next) {
+  return !prev || prev.seed !== next.seed || next.tick < prev.tick || next.tick - prev.tick > JUMP;
+}
+
+/**
  * Whether a building gone from the game fell, rather than being given up
  * (only a site can be) or breaking up (a band, whose crew all left it).
  * @param {Building} b As last seen.
@@ -86,7 +97,7 @@ export class Effects {
    * @returns {Effect[]} The effects it started.
    */
   update(prev, next, now) {
-    if (!prev || prev.seed !== next.seed || next.tick < prev.tick || next.tick - prev.tick > JUMP) {
+    if (jumped(prev, next)) {
       this.hitAt.clear();
       return [];
     }
