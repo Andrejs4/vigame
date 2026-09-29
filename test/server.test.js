@@ -379,10 +379,10 @@ test('the server refuses commands from spectators, while paused, and that the ru
 test('an accepted command is logged, with its tick, before any player sees it', async () => {
   const { id, a, b } = await twoPlayers();
 
-  /** How many commands were logged when Crimson first saw the upgrade. */
+  /** How many commands were logged when Crimson first saw the upgrade begin. */
   let loggedWhenSeen = null;
   b.onStateChange(() => {
-    if (loggedWhenSeen === null && seen(b).buildings.b1?.grade === 2) {
+    if (loggedWhenSeen === null && seen(b).buildings.b1?.upgrading !== undefined) {
       loggedWhenSeen = server.storage.listCommands(id).length;
     }
   });
@@ -559,7 +559,7 @@ test('the page transport plays through the server and follows it', async () => {
   assert.ok(now >= crimsonSaw.at(-1).tick && now <= crimsonSaw.at(-1).tick + 1, 'the clock runs between ticks');
 
   assert.deepEqual(await blue.send({ type: 'upgrade', building: 'b1' }), { ok: true });
-  await until(() => crimsonSaw.at(-1).buildings.b1.grade === 2);
+  await until(() => crimsonSaw.at(-1).buildings.b1.upgrading !== undefined);
   assert.deepEqual(await crimson.send({ type: 'upgrade', building: 'b1' }), { ok: false, reason: 'not your building' });
 
   // Picks reach the other side as peers, with names.

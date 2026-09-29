@@ -1230,13 +1230,17 @@ function mend(state, occ) {
  * building needs mending.
  * @param {GameState} state
  * @param {Occupancy} occ
+ * @returns {Set<string>} The buildings whose crews did this work this tick.
  */
 function raise(state, occ) {
+  /** @type {Set<string>} */
+  const busy = new Set();
   for (const b of Object.values(state.buildings)) {
     const rising = isRising(b);
     if (!rising && b.upgrading === undefined) continue;
     const inside = /** @type {string[]} */ (occ.inside.get(b.id));
     if (!inside.length || /** @type {number} */ (b.hp) < maxHp(b)) continue;
+    busy.add(b.id);
     let done = /** @type {number} */ (rising ? b.raised : b.upgrading);
     for (const id of inside) {
       const u = state.units[id];
@@ -1259,6 +1263,7 @@ function raise(state, occ) {
       b.hp = /** @type {number} */ (b.hp) + BUILDING_TYPES[b.type].hp;
     }
   }
+  return busy;
 }
 
 /**
@@ -1289,10 +1294,10 @@ function bandTicks(board, state, occ, b, cell) {
  */
 function work(board, state, occ) {
   mend(state, occ);
-  raise(state, occ);
+  const busy = raise(state, occ); // a crew that just finished starts next tick
   for (const b of Object.values(state.buildings)) {
     const type = BUILDING_TYPES[b.type];
-    if (type.work === undefined || isRising(b) || b.upgrading !== undefined || isDugOut(b)) continue;
+    if (type.work === undefined || isRising(b) || b.upgrading !== undefined || busy.has(b.id) || isDugOut(b)) continue;
     const inside = /** @type {string[]} */ (occ.inside.get(b.id));
     if (type.yields === 'unit' && (inside.length >= capacityOf(b) || occ.unitCount[b.owner] >= UNIT_LIMIT)) continue;
     // While a building is damaged, its units mend it instead.
