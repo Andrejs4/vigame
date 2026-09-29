@@ -34,11 +34,11 @@ Run `npm start` and open http://127.0.0.1:2567.
   - **Cooperation** (the default): all the players are one team against the
     Dark Lord, whose lair (6000 hit points) stands in the middle of the map
     and strikes the nearest enemy within 4 cells by itself, 20 hit points a
-    second. From the second minute it sends out his horde, a wave a minute,
+    second, and against units as a level-60 fighter. From the second minute it sends out his horde, a wave a minute,
     each bigger than the last (wave n: n/2 ghouls rounded up and n/3 ogres
     rounded down, at most 24 out at once). **Ghouls** are small and fast
-    (120 hit points, a cell a second, 6 a strike); **ogres** are slow and
-    tougher (600 hit points, 4 s a cell, 25 a strike). They need no units and
+    (120 hit points, a cell a second, 6 a strike, level 10); **ogres** are
+    slow and tougher (600 hit points, 4 s a cell, 25 a strike, level 35). They need no units and
     cost him nothing. Each goes for the nearest farm, and for a castle once
     no farm is left; it turns on any building that strikes it, and on the
     nearest one when its way is blocked. Bringing one down yields 2 dark
@@ -127,7 +127,8 @@ Run `npm start` and open http://127.0.0.1:2567.
   Some strikes on a building get through to a unit inside: half on a farm,
   a quarter on a pit, none on a castle, tower or wagon. Units out in the
   open or in a band take every strike. A strike kills a unit with a chance
-  set by the striker's skill against the unit's level: 10% when they
+  set by the striker's skill against the unit's level (the lair, raiders
+  and the horde strike at a level of their own): 10% when they
   match, up to 50% at most, and under 1% once the unit is 50 levels ahead
   (a stand-in until units get their dice). The strike that brings a
   building down or kills a unit is a killing blow, worth 600 experience.
@@ -144,7 +145,8 @@ Run `npm start` and open http://127.0.0.1:2567.
   stops, commands are refused, the page says who won, and the lobby lists
   the game as finished.
 - **Raiders** turn up in every game: wandering hostile wagons, against
-  everyone, that strike whatever comes within 2 cells. Every minute and a
+  everyone, that strike whatever comes within 2 cells (10 a strike, level
+  20). Every minute and a
   half one may appear on open ground away from the castles, up to 2 plus
   one per player. The side that brings one down gets 10 dark metal: the
   only way to get it, and what wagons are built with.

@@ -259,7 +259,8 @@ export const REPAIR_WORK = 100;
  *   nearest enemy building when its way is blocked.
  * @property {{ damage: number, skill: number, reach: number }} [attack] A
  *   building that strikes by itself, once every COMBAT_PERIOD: `damage` off a
- *   building, or a kill roll as a striker of `skill` against a unit, at the
+ *   building, or a kill roll against a unit as a unit of level `skill` would
+ *   strike (the level it fights at; damage is set apart from it), at the
  *   nearest enemy within `reach` cells.
  */
 
@@ -287,7 +288,7 @@ export const BUILDING_TYPES = {
   },
   lair: {
     name: 'Lair', size: 7, capacity: 0, grades: 1, hp: 6000, build: false, cost: 0,
-    skill: 'melee', life: true, attack: { damage: 20, skill: 30, reach: 4 }, scales: true,
+    skill: 'melee', life: true, attack: { damage: 20, skill: 60, reach: 4 }, scales: true,
   },
   raider: {
     name: 'Raider', size: 1, capacity: 0, grades: 1, hp: 300, build: false, cost: 0,
@@ -299,7 +300,7 @@ export const BUILDING_TYPES = {
   },
   ogre: {
     name: 'Ogre', size: 1, capacity: 0, grades: 1, hp: 600, build: false, cost: 0,
-    skill: 'melee', speed: 4 * TICKS_PER_SECOND, attack: { damage: 25, skill: 30, reach: 1 }, loot: 6, hunts: true, scales: true,
+    skill: 'melee', speed: 4 * TICKS_PER_SECOND, attack: { damage: 25, skill: 35, reach: 1 }, loot: 6, hunts: true, scales: true,
   },
   band: {
     name: 'Band', size: 1, capacity: 30, grades: 1, hp: 0, build: true, cost: 0,

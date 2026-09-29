@@ -278,9 +278,11 @@ export async function startGame(net, me) {
     const done = `${Math.floor((100 * (b.work ?? 0)) / (type.work ?? 1))}%`;
     if (b.type === 'castle') {
       parts.push(`${occ?.inside.get(b.id)?.length ?? 0}/${capacityOf(b)} at home`, `next unit ${done}`);
-    } else {
+    } else if (type.capacity) {
       parts.push(`crew ${view ? crewOf(view, b.id).length : 0}/${capacityOf(b)}`);
     }
+    // The lair, raiders and the horde fight by themselves, at a level of their own.
+    if (type.attack) parts.push(`level ${type.attack.skill}`);
     const toward = (/** @type {number} */ sofar) => `${Math.floor((100 * sofar) / raiseWork(b))}%`;
     if (b.upgrading !== undefined) parts.push(`upgrading ${toward(b.upgrading)}`);
     if (isRising(b)) {
