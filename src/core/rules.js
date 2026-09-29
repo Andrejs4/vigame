@@ -28,10 +28,16 @@ export const SIDES = [
   { id: 6, name: 'Rose',      color: '#c9508f', accent: '#f5b3d6' },
   { id: 7, name: 'Silver',    color: '#8e9aa6', accent: '#dfe5eb' },
   { id: 8, name: 'Dark Lord', color: '#6a3fa0', accent: '#cdb0ff', npc: true },
+  { id: 9, name: 'Raiders',   color: '#4a4038', accent: '#d8b08c', npc: true, wild: true },
 ];
 
-/** The Dark Lord's palette: the last side. */
-export const DARK_LORD = SIDES.length - 1;
+/** The Dark Lord's palette. */
+export const DARK_LORD = 8;
+/**
+ * The raiders' palette: wandering hostile wagons, in every game, against
+ * everyone. They neither win nor lose.
+ */
+export const RAIDERS = 9;
 
 /** Players a game may seat. */
 export const MIN_PLAYERS = 1;
@@ -159,6 +165,23 @@ export const KILL_MAX = 50;
 export const KILL_STEP = 1.06;
 
 /**
+ * Raiders. Every RAID_PERIOD, with a RAID_CHANCE chance, a raider appears on
+ * open ground at least RAID_CLEAR cells from any castle or lair, while there
+ * are fewer than RAID_MAX plus one per player. It wanders at random and
+ * strikes whatever comes near; bringing one down yields its `loot` of dark
+ * metal to the side that struck the blow.
+ */
+export const RAID_PERIOD = 90 * TICKS_PER_SECOND;
+export const RAID_CHANCE = 0.6;
+export const RAID_MAX = 2;
+export const RAID_CLEAR = 6;
+/** How far a raider wanders at a time, in cells. */
+export const RAID_ROAM = 4;
+
+/** Dark metal each side starts with. */
+export const START_METAL = 0;
+
+/**
  * Repair: while a building is damaged, the units inside mend it instead of
  * their usual work, a hit point for every REPAIR_WORK of work, which trains
  * their building skill.
@@ -181,6 +204,9 @@ export const REPAIR_WORK = 100;
  *   has nobody.
  * @property {boolean} build Whether players may build it.
  * @property {number} cost Stone to build it.
+ * @property {number} [metal] Dark metal to build it.
+ * @property {boolean} [nearCastle] Built only within BUILD_RANGE of the castle.
+ * @property {number} [loot] Dark metal for the side that brings it down.
  * @property {number} [upgrade] Stone to upgrade it, times its grade before.
  * @property {Skill} skill The skill its units use there.
  * @property {number} [work] Work, from the units inside, for each thing it
@@ -212,7 +238,7 @@ export const BUILDING_TYPES = {
     name: 'Tower', size: 1, capacity: 20, grades: 3, hp: 500, build: true, cost: 60, upgrade: 60, reach: 2, skill: 'ranged',
   },
   wagon: {
-    name: 'Wagon', size: 1, capacity: 10, grades: 1, hp: 300, build: true, cost: 0,
+    name: 'Wagon', size: 1, capacity: 10, grades: 1, hp: 300, build: true, cost: 0, metal: 15, nearCastle: true,
     skill: 'melee', speed: 2 * TICKS_PER_SECOND,
   },
   pit: {
@@ -226,6 +252,10 @@ export const BUILDING_TYPES = {
   lair: {
     name: 'Lair', size: 7, capacity: 0, grades: 1, hp: 6000, build: false, cost: 0,
     skill: 'melee', life: true, attack: { damage: 20, skill: 30, reach: 4 },
+  },
+  raider: {
+    name: 'Raider', size: 1, capacity: 0, grades: 1, hp: 300, build: false, cost: 0,
+    skill: 'melee', speed: 3 * TICKS_PER_SECOND, attack: { damage: 10, skill: 20, reach: 2 }, loot: 10,
   },
   band: {
     name: 'Band', size: 1, capacity: 30, grades: 1, hp: 0, build: true, cost: 0,

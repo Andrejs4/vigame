@@ -7,7 +7,7 @@
 import { bounds, key, pixelToAxial } from '../core/hex.js';
 import { BOARD_OPTIONS, TERRAIN, createBoard, tileAt } from '../core/board.js';
 import {
-  capacityOf, castleOf, crewOf, depthOf, foodStore, isDugOut, maxHp, nearStanding, occupancy, seatsOf, sideOf, upgradeCost,
+  capacityOf, castleOf, crewOf, depthOf, foodStore, inBuildRange, isDugOut, maxHp, occupancy, seatsOf, sideOf, upgradeCost,
 } from '../core/game.js';
 import { BUILDING_TYPES, SKILLS, TICKS_PER_SECOND, UNIT_LIMIT } from '../core/rules.js';
 import { serverBase } from './api.js';
@@ -35,8 +35,8 @@ export async function startGame(net, me) {
     seat: document.getElementById('seat'),
     units: document.getElementById('units'),
     stone: document.getElementById('stone'),
+    metal: document.getElementById('metal'),
     food: document.getElementById('food'),
-    hunger: document.getElementById('hunger'),
     selection: document.getElementById('selection'),
     tile: document.getElementById('tile'),
     viewers: document.getElementById('viewers'),
@@ -143,7 +143,7 @@ export async function startGame(net, me) {
       for (const t of board.list) {
         const k = key(t.q, t.r);
         const ground = band ? t.passable : t.buildable;
-        if (ground && !occ.buildingAt.has(k) && nearStanding(/** @type {any} */ (view), seat, t)) highlights.add(k);
+        if (ground && !occ.buildingAt.has(k) && inBuildRange(/** @type {any} */ (view), seat, placing, t)) highlights.add(k);
       }
     }
     needsDraw = true;
@@ -154,16 +154,15 @@ export async function startGame(net, me) {
     const paused = !net.running();
 
     if (hud.time) {
-      // Over once one team has sides left standing: it won.
       const players = view?.players ?? [];
-      const standing = [...new Set(players.filter((p) => p.lost === undefined).map((p) => p.team))];
-      const winners = standing.length === 1 && players.some((p) => p.lost !== undefined) ? standing[0] : null;
+      const over = view?.over !== undefined;
+      const winners = view?.winner;
       const names = players.filter((p) => p.team === winners).map((p) => sideOf({ players }, p.id).name).join(' and ');
-      const outcome = winners === null ? '' : seat === null
-        ? ` · ${names} won`
-        : players[seat]?.team === winners ? ' · you won' : ' · you lost';
-      hud.time.textContent = `${formatTime(view?.tick ?? 0)}${paused ? ' · paused' : ''}${outcome}`;
-      hud.time.title = paused ? 'The game waits until every player is here' : '';
+      const outcome = !over ? '' : winners === undefined ? ' · over, nobody won' : seat === null
+        ? ` · over: ${names} won`
+        : players[seat]?.team === winners ? ' · over: you won' : ' · over: you lost';
+      hud.time.textContent = `${formatTime(view?.tick ?? 0)}${paused && !over ? ' · paused' : ''}${outcome}`;
+      hud.time.title = paused && !over ? 'The game waits until every player is here' : '';
     }
     if (hud.seat) {
       const mine = seat !== null && view ? sideOf(view, seat) : null;
@@ -175,8 +174,13 @@ export async function startGame(net, me) {
     }
     const stock = seat !== null ? view?.players[seat] : null;
     if (hud.stone) hud.stone.textContent = stock ? String(stock.stone) : '—';
-    if (hud.food) hud.food.textContent = stock && view && seat !== null ? `${stock.food} / ${foodStore(view, seat)}` : '—';
-    if (hud.hunger) hud.hunger.textContent = stock ? `${stock.hunger}%` : '—';
+    if (hud.metal) hud.metal.textContent = stock ? String(stock.metal) : '—';
+    if (hud.food) {
+      hud.food.textContent = stock && view && seat !== null
+        ? `${stock.food} / ${foodStore(view, seat)} · hunger ${stock.hunger}%`
+        : '—';
+      hud.food.style.color = stock?.hunger ? 'var(--amber)' : '';
+    }
     if (hud.selection) {
       const b = selected ? view?.buildings[selected] : null;
       if (b) {
@@ -386,7 +390,10 @@ export async function startGame(net, me) {
       return;
     }
 
-    const here = occ.buildingAt.get(key(at.q, at.r)) ?? null;
+    // Bands hold no cell, so they are found by where they stand.
+    const here = occ.buildingAt.get(key(at.q, at.r))
+      ?? Object.values(view.buildings).find((b) => BUILDING_TYPES[b.type].band && b.q === at.q && b.r === at.r)?.id
+      ?? null;
     if (aiming) {
       // After Attack: an enemy building becomes the target; anywhere else clears it.
       const from = aiming;
@@ -520,9 +527,9 @@ export async function startGame(net, me) {
   });
 
   for (const button of buildButtons) {
-    const { name, cost } = BUILDING_TYPES[button.dataset.kind ?? ''];
-    button.textContent = cost ? `${name} · ${cost}` : name;
-    button.title = cost ? `${cost} stone` : 'Free';
+    const { name, cost, metal } = BUILDING_TYPES[button.dataset.kind ?? ''];
+    button.textContent = cost ? `${name} · ${cost}` : metal ? `${name} · ${metal}◆` : name;
+    button.title = cost ? `${cost} stone` : metal ? `${metal} dark metal, near your castle` : 'Free';
     button.addEventListener('click', () => {
       const kind = button.dataset.kind ?? null;
       placing = placing === kind ? null : kind;

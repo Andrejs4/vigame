@@ -401,9 +401,18 @@ async function threeBrowsers(browser, url, { full, label }) {
     .some((u) => u.to === id || u.in === id), pit.id);
   await a.keyboard.press('Escape');
 
-  // Bēla builds a wagon, crews it, and drives it; its crew rides along.
-  const wagon = await buildWith(b, 'wagon');
-  await crewWith(b, wagon, 3);
+  // Bēla forms a band next to her castle (who goes is chosen as it forms),
+  // then leads it; its members go along inside.
+  const before = (await buildings(b)).length;
+  await b.click('#build-band');
+  await b.waitForFunction(() => /** @type {any} */ (window).__vigame.highlights.length > 0);
+  const bandCells = await b.evaluate(() => /** @type {any} */ (window).__vigame.highlights);
+  const bandSpot = await openCell(b, bandCells.map((k) => k.split(',').map(Number))
+    .sort(([q1, r1], [q2, r2]) => distance({ q: q1, r: r1 }, crimson) - distance({ q: q2, r: r2 }, crimson)));
+  await clickHex(b, bandSpot.q, bandSpot.r);
+  await confirmCrew(b);
+  await b.waitForFunction((n) => Object.keys(/** @type {any} */ (window).__vigame.view.buildings).length === n, before + 1);
+  const wagon = (await buildings(b)).find((x) => x.type === 'band');
   await b.waitForFunction((id) => !Object.values(/** @type {any} */ (window).__vigame.view.units)
     .some((u) => u.to === id), wagon.id, { timeout: 30000 });
   const riders = await insideOf(b, wagon.id);

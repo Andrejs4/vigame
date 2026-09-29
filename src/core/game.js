@@ -38,7 +38,7 @@ import { distance, key, neighbors, parseKey } from './hex.js';
 import { tileAt } from './board.js';
 import { unitName } from './names.js';
 import {
-  BUILDING_TYPES, BUILD_RANGE, DARK_LORD, DEFAULT_MODE, MAX_PLAYERS, MODES, COMBAT_PERIOD, DEPART_GAP, FOOD_PER_UNIT, KILL_EVEN, KILL_MAX, KILL_STEP, KILL_XP, MELEE_DAMAGE, MELEE_RANGE,
+  BUILDING_TYPES, BUILD_RANGE, DARK_LORD, RAIDERS, RAID_CHANCE, RAID_CLEAR, RAID_MAX, RAID_PERIOD, RAID_ROAM, START_METAL, DEFAULT_MODE, MAX_PLAYERS, MODES, COMBAT_PERIOD, DEPART_GAP, FOOD_PER_UNIT, KILL_EVEN, KILL_MAX, KILL_STEP, KILL_XP, MELEE_DAMAGE, MELEE_RANGE,
   RANGED_DAMAGE, RANGED_RANGE, REPAIR_WORK, FOOD_PERIOD, FOOD_STORE, HUNGER_LINE, LEVEL_GROWTH,
   LEVEL_RATE, LEVEL_XP, MAX_HUNGER, MAX_LEVEL, SIDES, SKILLS, SKILL_XP, START_STONE, START_UNITS, STARVE_CHANCE,
   UNIT_LIMIT, WAGON_PATIENCE, WALK_TICKS, WORK_BASE,
@@ -91,6 +91,9 @@ import {
  * @typedef {object} GameState
  * @property {number} version The shape of this object; see STATE_VERSION.
  * @property {string} mode A key of MODES.
+ * @property {number} [over] The tick the game ended: once only one team (or
+ *   none) of castles and lairs is left standing. Nothing happens after.
+ * @property {number} [winner] The team left standing, if one is.
  * @property {number} seed The map's seed. The board is rebuilt from it.
  * @property {number} tick Ticks since the game began.
  * @property {number} rng The random generator's state.
@@ -104,6 +107,7 @@ import {
  * @typedef {object} Player A side, and what it has in store.
  * @property {number} id
  * @property {number} stone
+ * @property {number} metal Dark metal.
  * @property {number} food
  * @property {number} hunger From 0 to MAX_HUNGER.
  * @property {number} side Its name and colours: an index into SIDES.
@@ -130,7 +134,7 @@ import {
  */
 
 /** Bump when GameState changes shape, and teach `checkState` the new one. */
-export const STATE_VERSION = 6;
+export const STATE_VERSION = 7;
 
 const SKILL_NAMES = /** @type {Skill[]} */ (Object.keys(SKILLS));
 
@@ -176,13 +180,17 @@ export function newGame(board, { mode = DEFAULT_MODE } = {}) {
   board.starts.slice(0, coop ? players + 1 : players).forEach((start, owner) => {
     const npc = owner === players;
     const side = npc ? DARK_LORD : owner;
-    state.players.push({ id: owner, side, team: coop ? Number(npc) : owner, stone: npc ? 0 : START_STONE, food: 0, hunger: 0 });
+    state.players.push({
+      id: owner, side, team: coop ? Number(npc) : owner, stone: npc ? 0 : START_STONE, metal: START_METAL, food: 0, hunger: 0,
+    });
     const id = newId(state, 'b');
     const type = npc ? 'lair' : 'castle';
     const hp = BUILDING_TYPES[type].hp;
     state.buildings[id] = { id, owner, type, grade: 1, q: start.q, r: start.r, hp, ...(npc ? {} : { work: 0 }) };
     if (!npc) for (let i = 0; i < START_UNITS; i++) newUnit(state, owner, id);
   });
+  // The raiders: a side of their own, against everyone, with nothing yet.
+  state.players.push({ id: state.players.length, side: RAIDERS, team: -1, stone: 0, metal: 0, food: 0, hunger: 0 });
   return state;
 }
 
@@ -641,6 +649,7 @@ function commandCell(cmd) {
  */
 export function applyCommand(board, state, player, command) {
   if (!state.players.some((p) => p.id === player)) return refuse('not a player');
+  if (state.over !== undefined) return refuse('the game is over');
   if (state.players[player].lost !== undefined) return refuse('your castle has fallen');
   if (!command || typeof command !== 'object') return refuse('not a command');
   const cmd = /** @type {Record<string, unknown>} */ (command);
@@ -762,12 +771,13 @@ function build(board, state, occ, player, cmd) {
     if (!(type.band ? tile?.passable : tile?.buildable)) return refuse('cannot build there');
     if (occ.buildingAt.has(key(c.q, c.r))) return refuse('cell taken');
   }
-  if (!nearStanding(state, player, at)) return refuse('too far from your buildings');
+  if (!inBuildRange(state, player, kind, at)) return refuse(type.nearCastle ? 'too far from your castle' : 'too far from your buildings');
   const ids = unitList(state, player, cmd.units ?? []);
   if (typeof ids === 'string') return refuse(ids);
   if (type.band && !ids.length) return refuse('a band needs units');
   const stock = state.players[player];
   if (stock.stone < type.cost) return refuse('not enough stone');
+  if (stock.metal < (type.metal ?? 0)) return refuse('not enough dark metal');
 
   /** @type {Building} */
   const b = { id: `b${state.nextId}`, owner: player, type: kind, grade: 1, q: at.q, r: at.r };
@@ -782,7 +792,23 @@ function build(board, state, occ, player, cmd) {
   state.buildings[b.id] = b;
   state.nextId += 1;
   stock.stone -= type.cost;
+  stock.metal -= type.metal ?? 0;
   return { ok: true };
+}
+
+/**
+ * Whether a building of this kind may go on a cell: within building range of
+ * the player's castle, for kinds built only there, or else of any of their
+ * buildings that doesn't move.
+ * @param {Pick<GameState, 'buildings'>} state
+ * @param {number} player
+ * @param {string} kind
+ * @param {Axial} at
+ */
+export function inBuildRange(state, player, kind, at) {
+  if (!BUILDING_TYPES[kind]?.nearCastle) return nearStanding(state, player, at);
+  const castle = castleOf(state, player);
+  return Boolean(castle) && footprint('castle', castle.q, castle.r).some((c) => distance(c, at) <= BUILD_RANGE);
 }
 
 /**
@@ -866,9 +892,12 @@ function moveBuilding(board, state, occ, player, cmd) {
  * @param {GameState} state
  */
 export function advance(board, state) {
+  if (state.over !== undefined) return; // the clock has stopped
   state.tick += 1;
   if (state.tick % COMBAT_PERIOD === 0) fight(board, state, occupancy(state));
   for (const b of Object.values(state.buildings)) if (/** @type {number} */ (b.hp) <= 0) collapse(state, b);
+  settle(state);
+  if (state.tick % RAID_PERIOD === 0) raid(board, state);
   if (state.tick % FOOD_PERIOD === 0) {
     harvest(state);
     for (const p of state.players) eat(state, p);
@@ -877,9 +906,64 @@ export function advance(board, state) {
     if (BUILDING_TYPES[b.type].band && !crewOf(state, b.id).length) delete state.buildings[b.id];
   }
   const occ = occupancy(state);
+  if (state.tick % COMBAT_PERIOD === 0) roam(board, state, occ);
   work(board, state, occ);
   rollWagons(board, state, occ);
   marchUnits(board, state, occ);
+}
+
+/**
+ * The game ends once no more than one team has a castle or lair standing:
+ * that team wins (or nobody, if none has). Raiders don't count.
+ * @param {GameState} state
+ */
+function settle(state) {
+  const contenders = state.players.filter((p) => !SIDES[p.side]?.wild);
+  const teams = new Set(contenders.map((p) => p.team));
+  const standing = new Set(contenders.filter((p) => p.lost === undefined).map((p) => p.team));
+  if (teams.size < 2 || standing.size > 1) return;
+  state.over = state.tick;
+  if (standing.size === 1) state.winner = [...standing][0];
+}
+
+/**
+ * Now and then a raider turns up on open ground away from the castles and
+ * lairs, while there are few enough. See RAID_PERIOD in rules.js.
+ * @param {Board} board
+ * @param {GameState} state
+ */
+function raid(board, state) {
+  const wild = state.players.find((p) => SIDES[p.side]?.wild);
+  if (!wild) return;
+  const raiders = Object.values(state.buildings).filter((b) => b.owner === wild.id).length;
+  if (raiders >= RAID_MAX + seatsOf(state) || random(state) >= RAID_CHANCE) return;
+  const taken = occupancy(state).buildingAt;
+  const lives = Object.values(state.buildings).filter((b) => BUILDING_TYPES[b.type].life);
+  for (let tries = 0; tries < 20; tries++) {
+    const t = board.list[Math.floor(random(state) * board.list.length)];
+    if (!t.passable || taken.has(key(t.q, t.r)) || lives.some((b) => distance(b, t) < RAID_CLEAR)) continue;
+    const id = newId(state, 'b');
+    state.buildings[id] = { id, owner: wild.id, type: 'raider', grade: 1, q: t.q, r: t.r, hp: BUILDING_TYPES.raider.hp };
+    return;
+  }
+}
+
+/**
+ * Raiders at rest now and then set off for somewhere nearby, at random.
+ * @param {Board} board
+ * @param {GameState} state
+ * @param {Occupancy} occ
+ */
+function roam(board, state, occ) {
+  for (const b of Object.values(state.buildings)) {
+    if (b.path || !SIDES[state.players[b.owner]?.side]?.wild || random(state) >= 0.5) continue;
+    const dq = Math.floor(random(state) * (2 * RAID_ROAM + 1)) - RAID_ROAM;
+    const dr = Math.floor(random(state) * (2 * RAID_ROAM + 1)) - RAID_ROAM;
+    const to = { q: b.q + dq, r: b.r + dr };
+    if (!tileAt(board, to.q, to.r)?.passable) continue;
+    const route = findPath(board, b, to, takenCells(occ, b.id));
+    if (route?.length) b.path = route;
+  }
 }
 
 /**
@@ -900,9 +984,12 @@ function collapse(state, b) {
 }
 
 /**
- * The units inside a building, or in a band, strike the nearest enemy in
- * reach: close combat if one is next to them, else ranged. See COMBAT_PERIOD
- * in rules.js.
+ * A round of fighting. Everyone strikes the nearest enemy in reach, its
+ * building's target first: the units inside a building or band (close
+ * combat if one is next to them, else ranged), buildings that strike by
+ * themselves, and units out walking, who strike as they go without
+ * stopping. See COMBAT_PERIOD in rules.js.
+ * @param {Board} board
  * @param {GameState} state
  * @param {Occupancy} occ
  */
@@ -919,59 +1006,90 @@ function fight(board, state, occ) {
     else if (band) targets.push({ cells: [{ q: band.q, r: band.r }], owner: u.owner, unit: u });
   }
 
+  /**
+   * Enemies within `reach` of these cells, the aimed-at first, then the
+   * nearest; the list order breaks ties.
+   * @param {Axial[]} from
+   * @param {number} owner
+   * @param {number} reach
+   * @param {string} [aim] A target building: it, or the units of a band.
+   */
+  const inReach = (from, owner, reach, aim) => targets
+    .filter((t) => !allied(state, t.owner, owner))
+    .map((t) => ({ t, d: Math.min(...t.cells.flatMap((c) => from.map((f) => distance(c, f)))) }))
+    .filter(({ d }) => d <= reach)
+    .sort((x, y) => aimedAt(y.t, aim) - aimedAt(x.t, aim) || x.d - y.d);
+  const aimedAt = (/** @type {typeof targets[number]} */ t, /** @type {string | undefined} */ aim) => Number(
+    aim !== undefined && (t.building?.id === aim || t.unit?.in === aim),
+  );
+  const standing = (/** @type {{ t: typeof targets[number] }} */ { t }) => (t.building
+    ? /** @type {number} */ (t.building.hp) > 0 && Boolean(state.buildings[t.building.id])
+    : Boolean(state.units[t.unit?.id ?? '']));
+
+  /**
+   * One strike: `damage` off a building (unless it gets through to a unit
+   * inside), or a kill roll as a striker of `skill` against a unit. Bringing
+   * down a building with loot gives it to the striker's side.
+   * @param {{ t: typeof targets[number] }} target
+   * @param {number} owner The striker's side.
+   * @param {number} damage
+   * @param {number} skill
+   * @returns {boolean} Whether it brought a building down or killed.
+   */
+  const strike = ({ t }, owner, damage, skill) => {
+    const hit = t.building;
+    // Some strikes on a building get through to a unit inside.
+    const sheltered = hit ? /** @type {string[]} */ (occ.inside.get(hit.id) ?? []).filter((x) => state.units[x]) : [];
+    const through = hit && sheltered.length && random(state) < (BUILDING_TYPES[hit.type].through ?? 0);
+    if (hit && !through) {
+      hit.hp = Math.max(0, /** @type {number} */ (hit.hp) - damage);
+      if (hit.hp > 0) return false;
+      state.players[owner].metal += BUILDING_TYPES[hit.type].loot ?? 0;
+      return true;
+    }
+    const foe = hit ? state.units[sheltered[Math.floor(random(state) * sheltered.length)]] : /** @type {Unit} */ (t.unit);
+    const killed = random(state) * 100 < killChance(skill, foe.level);
+    if (killed) delete state.units[foe.id];
+    return killed;
+  };
+
+  /**
+   * A unit strikes the first enemy standing in the list that it can reach.
+   * @param {Unit} u
+   * @param {Array<{ t: typeof targets[number], d: number }>} near
+   * @param {number} reach
+   */
+  const unitStrikes = (u, near, reach) => {
+    const target = near.find((x) => x.d <= reach && standing(x));
+    if (!target) return false;
+    const melee = target.d <= MELEE_RANGE;
+    const skill = melee ? 'melee' : 'ranged';
+    const killed = strike(target, u.owner, (melee ? MELEE_DAMAGE : RANGED_DAMAGE) + u.skills[skill], u.skills[skill]);
+    practise(u, skill, killed ? KILL_XP : 0);
+    return true;
+  };
+
   for (const b of Object.values(state.buildings)) {
     if (b.target !== undefined && state.buildings[b.target]?.owner === undefined) delete b.target;
     const type = BUILDING_TYPES[b.type];
     if (type.speed && b.target !== undefined) chase(board, state, occ, b);
     const inside = /** @type {string[]} */ (occ.inside.get(b.id));
     if (!inside.length && !type.attack) continue;
-    const from = footprint(b.type, b.q, b.r);
     const unitReach = RANGED_RANGE + (type.reach ?? 0);
-    const reach = Math.max(unitReach, type.attack?.reach ?? 0);
-    // Enemies in reach: its target first, then the nearest; the list order breaks ties.
-    const near = targets
-      .filter((t) => !allied(state, t.owner, b.owner))
-      .map((t) => ({ t, d: Math.min(...t.cells.flatMap((c) => from.map((f) => distance(c, f)))) }))
-      .filter(({ d }) => d <= reach)
-      .sort((x, y) => Number(y.t.building?.id === b.target) - Number(x.t.building?.id === b.target) || x.d - y.d);
-    const standing = (/** @type {typeof near[number]} */ { t }) => (t.building
-      ? /** @type {number} */ (t.building.hp) > 0 && Boolean(state.buildings[t.building.id])
-      : Boolean(state.units[t.unit?.id ?? '']));
-
-    /**
-     * One strike: `damage` off a building (unless it gets through to a unit
-     * inside), or a kill roll as a striker of `skill` against a unit.
-     * @returns {boolean} Whether it brought a building down or killed.
-     */
-    const strike = (/** @type {typeof near[number]} */ target, /** @type {number} */ damage, /** @type {number} */ skill) => {
-      const hit = target.t.building;
-      // Some strikes on a building get through to a unit inside.
-      const sheltered = hit ? /** @type {string[]} */ (occ.inside.get(hit.id) ?? []).filter((x) => state.units[x]) : [];
-      const through = hit && sheltered.length && random(state) < (BUILDING_TYPES[hit.type].through ?? 0);
-      if (hit && !through) {
-        hit.hp = Math.max(0, /** @type {number} */ (hit.hp) - damage);
-        return hit.hp === 0;
-      }
-      const foe = hit ? state.units[sheltered[Math.floor(random(state) * sheltered.length)]] : /** @type {Unit} */ (target.t.unit);
-      const killed = random(state) * 100 < killChance(skill, foe.level);
-      if (killed) delete state.units[foe.id];
-      return killed;
-    };
-
+    const near = inReach(footprint(b.type, b.q, b.r), b.owner, Math.max(unitReach, type.attack?.reach ?? 0), b.target);
     if (type.attack) {
-      const target = near.find(standing);
-      if (target && target.d <= type.attack.reach) strike(target, type.attack.damage, type.attack.skill);
+      const target = near.find((x) => x.d <= /** @type {{ reach: number }} */ (type.attack).reach && standing(x));
+      if (target) strike(target, b.owner, type.attack.damage, type.attack.skill);
     }
     for (const id of inside) {
       const u = state.units[id];
-      if (!u) continue; // killed this very round
-      const target = near.find((x) => x.d <= unitReach && standing(x));
-      if (!target) break;
-      const melee = target.d <= MELEE_RANGE;
-      const skill = melee ? 'melee' : 'ranged';
-      const killed = strike(target, (melee ? MELEE_DAMAGE : RANGED_DAMAGE) + u.skills[skill], u.skills[skill]);
-      practise(u, skill, killed ? KILL_XP : 0);
+      if (u && !unitStrikes(u, near, unitReach)) break;
     }
+  }
+  for (const u of Object.values(state.units)) {
+    if (u.in !== undefined || !state.units[u.id]) continue;
+    const here = { q: /** @type {number} */ (u.q), r: /** @type {number} */ (u.r) };
+    unitStrikes(u, inReach([here], u.owner, RANGED_RANGE), RANGED_RANGE);
   }
 }
 
@@ -1317,14 +1435,16 @@ export function checkState(board, raw) {
   if (!Number.isSafeInteger(state.rng) || state.rng < 0) fail('bad rng');
   if (!Number.isSafeInteger(state.nextId) || state.nextId < 1) fail('bad nextId');
   const isCount = (/** @type {unknown} */ n, /** @type {number} */ below) => Number.isSafeInteger(n) && Number(n) >= 0 && Number(n) < below;
-  if (!Array.isArray(state.players) || !state.players.every((p, i) => p?.id === i) || state.players.length > MAX_PLAYERS + 1) {
+  if (!Array.isArray(state.players) || !state.players.every((p, i) => p?.id === i) || state.players.length > MAX_PLAYERS + 2) { // the players, the Dark Lord, the raiders
     return [...problems, 'bad players'];
   }
   if (!Object.hasOwn(MODES, state.mode)) fail('bad mode');
+  if (state.over !== undefined && !isCount(state.over, Infinity)) fail('bad over');
+  if (state.winner !== undefined && (state.over === undefined || !Number.isInteger(state.winner))) fail('bad winner');
   state.players.forEach((p, i) => {
     if (!Number.isInteger(p.team)) fail(`side ${i}: bad team`);
     if (!Number.isInteger(p.side) || !SIDES[p.side]) fail(`side ${i}: bad palette`);
-    if (!isCount(p.stone, Infinity) || !isCount(p.food, Infinity)) fail(`side ${i}: bad stock`);
+    if (!isCount(p.stone, Infinity) || !isCount(p.food, Infinity) || !isCount(p.metal, Infinity)) fail(`side ${i}: bad stock`);
     if (!isCount(p.hunger, MAX_HUNGER + 1)) fail(`side ${i}: bad hunger`);
     if (p.lost !== undefined && !isCount(p.lost, state.tick + 1)) fail(`side ${i}: bad lost`);
   });
@@ -1448,6 +1568,8 @@ export function publicView(state) {
   return {
     version: state.version,
     mode: state.mode,
+    ...(state.over !== undefined ? { over: state.over } : {}),
+    ...(state.winner !== undefined ? { winner: state.winner } : {}),
     seed: state.seed,
     tick: state.tick,
     players: state.players,

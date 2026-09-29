@@ -65,12 +65,14 @@ Run `npm start` and open http://127.0.0.1:2567.
   ground and four on scrub, less the better they run. Water is impassable.
   **Return** sends the whole crew home. A unit left with nowhere to go (its
   building collapsed, say) goes home by itself.
-- **Stone and food** go straight into your side's stock (the HUD shows
-  it); nothing carries them. Each side starts with 200 stone.
-- **Build**: pick **Tower** (60 stone), **Wagon**, **Pit** or **Farm** (30
-  stone), then a highlighted cell: open, buildable ground within three
-  cells of one of your standing buildings. Scrub can be crossed but not
-  built on; water is neither. One building per cell.
+- **Stone, dark metal and food** go straight into your side's stock (the
+  HUD shows them, and hunger next to food); nothing carries them. Each side
+  starts with 200 stone and no dark metal.
+- **Build**: pick **Tower** (60 stone), **Pit**, **Farm** (30 stone),
+  **Band** or **Wagon** (15 dark metal), then a highlighted cell: open,
+  buildable ground within three cells of one of your standing buildings (a
+  wagon: of your castle). Scrub can be crossed but not built on; water is
+  neither. One building per cell.
 - **Pits**: placing one asks for its crew first, up to 8, with the best
   diggers at home ticked. They walk there and dig stone, faster the more of
   them and the better they build; every 20 stone the pit is a grade deeper.
@@ -103,16 +105,23 @@ Run `npm start` and open http://127.0.0.1:2567.
   match, up to 50% at most, and under 1% once the unit is 50 levels ahead
   (a stand-in until units get their dice). The strike that brings a
   building down or kills a unit is a killing blow, worth 600 experience.
-  Units walking in the open don't strike; only those inside a building or
-  band do.
+  Units walking in the open strike too, at their own reach, as they go:
+  they never stop or turn aside for it.
 - **Targets**: select one of your buildings, press **Attack…**, then click
-  an enemy building. A building that can't move strikes its target while it
+  an enemy building or band (a band's units are struck first). A building that can't move strikes its target while it
   is in reach, and the nearest enemy otherwise; a wagon or band goes after
   it until it's close enough for close combat. Driving a wagon or band by
   hand drops its target.
-- **Losing**: a side whose castle falls has lost, and can give no more
-  commands; its units stay and still fight from wherever they are. A team
-  wins once no other team has a castle (or lair) standing.
+- **Losing and winning**: a side whose castle falls has lost, and can give
+  no more commands; its units stay and still fight. Once only one team has
+  a castle (or lair) standing, it has won and the game is over: the clock
+  stops, commands are refused, the page says who won, and the lobby lists
+  the game as finished.
+- **Raiders** turn up in every game: wandering hostile wagons, against
+  everyone, that strike whatever comes within 2 cells. Every minute and a
+  half one may appear on open ground away from the castles, up to 2 plus
+  one per player. The side that brings one down gets 10 dark metal: the
+  only way to get it, and what wagons are built with.
 - **Wagons** are buildings that move. Select one, then click a cell to drive
   it there, two seconds a cell; its crew rides along inside. Wagons can't
   pass through other buildings, each other included: a blocked wagon waits,
@@ -223,11 +232,12 @@ http://127.0.0.1:2567;` with the same headers.
 
 ```js
 {
-  version: 6, mode: 'coop', seed: 1337, tick: 420, rng: 123456789, nextId: 58,
+  version: 7, mode: 'coop', seed: 1337, tick: 420, rng: 123456789, nextId: 58,
   players: [                                                // by owner number
-    { id: 0, side: 0, team: 0, stone: 140, food: 620, hunger: 0 },
-    { id: 1, side: 1, team: 0, stone: 200, food: 300, hunger: 5 },
-    { id: 2, side: 8, team: 1, stone: 0, food: 0, hunger: 0 },  // the Dark Lord
+    { id: 0, side: 0, team: 0, stone: 140, metal: 10, food: 620, hunger: 0 },
+    { id: 1, side: 1, team: 0, stone: 200, metal: 0, food: 300, hunger: 5 },
+    { id: 2, side: 8, team: 1, stone: 0, metal: 0, food: 0, hunger: 0 },  // the Dark Lord
+    { id: 3, side: 9, team: -1, stone: 0, metal: 0, food: 0, hunger: 0 }, // the raiders
   ],
   buildings: {
     b1: { id: 'b1', owner: 0, type: 'castle', grade: 1, q: 2, r: 5, hp: 2000,
@@ -264,7 +274,7 @@ http://127.0.0.1:2567;` with the same headers.
   - `{ type: 'crew', building, units }`: that building's whole crew (`[]` sends them all home);
   - `{ type: 'upgrade', building }`;
   - `{ type: 'move', building, q, r }`: a wagon or band;
-  - `{ type: 'target', building, target }`: an enemy building to go for (`''` clears it).
+  - `{ type: 'target', building, target }`: an enemy building or band to go for (`''` clears it).
 - `advance(board, state)` runs one tick: every second a round of fighting,
   collapses, every minute food and a meal, empty bands breaking up, mending
   and work in castles, pits and farms, wagons and bands, walking.
@@ -330,17 +340,12 @@ opening position.
 [docs/architecture.md](docs/architecture.md) covers the design and what
 comes next.
 
-- Combat is a first cut:
-  - Units walking in the open never strike back; only units inside a
-    building or band fight.
-  - A unit dies to a single lucky strike until units get their dice.
-  - Only buildings can be picked as targets, not bands or single units.
+- Combat is a first cut: a unit dies to a single lucky strike until units
+  get their dice, and single units can't be picked as targets.
 - The Dark Lord only has his lair: it strikes whatever comes within 4
-  cells, but he builds nothing, raises no units and never attacks.
-- A won game doesn't end: the clock keeps running, a defeated side's units
-  stay and still fight, and the lobby doesn't mark finished games.
-- There is no dark metal yet (it is to come from killing monsters), and
-  food has no use beyond keeping hunger down.
+  cells, but he builds nothing, raises no units and never attacks. Raiders
+  only wander.
+- Food has no use beyond keeping hunger down; dark metal only buys wagons.
 - A simulation harness: the core can already play games with no players (the
   tests do), but there are no bots or reports yet.
 - Game server:

@@ -26,6 +26,16 @@ function gameTime(tick) {
 }
 
 /**
+ * How a finished game came out, in a few words.
+ * @param {import('./api.js').GameSummary} game
+ */
+function result(game) {
+  if (game.winner === null) return 'over, nobody won';
+  if (game.mode === 'coop') return game.winner === 0 ? 'won' : 'the Dark Lord won';
+  return `${SIDES[game.winner]?.name ?? '?'} won`;
+}
+
+/**
  * One game as a list row: who plays which side, how far it has got, and a
  * button to open it.
  * @param {import('./api.js').GameSummary} game
@@ -46,7 +56,7 @@ function row(game, action) {
   });
   const when = document.createElement('span');
   when.className = 'when';
-  when.textContent = `${MODES[/** @type {keyof typeof MODES} */ (game.mode)] ?? ''} · ${gameTime(game.tick)}`;
+  when.textContent = `${MODES[/** @type {keyof typeof MODES} */ (game.mode)] ?? ''} · ${gameTime(game.tick)}${game.over === null ? '' : ` · ${result(game)}`}`;
   who.append(when);
 
   const open = document.createElement('a');
@@ -95,7 +105,7 @@ export function showLobby(token, me, { notice } = {}) {
     }
     const isMine = (/** @type {import('./api.js').GameSummary} */ g) => g.seats.some((s) => s?.pid === me.pid);
     const mineList = games.filter(isMine);
-    const openList = games.filter((g) => !isMine(g) && g.seats.some((s) => s === null));
+    const openList = games.filter((g) => !isMine(g) && g.over === null && g.seats.some((s) => s === null));
     mine.replaceChildren(...mineList.map((g) => row(g, 'Open')));
     open.replaceChildren(...openList.map((g) => row(g, 'Join')));
     mineEmpty.hidden = mineList.length > 0;

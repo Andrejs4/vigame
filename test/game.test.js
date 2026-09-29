@@ -7,7 +7,7 @@ import {
   killChance, seatsOf, starveChance,
 } from '../src/core/game.js';
 import {
-  BUILDING_TYPES, COMBAT_PERIOD, FOOD_PER_UNIT, FOOD_PERIOD, KILL_XP, LEVEL_RATE, RANGED_DAMAGE, LEVEL_XP, MAX_LEVEL, SKILL_XP, START_UNITS, UNIT_LIMIT, WAGON_PATIENCE,
+  BUILDING_TYPES, COMBAT_PERIOD, RAIDERS, RAID_PERIOD, FOOD_PER_UNIT, FOOD_PERIOD, KILL_XP, LEVEL_RATE, RANGED_DAMAGE, LEVEL_XP, MAX_LEVEL, SKILL_XP, START_UNITS, UNIT_LIMIT, WAGON_PATIENCE,
   WALK_TICKS, WORK_BASE,
 } from '../src/core/rules.js';
 import { distance } from '../src/core/hex.js';
@@ -27,12 +27,12 @@ test('a new game has a castle per player on the start sites, with named units in
     Object.values(state.buildings).map((b) => [b.owner, b.type, b.q, b.r]),
     board.starts.map((s, owner) => [owner, owner === 2 ? 'lair' : 'castle', s.q, s.r]),
   );
-  assert.deepEqual(state.players.map((p) => p.team), [0, 0, 1], 'the players against the Dark Lord');
+  assert.deepEqual(state.players.map((p) => p.team), [0, 0, 1, -1], 'the players against the Dark Lord, and the raiders against all');
   const occ = occupancy(state);
   assert.deepEqual(Object.values(state.buildings).map((b) => occ.inside.get(b.id)?.length), [START_UNITS, START_UNITS, 0]);
   const ffa = newGame(board, { mode: 'ffa' });
   assert.deepEqual(checkState(board, ffa), []);
-  assert.deepEqual([ffa.players.map((p) => p.team), Object.values(ffa.buildings).map((b) => b.type)], [[0, 1], ['castle', 'castle']]);
+  assert.deepEqual([ffa.players.map((p) => p.team), Object.values(ffa.buildings).map((b) => b.type)], [[0, 1, -1], ['castle', 'castle']]);
   const names = Object.values(state.units).map((u) => u.name);
   for (const name of names) assert.match(name, /^[A-Z][a-z]+ [A-Z][a-z]+$/);
   assert.ok(new Set(names).size > START_UNITS, 'names vary');
@@ -421,11 +421,57 @@ test('allies don\'t strike each other; the Dark Lord\'s lair strikes by itself',
     { id: 'b1', q: 0, r: 0 }, { id: 'b2', owner: 1, q: 2, r: 0 }, { id: 'b3', owner: 2, type: 'lair', q: -3, r: 0 },
   ], [...unitsIn('b1', 3, 10), ...unitsIn('b2', 3, 20, 1)]);
   state.mode = 'coop';
-  state.players = [{ ...state.players[0], team: 0 }, { ...state.players[1], team: 0 }, { id: 2, side: 8, team: 1, stone: 0, food: 0, hunger: 0 }];
+  state.players = [{ ...state.players[0], team: 0 }, { ...state.players[1], team: 0 }, { id: 2, side: 8, team: 1, stone: 0, metal: 0, food: 0, hunger: 0 }];
   run(board, state, COMBAT_PERIOD);
   assert.equal(state.buildings.b2.hp, BUILDING_TYPES.tower.hp, 'allies left alone');
   assert.equal(state.buildings.b1.hp, BUILDING_TYPES.tower.hp - /** @type {any} */ (BUILDING_TYPES.lair.attack).damage, 'the lair struck the nearest');
   assert.ok(state.buildings.b3.hp < BUILDING_TYPES.lair.hp, 'and was struck back');
+});
+
+test('units out walking strike as they pass, and keep going', () => {
+  const board = openBoard(5);
+  const state = stateWith([
+    { id: 'b1', q: -3, r: 0 }, { id: 'b2', owner: 1, q: 0, r: -2 }, { id: 'b3', q: 3, r: 0 },
+  ], unitsIn('b1', 1, 10));
+  assert.deepEqual(applyCommand(board, state, 0, { type: 'crew', building: 'b3', units: ['u10'] }), OK);
+  runUntil(board, state, () => state.units.u10.in === 'b3');
+  assert.ok(state.buildings.b2.hp < BUILDING_TYPES.tower.hp, 'the enemy tower was struck on the way');
+});
+
+test('raiders turn up now and then; bringing one down yields dark metal', () => {
+  const board = createBoard({ ...BOARD_OPTIONS, seed: 3 });
+  const game = newGame(board, { mode: 'ffa' });
+  const wild = game.players.findIndex((p) => p.side === RAIDERS);
+  runUntil(board, game, () => Object.values(game.buildings).some((b) => b.owner === wild), 6 * RAID_PERIOD);
+
+  const state = stateWith([{ id: 'b1' }], unitsIn('b1', 1, 10));
+  state.players.push({ id: 2, side: RAIDERS, team: -1, stone: 0, metal: 0, food: 0, hunger: 0 });
+  state.buildings.b2 = { id: 'b2', owner: 2, type: 'raider', grade: 1, q: 2, r: 0, hp: 1 };
+  state.nextId = 11;
+  const metal = state.players[0].metal;
+  run(openBoard(4), state, COMBAT_PERIOD);
+  assert.equal(state.buildings.b2, undefined);
+  assert.equal(state.players[0].metal, metal + /** @type {number} */ (BUILDING_TYPES.raider.loot));
+});
+
+test('wagons cost dark metal and go up only near the castle; bands can be aimed at', () => {
+  const board = openBoard(7);
+  const state = stateWith([{ id: 'b1', type: 'castle' }, { id: 'b2', q: 5, r: 0 }]);
+  state.players[0].metal = 10;
+  const wagon = (/** @type {number} */ q) => applyCommand(board, state, 0, { type: 'build', kind: 'wagon', q, r: -2 });
+  assert.deepEqual(wagon(-2), { ok: false, reason: 'not enough dark metal' });
+  state.players[0].metal = 100;
+  assert.deepEqual(wagon(6), { ok: false, reason: 'too far from your castle' }, 'though near the tower');
+  assert.deepEqual(wagon(-2), OK);
+  assert.equal(state.players[0].metal, 100 - /** @type {number} */ (BUILDING_TYPES.wagon.metal));
+
+  // A tower aimed at an enemy band strikes its units, not the nearer tower.
+  const aim = stateWith([
+    { id: 'b1', q: 0, r: 0 }, { id: 'b2', owner: 1, type: 'band', q: 3, r: 0 }, { id: 'b3', owner: 1, q: 1, r: 0 },
+  ], [...unitsIn('b1', 1, 10), ...unitsIn('b2', 1, 20, 1)]);
+  assert.deepEqual(applyCommand(board, aim, 0, { type: 'target', building: 'b1', target: 'b2' }), OK);
+  run(board, aim, COMBAT_PERIOD);
+  assert.equal(aim.buildings.b3.hp, BUILDING_TYPES.tower.hp);
 });
 
 test('a kill is likelier the more the striker outclasses the target, 50% at most', () => {
@@ -465,13 +511,23 @@ test('a target: a tower strikes it in reach, else the nearest; a band goes after
   assert.ok(!state.buildings.b4 || state.buildings.b4.hp < BUILDING_TYPES.farm.hp, 'and strikes it');
 });
 
-test('the side whose castle falls has lost, and gives no more commands', () => {
-  const board = openBoard(4);
-  const state = stateWith([{ id: 'b1', type: 'castle' }]);
+test('the side whose castle falls has lost; when one team is left, the game is over', () => {
+  const board = openBoard(6);
+  const state = stateWith([{ id: 'b1', type: 'castle' }, { id: 'b2', type: 'castle', owner: 1, q: 4, r: -2 }]);
+  state.players.push({ ...state.players[1], id: 2, side: 2, team: 2 });
+  state.buildings.b3 = { id: 'b3', type: 'castle', owner: 2, grade: 1, q: -4, r: 2, hp: 1, work: 0 };
+  state.nextId = 4;
   state.buildings.b1.hp = 0;
   run(board, state, 1);
   assert.equal(state.players[0].lost, 1);
+  assert.equal(state.over, undefined, 'two sides still stand');
   assert.deepEqual(applyCommand(board, state, 0, { type: 'build', kind: 'pit', q: 3, r: 0 }), { ok: false, reason: 'your castle has fallen' });
+  state.buildings.b3.hp = 0;
+  run(board, state, 1);
+  assert.deepEqual([state.over, state.winner], [2, 1], 'the last one standing wins');
+  assert.deepEqual(applyCommand(board, state, 1, { type: 'upgrade', building: 'b2' }), { ok: false, reason: 'the game is over' });
+  run(board, state, 5);
+  assert.equal(state.tick, 2, 'and the clock has stopped');
 });
 
 test('units mend their damaged building before their usual work', () => {

@@ -438,9 +438,9 @@ test('a crew marches through the server, one cell of its route at a time', async
 test('a game outlives its room: its snapshot comes back exactly, and its log rebuilds it', async () => {
   const { id, a, b } = await twoPlayers();
   await give(a, { type: 'upgrade', building: 'b1' });
-  await give(a, { type: 'build', kind: 'wagon', ...buildSpot(seen(a)) });
-  await until(() => Object.values(seen(a).buildings).some((x) => x.type === 'wagon'));
-  const wagon = /** @type {any} */ (Object.values(seen(a).buildings).find((x) => x.type === 'wagon'));
+  await give(a, { type: 'build', kind: 'pit', ...buildSpot(seen(a)) });
+  await until(() => Object.values(seen(a).buildings).some((x) => x.type === 'pit'));
+  const wagon = /** @type {any} */ (Object.values(seen(a).buildings).find((x) => x.type === 'pit'));
   await give(a, { type: 'crew', building: wagon.id, units: /** @type {string[]} */ (occupancy(seen(a)).inside.get('b1')).slice(0, 3) });
   await give(b, { type: 'upgrade', building: castleOf(seen(b), 1)?.id });
   await sleep(100);

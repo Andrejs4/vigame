@@ -240,6 +240,7 @@ export class GameRoom extends Room {
    * or with `soloClock`, while any seated player is here.
    */
   clockRuns() {
+    if (this.game.over !== undefined) return false; // the game is over
     const here = new Set([...this.state.viewers.values()].map((v) => v.pid));
     const present = (/** @type {string | null} */ pid) => pid !== null && here.has(pid);
     return this.soloClock ? this.seats.some(present) : this.seats.every(present);
