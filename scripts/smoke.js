@@ -19,6 +19,7 @@ import { chromium } from 'playwright';
 import { startGameServer } from '../server/app.js';
 import { axialToPixel, distance } from '../src/core/hex.js';
 import { BUILDING_TYPES } from '../src/core/rules.js';
+import { PICTURES } from '../src/client/tokens.js';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const OUT = join(ROOT, 'smoke-output');
@@ -385,6 +386,8 @@ async function threeBrowsers(browser, url, { full, label }) {
     await b.screenshot({ path: join(OUT, 'game-crimson.png') });
   }
   await waitInside(b, tower.id, 1);
+  // Every picture arrived, here and behind the proxy alike.
+  await a.waitForFunction((n) => /** @type {any} */ (window).__vigame.tokens.images.size === n, PICTURES.length);
   if (!full) {
     for (const p of [a, b]) await p.context().close();
     return;

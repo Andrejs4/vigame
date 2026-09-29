@@ -15,6 +15,7 @@ import { Camera } from './camera.js';
 import { Effects } from './effects.js';
 import { Minimap } from './minimap.js';
 import { BoardRenderer } from './render.js';
+import { Tokens } from './tokens.js';
 
 /** @param {number} tick */
 function formatTime(tick) {
@@ -69,7 +70,9 @@ export async function startGame(net, me) {
   let board = createBoard({ ...BOARD_OPTIONS, seed: 0 });
   let boardPlayers = 0;
   const camera = new Camera();
-  let renderer = new BoardRenderer(canvas, board);
+  // The pictures arrive after the first draws; each one redraws the board.
+  const tokens = new Tokens(() => { needsDraw = true; });
+  let renderer = new BoardRenderer(canvas, board, tokens);
   let minimap = new Minimap(mapCanvas, mapFrame, board);
   /** The main view's size, in CSS pixels. */
   let viewW = 0;
@@ -123,7 +126,7 @@ export async function startGame(net, me) {
     if (next.seed !== board.seed || players !== boardPlayers) {
       boardPlayers = players;
       board = createBoard({ ...BOARD_OPTIONS, seed: next.seed, players });
-      renderer = new BoardRenderer(canvas, board);
+      renderer = new BoardRenderer(canvas, board, tokens);
       renderer.showCoords = showCoords;
       minimap = new Minimap(mapCanvas, mapFrame, board);
       recenter();
@@ -700,6 +703,7 @@ export async function startGame(net, me) {
       get peers() { return peers; },
       get minimap() { return minimap; },
       effects,
+      tokens,
       net,
       camera,
       forceDraw: () => { needsDraw = true; },

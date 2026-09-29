@@ -1,6 +1,9 @@
 /**
  * Canvas 2D renderer for the board.
  *
+ * Buildings and units are tokens (tokens.js): round counters in their
+ * side's colour with a picture on, or their letter until the pictures load.
+ *
  * Kept behind a small interface (construct, then call draw each frame) so a
  * WebGL renderer such as PixiJS can be dropped in later without the rest of
  * the app caring. It draws a view of the game (see `publicView` in game.js)
@@ -9,7 +12,7 @@
  */
 
 import { DIRECTIONS, axialToPixel, corners, key } from '../core/hex.js';
-import { footprint, maxHp, occupancy, sideOf } from '../core/game.js';
+import { footprint, maxHp, occupancy, raiseWork, sideOf } from '../core/game.js';
 import { BUILDING_TYPES } from '../core/rules.js';
 
 /** Base colours per terrain, before per-tile tint. */
@@ -99,6 +102,20 @@ const HP_COLORS = [
   { above: -1, color: '#ef5a4a' },
 ];
 
+/**
+ * How wide a building's token is, in hexes: the castle and the lair span
+ * their middle cell, the rest sit inside theirs.
+ * @param {import('../core/rules.js').BuildingType} type
+ * @param {boolean} rolling
+ */
+function tokenHexes(type, rolling) {
+  return type.size === 7 ? 2.3 : rolling ? 1.05 : 1.2;
+}
+
+/** A unit's token, in hexes; narrower than UNIT_TOKEN_MIN pixels, a dot. */
+const UNIT_TOKEN = 0.42;
+const UNIT_TOKEN_MIN = 11;
+
 /** @typedef {import('../core/game.js').Building} Building */
 /** @typedef {import('./effects.js').Effect} Effect */
 
@@ -106,13 +123,15 @@ export class BoardRenderer {
   /**
    * @param {HTMLCanvasElement} canvas
    * @param {import('../core/board.js').Board} board
+   * @param {import('./tokens.js').Tokens | null} [tokens] The pictures, once loaded.
    */
-  constructor(canvas, board) {
+  constructor(canvas, board, tokens = null) {
     this.canvas = canvas;
     const ctx = canvas.getContext('2d');
     if (!ctx) throw new Error('2D canvas context unavailable');
     this.ctx = ctx;
     this.board = board;
+    this.tokens = tokens;
     this.cornerOffsets = corners(board.hexSize);
     this.showCoords = false;
   }
@@ -289,7 +308,7 @@ export class BoardRenderer {
         for (const c of cells) {
           const sp = rolling ? centre : cellScreen(c.q, c.r);
           this.hexPath(sp.x, sp.y, zoom, rolling ? 0.8 : 1);
-          ctx.fillStyle = side.color + (rolling ? 'cc' : rising ? '2e' : '66');
+          ctx.fillStyle = side.color + (rising ? '2e' : rolling ? '55' : '66');
           ctx.fill();
           if (flash) {
             ctx.fillStyle = `rgba(255, 96, 72, ${(0.6 * flash).toFixed(3)})`;
@@ -315,16 +334,21 @@ export class BoardRenderer {
         ctx.stroke();
         ctx.setLineDash([]);
 
-        // Its letter, grade pips, and how many are inside.
-        const letter = size * zoom * (type.size === 7 ? 0.8 : 0.55);
+        // Its token (a site's fades in as it goes up; its letter until the
+        // pictures arrive), grade pips under it, and how many are inside.
+        const across = size * zoom * tokenHexes(type, Boolean(rolling));
+        const built = rising ? Math.min(1, (b.raised ?? 0) / Math.max(1, raiseWork(b))) : 1;
+        const drawn = this.tokens?.draw(ctx, b.type, side.color, centre.x, centre.y, across, 0.3 + 0.7 * built);
         ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
-        ctx.font = `600 ${Math.round(letter)}px ui-sans-serif, system-ui, sans-serif`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText(type.name[0], centre.x, centre.y);
+        if (!drawn) {
+          ctx.font = `600 ${Math.round(across * 0.45)}px ui-sans-serif, system-ui, sans-serif`;
+          ctx.fillText(type.name[0], centre.x, centre.y);
+        }
         for (let g = 0; g < b.grade; g++) {
           ctx.beginPath();
-          ctx.arc(centre.x + (g - (b.grade - 1) / 2) * 6 * zoom, centre.y + letter * 0.62, 1.8 * zoom, 0, Math.PI * 2);
+          ctx.arc(centre.x + (g - (b.grade - 1) / 2) * 6 * zoom, centre.y + across / 2 + 3 * zoom, 1.8 * zoom, 0, Math.PI * 2);
           ctx.fill();
         }
         const count = occ.inside.get(b.id)?.length ?? 0;
@@ -332,8 +356,8 @@ export class BoardRenderer {
           const label = String(count);
           ctx.font = `600 ${Math.round(10 * zoom)}px ui-monospace, monospace`;
           const bw = ctx.measureText(label).width + 8 * zoom;
-          const bx = centre.x + size * zoom * 0.35;
-          const by = centre.y - size * zoom * 0.62;
+          const bx = centre.x + across * 0.42;
+          const by = centre.y - across * 0.42;
           ctx.fillStyle = 'rgba(12, 16, 12, 0.85)';
           ctx.fillRect(bx - bw / 2, by - 7 * zoom, bw, 14 * zoom);
           ctx.fillStyle = side.accent;
@@ -356,9 +380,12 @@ export class BoardRenderer {
       }
     }
 
-    // Pass 6: units out on the map, drawn between cells as they march.
+    // Pass 6: units out on the map, drawn between cells as they march: as
+    // tokens, or dots when those would be too small to make out.
     if (view) {
       const radius = Math.max(2, size * 0.1 * zoom);
+      const across = size * zoom * UNIT_TOKEN;
+      const tokens = across >= UNIT_TOKEN_MIN && this.tokens?.has('unit') ? this.tokens : null;
       for (const u of Object.values(view.units)) {
         if (u.in !== undefined || u.q === undefined || u.r === undefined) continue;
         const side = sideOf(view, u.owner);
@@ -368,6 +395,7 @@ export class BoardRenderer {
         const x = p.x + j.x * size * zoom;
         const y = p.y + j.y * size * zoom;
         if (!onScreen({ x, y })) continue;
+        if (tokens?.draw(ctx, 'unit', side.color, x, y, across)) continue;
         ctx.beginPath();
         ctx.arc(x, y, radius, 0, Math.PI * 2);
         ctx.fillStyle = side.color;
@@ -477,6 +505,9 @@ export class BoardRenderer {
       ctx.fillStyle = `rgba(28, 22, 18, ${(0.6 * t).toFixed(3)})`;
       ctx.fill();
     }
+    // Its token sinks and shrinks as it fades (the alpha is already set).
+    const across = size * zoom * tokenHexes(type, Boolean(rolling));
+    this.tokens?.draw(ctx, b.type, side.color, centre.x, centre.y + size * zoom * 0.2 * t, across * (1 - 0.3 * t));
 
     const ring = spread * (0.7 + 0.8 * easeOut(t));
     ctx.globalAlpha = 0.6 * (1 - t);
@@ -519,7 +550,8 @@ export class BoardRenderer {
     const { centre } = this.place(camera, b, clock);
     // Hits a second apart would float up over each other; each goes a little aside.
     const aside = (((e.seq * 7) % 5) - 2) * size * zoom * 0.12;
-    const lift = size * zoom * (BUILDING_TYPES[b.type]?.size === 7 ? 1.2 : 0.35);
+    const type = BUILDING_TYPES[b.type];
+    const lift = type ? (size * zoom * tokenHexes(type, false)) / 2 : 0;
     const x = centre.x + aside;
     const y = centre.y - lift - size * zoom * 0.6 * easeOut(t);
     const label = `\u2212${e.damage}`;

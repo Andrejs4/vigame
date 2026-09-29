@@ -168,6 +168,10 @@ Run `npm start` and open http://127.0.0.1:2567.
   clears the selection.
 - Every viewer's picked hex shows as a ring: solid for yours, dashed for
   others.
+- Buildings and units are round tokens in their side's colour, with a
+  picture on each (from [game-icons.net](https://game-icons.net), CC BY
+  3.0; see `src/client/art/CREDITS.md`). A building going up shows faint,
+  and firms up as it rises. Zoomed far out, units are dots.
 - A building shows its hit points in a bar over it while it is hurt or
   selected. A hit flashes it red and floats up the points lost; a building
   that falls crumbles, and a unit that dies leaves a cross (with how many,
@@ -221,6 +225,7 @@ have one, install it with `npx playwright install chromium`.
 | `src/client/camera.js`, `render.js` | Pan and zoom, and the canvas renderer: terrain, buildings, marching units between cells, picks, hover. |
 | `src/client/minimap.js` | The minimap: a few pixels a cell, repainted at most twice a second and only when a pixel changes. |
 | `src/client/effects.js` | Hits, falls and deaths, worked out from each update and the one before, for the renderer to play. |
+| `src/client/tokens.js`, `art/` | The pictures (SVG, credited in `art/CREDITS.md`) and the tokens made of them, painted once per colour and size. |
 | `server/app.js` | The game server: Colyseus, the HTTP API, the page's files, the monitor. |
 | `server/room.js` | `GameRoom`, one per game: runs the core's clock, logs and applies commands, snapshots. |
 | `server/schema.js` | The room state Colyseus syncs: a generic mirror of the core's view. |
@@ -389,8 +394,9 @@ comes next.
   rules; he builds nothing, raises no units and spends no dark metal.
   Raiders only wander.
 - Food has no use beyond keeping hunger down; dark metal only buys wagons.
-- Graphics are shapes and letters, with no pictures yet, and combat shows
-  hits but not who struck them.
+- Graphics are tokens on flat hexes: nothing faces a way or moves but by
+  sliding, the ground has no texture, and combat shows hits but not who
+  struck them.
 - A simulation harness: the core can already play games with no players (the
   tests do), but there are no bots or reports yet.
 - Game server:
