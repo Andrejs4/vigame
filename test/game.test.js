@@ -7,7 +7,7 @@ import {
   isRising, killChance, seatsOf, starveChance,
 } from '../src/core/game.js';
 import {
-  BUILDING_TYPES, COMBAT_PERIOD, DARK_LORD, HORDE_PERIOD, HORDE_START, RAIDERS, RAID_PERIOD, FOOD_PER_UNIT, FOOD_PERIOD, KILL_XP, LEVEL_RATE, RANGED_DAMAGE, LEVEL_XP, MAX_LEVEL, SKILL_XP, START_UNITS, UNIT_LIMIT, WAGON_PATIENCE,
+  BUILDING_TYPES, COMBAT_PERIOD, DARK_LORD, HORDE_PERIOD, HORDE_START, RAIDERS, RAID_PERIOD, SALVAGE, FOOD_PER_UNIT, FOOD_PERIOD, KILL_XP, LEVEL_RATE, RANGED_DAMAGE, LEVEL_XP, MAX_LEVEL, SKILL_XP, START_UNITS, UNIT_LIMIT, WAGON_PATIENCE,
   WALK_TICKS, WORK_BASE,
 } from '../src/core/rules.js';
 import { distance } from '../src/core/hex.js';
@@ -561,6 +561,13 @@ test('wagons cost dark metal and go up only near the castle; bands can be aimed 
   assert.deepEqual(wagon(6), { ok: false, reason: 'too far from your castle' }, 'though near the tower');
   assert.deepEqual(wagon(-2), OK);
   assert.equal(state.players[0].metal, 100 - /** @type {number} */ (BUILDING_TYPES.wagon.metal));
+
+  // Bringing a wagon down yields a share of its price.
+  const salvage = stateWith([{ id: 'b1', q: 0, r: 0 }, { id: 'b2', owner: 1, type: 'wagon', q: 2, r: 0, hp: 1 }], unitsIn('b1', 1, 10));
+  const metal = salvage.players[0].metal;
+  run(board, salvage, COMBAT_PERIOD);
+  assert.equal(salvage.buildings.b2, undefined);
+  assert.equal(salvage.players[0].metal, metal + Math.floor(/** @type {number} */ (BUILDING_TYPES.wagon.metal) * SALVAGE));
 
   // A tower aimed at an enemy band strikes its units, not the nearer tower.
   const aim = stateWith([

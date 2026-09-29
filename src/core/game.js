@@ -40,7 +40,7 @@ import { distance, key, neighbors, parseKey } from './hex.js';
 import { tileAt } from './board.js';
 import { unitName } from './names.js';
 import {
-  BUILDING_TYPES, BUILD_RANGE, DARK_LORD, HORDE_MAX, HORDE_PERIOD, HORDE_START, RAIDERS, RAID_CHANCE, RAID_CLEAR, RAID_MAX, RAID_PERIOD, RAID_ROAM, START_METAL, DEFAULT_MODE, MAX_PLAYERS, MODES, COMBAT_PERIOD, DEPART_GAP, FOOD_PER_UNIT, KILL_EVEN, KILL_MAX, KILL_STEP, KILL_XP, MELEE_DAMAGE, MELEE_RANGE,
+  BUILDING_TYPES, BUILD_RANGE, DARK_LORD, HORDE_MAX, HORDE_PERIOD, HORDE_START, RAIDERS, SALVAGE, RAID_CHANCE, RAID_CLEAR, RAID_MAX, RAID_PERIOD, RAID_ROAM, START_METAL, DEFAULT_MODE, MAX_PLAYERS, MODES, COMBAT_PERIOD, DEPART_GAP, FOOD_PER_UNIT, KILL_EVEN, KILL_MAX, KILL_STEP, KILL_XP, MELEE_DAMAGE, MELEE_RANGE,
   RANGED_DAMAGE, RANGED_RANGE, REPAIR_WORK, FOOD_PERIOD, FOOD_STORE, HUNGER_LINE, LEVEL_GROWTH,
   LEVEL_RATE, LEVEL_XP, MAX_HUNGER, MAX_LEVEL, SIDES, SKILLS, SKILL_XP, START_STONE, START_UNITS, STARVE_CHANCE,
   UNIT_LIMIT, WAGON_PATIENCE, WALK_TICKS, WORK_BASE,
@@ -1082,7 +1082,8 @@ function fight(board, state, occ) {
   /**
    * One strike: `damage` off a building (unless it gets through to a unit
    * inside), or a kill roll as a striker of `skill` against a unit. Bringing
-   * down a building with loot gives it to the striker's side. One of the
+   * down a building with loot, or bought with dark metal, gives the
+   * striker's side its loot or a share of its price. One of the
    * horde turns on the building that struck it.
    * @param {{ t: typeof targets[number] }} target
    * @param {number} owner The striker's side.
@@ -1102,7 +1103,8 @@ function fight(board, state, occ) {
       hit.hp = Math.max(0, /** @type {number} */ (hit.hp) - damage);
       if (from !== undefined && from !== hit.target && BUILDING_TYPES[hit.type].hunts) turnTo(hit, from);
       if (hit.hp > 0) return false;
-      state.players[owner].metal += BUILDING_TYPES[hit.type].loot ?? 0;
+      const { loot, metal = 0 } = BUILDING_TYPES[hit.type];
+      state.players[owner].metal += loot ?? Math.floor(metal * SALVAGE);
       return true;
     }
     const foe = hit ? state.units[sheltered[Math.floor(random(state) * sheltered.length)]] : /** @type {Unit} */ (t.unit);

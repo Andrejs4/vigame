@@ -56,14 +56,15 @@ const START_SPOTS = [
 const LAIR_SPOT = { fx: 0.5, fy: 0.5 };
 
 /**
- * The map's size for a number of players: 18 by 12 for one or two, growing
+ * The map's size for a number of players: 24 by 16 for one or two, growing
  * with the square root of the players beyond, so each has about as much
- * ground (36 by 24 for eight).
+ * ground (48 by 32 for eight). Big enough that castles start out of the
+ * lair's reach and of each other's (a test in board.test.js keeps it so).
  * @param {number} players
  */
 export function boardSize(players) {
   const scale = Math.sqrt(Math.max(2, players) / 2);
-  return { width: Math.round(18 * scale), height: Math.round(12 * scale) };
+  return { width: Math.round(24 * scale), height: Math.round(16 * scale) };
 }
 
 /** Cells around a start that are cleared to grass: the castle and a ring around it. */

@@ -25,8 +25,8 @@ Run `npm start` and open http://127.0.0.1:2567.
   logged in across visits.
 - **The lobby** lists your games and games with a free seat; **New game**
   starts one for 1 to 8 players (2 by default), on a map that grows with
-  them (18 × 12 cells for two, 36 × 24 for eight), castles in a ring
-  around the middle. A game's address (`?game=…`) is also the link to send
+  them (24 × 16 cells for two, 48 × 32 for eight), castles in a ring
+  around the middle, out of reach of the lair and of each other. A game's address (`?game=…`) is also the link to send
   someone. Players who join take the seats in order (Blue, Crimson, Green,
   Gold, Teal, Orange, Rose, Silver); once they are full, visitors watch.
   **Release seat** frees a seat for a spectator to take. A game is in
@@ -148,7 +148,9 @@ Run `npm start` and open http://127.0.0.1:2567.
 - **Wagons** are buildings that move. Select one, then click a cell to drive
   it there, two seconds a cell; its crew rides along inside. Wagons can't
   pass through other buildings, each other included: a blocked wagon waits,
-  then looks for another way, and stops if there is none.
+  then looks for another way, and stops if there is none. Whoever brings a
+  wagon down (another player, the Dark Lord, raiders) gets half its price in
+  dark metal, 7 for 15.
 - **Bands** are groups of up to 30 units that move like wagons, for free.
   Placing one asks who goes. A band holds no cell, so it passes anything of
   yours and blocks nothing; it has no hit points and gives no cover, and it
@@ -399,9 +401,9 @@ comes next.
   and the game waits for them.
 - The lobby lists only the 50 most recently active games.
 - Games of 5 to 8 players are untested at scale: up to 2400 units on a
-  36 × 24 map make route-finding and fighting costlier, and nobody has
+  48 × 32 map make route-finding and fighting costlier, and nobody has
   measured how much.
-- On a phone, the 18 × 12 board is wider than the screen even at minimum
+- On a phone, the 24 × 16 board is wider than the screen even at minimum
   zoom. Pinch-to-zoom and keyboard play are not wired up.
 
 ## License

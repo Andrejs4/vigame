@@ -188,6 +188,12 @@ export const HORDE_START = 2 * 60 * TICKS_PER_SECOND;
 export const HORDE_PERIOD = 60 * TICKS_PER_SECOND;
 export const HORDE_MAX = 24;
 
+/**
+ * Bringing down a building bought with dark metal (a wagon) yields the
+ * striker's side this share of its price.
+ */
+export const SALVAGE = 0.5;
+
 /** Dark metal each side starts with. */
 export const START_METAL = 0;
 
@@ -225,7 +231,8 @@ export const REPAIR_WORK = 100;
  * @property {number} cost Stone to build it.
  * @property {number} [metal] Dark metal to build it.
  * @property {boolean} [nearCastle] Built only within BUILD_RANGE of the castle.
- * @property {number} [loot] Dark metal for the side that brings it down.
+ * @property {number} [loot] Dark metal for the side that brings it down;
+ *   without it, a share of its price in dark metal (SALVAGE).
  * @property {number} [upgrade] Stone to upgrade it, times its grade before.
  * @property {Skill} skill The skill its units use there.
  * @property {number} [work] Work, from the units inside, for each thing it
