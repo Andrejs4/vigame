@@ -32,13 +32,13 @@ Run `npm start` and open http://127.0.0.1:2567.
   **Release seat** frees a seat for a spectator to take. A game is in
   either mode:
   - **Cooperation** (the default): all the players are one team against the
-    Dark Lord, whose lair (6000 hit points) stands in the middle of the map
-    and strikes the nearest enemy within 4 cells by itself, 20 hit points a
+    Dark Lord, whose lair (18000 hit points) stands in the middle of the map
+    and strikes the nearest enemy within 4 cells by itself, 40 hit points a
     second, and against units as a level-60 fighter. From the second minute it sends out his horde, a wave a minute,
     each bigger than the last (wave n: n/2 ghouls rounded up and n/3 ogres
     rounded down, at most 24 out at once). **Ghouls** are small and fast
-    (120 hit points, a cell a second, 6 a strike, level 10); **ogres** are
-    slow and tougher (600 hit points, 4 s a cell, 25 a strike, level 35). They need no units and
+    (600 hit points, a cell a second, 12 a strike, level 10); **ogres** are
+    slow and tougher (3000 hit points, 4 s a cell, 50 a strike, level 35). They need no units and
     cost him nothing. Each goes for the nearest farm, and for a castle once
     no farm is left; it turns on any building that strikes it, and on the
     nearest one when its way is blocked. Bringing one down yields 2 dark
@@ -114,12 +114,16 @@ Run `npm start` and open http://127.0.0.1:2567.
   takes as long again as the one before (a tower as long as raising it, a
   castle three times that). Once done, it holds as many units again and
   takes as many hits again. An upgrade can't be called off. Meanwhile the
-  crew still fights, and mends the building first when it's damaged, but a
+  crew still fights, and mends the building first when it's damaged (and
+  out of the fight), but a
   castle's units don't breed (the castle's own slow breeding goes on).
 - **Hit points**: every building has them, a castle 2000 and a pit 800. At
   none left it collapses at once, and whoever was inside is left standing
   there. While a building is damaged, the units inside mend it instead of
-  their usual work, faster the better they build.
+  their usual work, faster the better they build: 0.4 hit points a second
+  each, unskilled. But while they have an enemy in reach they fight it
+  instead, so a building mends only out of the fight, or under fire from
+  beyond its crew's reach.
 - **Fighting**: once a second, every unit inside a building or a band
   strikes the nearest enemy in reach: close combat at 1 cell if it can,
   else ranged at 3 cells, 4 from a castle, 5 from a tower. A strike takes 6

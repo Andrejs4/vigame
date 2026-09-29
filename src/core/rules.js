@@ -202,9 +202,10 @@ export const START_METAL = 0;
 /**
  * Repair: while a building is damaged, the units inside mend it instead of
  * their usual work, a hit point for every REPAIR_WORK of work, which trains
- * their building skill.
+ * their building skill; but not while they have an enemy in reach, whom
+ * they fight instead. An unskilled unit mends 0.4 hit points a second.
  */
-export const REPAIR_WORK = 100;
+export const REPAIR_WORK = 500;
 
 /**
  * @typedef {object} BuildingType
@@ -287,20 +288,20 @@ export const BUILDING_TYPES = {
     skill: 'farming', work: 300, yields: 'food', base: 20, through: 0.5, raise: 6000,
   },
   lair: {
-    name: 'Lair', size: 7, capacity: 0, grades: 1, hp: 6000, build: false, cost: 0,
-    skill: 'melee', life: true, attack: { damage: 20, skill: 60, reach: 4 }, scales: true,
+    name: 'Lair', size: 7, capacity: 0, grades: 1, hp: 18000, build: false, cost: 0,
+    skill: 'melee', life: true, attack: { damage: 40, skill: 60, reach: 4 }, scales: true,
   },
   raider: {
     name: 'Raider', size: 1, capacity: 0, grades: 1, hp: 300, build: false, cost: 0,
     skill: 'melee', speed: 3 * TICKS_PER_SECOND, attack: { damage: 10, skill: 20, reach: 2 }, loot: 10,
   },
   ghoul: {
-    name: 'Ghoul', size: 1, capacity: 0, grades: 1, hp: 120, build: false, cost: 0,
-    skill: 'melee', speed: TICKS_PER_SECOND, attack: { damage: 6, skill: 10, reach: 1 }, loot: 2, hunts: true, scales: true,
+    name: 'Ghoul', size: 1, capacity: 0, grades: 1, hp: 600, build: false, cost: 0,
+    skill: 'melee', speed: TICKS_PER_SECOND, attack: { damage: 12, skill: 10, reach: 1 }, loot: 2, hunts: true, scales: true,
   },
   ogre: {
-    name: 'Ogre', size: 1, capacity: 0, grades: 1, hp: 600, build: false, cost: 0,
-    skill: 'melee', speed: 4 * TICKS_PER_SECOND, attack: { damage: 25, skill: 35, reach: 1 }, loot: 6, hunts: true, scales: true,
+    name: 'Ogre', size: 1, capacity: 0, grades: 1, hp: 3000, build: false, cost: 0,
+    skill: 'melee', speed: 4 * TICKS_PER_SECOND, attack: { damage: 50, skill: 35, reach: 1 }, loot: 6, hunts: true, scales: true,
   },
   band: {
     name: 'Band', size: 1, capacity: 30, grades: 1, hp: 0, build: true, cost: 0,

@@ -22,7 +22,7 @@
 import Database from 'better-sqlite3';
 
 /** Bump when the tables change, and add the upgrade step to `migrate`. */
-const SCHEMA_VERSION = 11;
+const SCHEMA_VERSION = 12;
 
 /**
  * @typedef {{ id: string, seed: number, state: unknown, seq: number, seats: Array<string | null>,
@@ -313,6 +313,15 @@ function migrate(db) {
       DELETE FROM commands;
       DELETE FROM games;
       PRAGMA user_version = 11;
+    `))();
+  }
+  if (version < 12) {
+    // A stronger Dark Lord, and slower repair that stops while fighting:
+    // earlier games don't replay the same.
+    db.transaction(() => db.exec(`
+      DELETE FROM commands;
+      DELETE FROM games;
+      PRAGMA user_version = 12;
     `))();
   }
 }

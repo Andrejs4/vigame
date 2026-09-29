@@ -1165,7 +1165,7 @@ function fight(board, state, occ) {
     if (type.speed && b.target !== undefined && !isRising(b)) chase(board, state, occ, b);
     const inside = /** @type {string[]} */ (occ.inside.get(b.id));
     if (!inside.length && !type.attack) continue;
-    const unitReach = RANGED_RANGE + (isRising(b) ? 0 : type.reach ?? 0);
+    const unitReach = crewReach(b);
     const near = inReach(footprint(b.type, b.q, b.r), b.owner, Math.max(unitReach, type.attack?.reach ?? 0), b.target);
     if (type.attack) {
       const target = near.find((x) => x.d <= /** @type {{ reach: number }} */ (type.attack).reach && standing(x));
@@ -1337,8 +1337,43 @@ export function isDugOut(b) {
 }
 
 /**
+ * How far the units inside a building strike from it: ranged reach, plus
+ * the building's own once it stands.
+ * @param {Building} b
+ */
+function crewReach(b) {
+  return RANGED_RANGE + (isRising(b) ? 0 : BUILDING_TYPES[b.type].reach ?? 0);
+}
+
+/**
+ * Whether the units inside a building have an enemy in their reach, which
+ * they fight (see `fight`) rather than mend the building.
+ * @param {GameState} state
+ * @param {Building} b
+ */
+function crewFighting(state, b) {
+  const cells = footprint(b.type, b.q, b.r);
+  const reach = crewReach(b);
+  const near = (/** @type {Axial} */ c) => cells.some((x) => distance(x, c) <= reach);
+  for (const t of Object.values(state.buildings)) {
+    if (t.hp === undefined || t.hp <= 0 || allied(state, t.owner, b.owner)) continue;
+    if (footprint(t.type, t.q, t.r).some(near)) return true;
+  }
+  for (const u of Object.values(state.units)) {
+    if (allied(state, u.owner, b.owner)) continue;
+    // Out in the open, or in a band: units sheltered in a building are
+    // struck through it.
+    const band = u.in === undefined ? null : state.buildings[u.in];
+    if (band && !BUILDING_TYPES[band.type].band) continue;
+    if (near(/** @type {Axial} */ (band ?? u))) return true;
+  }
+  return false;
+}
+
+/**
  * Damaged buildings are mended by the units inside, a hit point per
- * REPAIR_WORK of their work, which trains their building skill.
+ * REPAIR_WORK of their work, which trains their building skill; but not
+ * while those units are fighting.
  * @param {GameState} state
  * @param {Occupancy} occ
  */
@@ -1346,6 +1381,7 @@ function mend(state, occ) {
   for (const b of Object.values(state.buildings)) {
     const inside = /** @type {string[]} */ (occ.inside.get(b.id));
     if (b.hp === undefined || b.hp <= 0 || b.hp >= maxHp(state, b) || !inside.length) continue;
+    if (crewFighting(state, b)) continue;
     let done = b.mend ?? 0;
     for (const id of inside) {
       const u = state.units[id];

@@ -662,10 +662,24 @@ test('the side whose castle falls has lost; when one team is left, the game is o
 test('units mend their damaged building before their usual work', () => {
   const board = openBoard(4);
   const state = stateWith([{ id: 'b1', type: 'pit', q: 1, r: 0, hp: 100 }], unitsIn('b1', 5, 10));
-  run(board, state, 10);
-  assert.equal(state.buildings.b1.hp, 100 + 10, '5 units mend 1 hit point a tick');
+  run(board, state, 50);
+  assert.equal(state.buildings.b1.hp, 100 + 10, '5 units mend a hit point every 5 ticks');
   assert.equal(state.buildings.b1.work, 0, 'no digging meanwhile');
   assert.ok(state.units.u10.practice.build > 0);
+});
+
+test('units with an enemy in reach fight it rather than mend their building', () => {
+  const board = openBoard(4);
+  // An enemy farm 2 cells away, in their ranged reach: they strike it and mend nothing.
+  const near = stateWith([{ id: 'b1', type: 'pit', q: 0, r: 0, hp: 100 }, { id: 'b2', owner: 1, type: 'farm', q: 2, r: 0 }], unitsIn('b1', 5, 10));
+  run(board, near, 50);
+  assert.equal(near.buildings.b1.hp, 100, 'no mending while fighting');
+  assert.ok(/** @type {number} */ (near.buildings.b2.hp) < 200, 'they fought');
+  // 4 cells away, out of their reach: they mend.
+  const far = stateWith([{ id: 'b1', type: 'pit', q: 0, r: 0, hp: 100 }, { id: 'b2', owner: 1, type: 'farm', q: 4, r: 0 }], unitsIn('b1', 5, 10));
+  run(board, far, 50);
+  assert.equal(far.buildings.b1.hp, 110);
+  assert.equal(far.buildings.b2.hp, 200);
 });
 
 test('a band goes at its slowest member\'s pace', () => {
