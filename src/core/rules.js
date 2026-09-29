@@ -14,21 +14,33 @@
 export const TICKS_PER_SECOND = 10;
 
 /**
- * The sides, indexed by owner number. Players take the first SEATS; the Dark
- * Lord is the game's own, and plays in cooperation games only.
+ * The sides' names and colours. A player's side has the palette of their
+ * seat; the Dark Lord, the game's own side in cooperation games, has the
+ * last one. A game's `players` records say which each owner number uses.
  */
 export const SIDES = [
   { id: 0, name: 'Blue',      color: '#3d7fd8', accent: '#9ec5ff' },
   { id: 1, name: 'Crimson',   color: '#c8473f', accent: '#ffb3ad' },
-  { id: 2, name: 'Dark Lord', color: '#6a3fa0', accent: '#cdb0ff', npc: true },
+  { id: 2, name: 'Green',     color: '#3f9e56', accent: '#a6e3b5' },
+  { id: 3, name: 'Gold',      color: '#c99a1e', accent: '#f5d98a' },
+  { id: 4, name: 'Teal',      color: '#249a97', accent: '#9de0dd' },
+  { id: 5, name: 'Orange',    color: '#d9722a', accent: '#f8c49a' },
+  { id: 6, name: 'Rose',      color: '#c9508f', accent: '#f5b3d6' },
+  { id: 7, name: 'Silver',    color: '#8e9aa6', accent: '#dfe5eb' },
+  { id: 8, name: 'Dark Lord', color: '#6a3fa0', accent: '#cdb0ff', npc: true },
 ];
 
-/** How many players a game seats. */
-export const SEATS = 2;
+/** The Dark Lord's palette: the last side. */
+export const DARK_LORD = SIDES.length - 1;
+
+/** Players a game may seat. */
+export const MIN_PLAYERS = 1;
+export const MAX_PLAYERS = 8;
+export const DEFAULT_PLAYERS = 2;
 
 /**
  * Game modes. In cooperation the players are one team against the Dark
- * Lord; in free for all, each against the other.
+ * Lord; in free for all, each against the others (two players at least).
  */
 export const MODES = { coop: 'Cooperation', ffa: 'Free for all' };
 export const DEFAULT_MODE = 'coop';

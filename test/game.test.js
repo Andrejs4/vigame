@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { BOARD_OPTIONS, createBoard } from '../src/core/board.js';
 import {
   advance, applyCommand, capacityOf, checkState, crewOf, footprint, levelXp, newGame, occupancy, publicView, random,
-  killChance, starveChance,
+  killChance, seatsOf, starveChance,
 } from '../src/core/game.js';
 import {
   BUILDING_TYPES, COMBAT_PERIOD, FOOD_PER_UNIT, FOOD_PERIOD, KILL_XP, LEVEL_RATE, RANGED_DAMAGE, LEVEL_XP, MAX_LEVEL, SKILL_XP, START_UNITS, UNIT_LIMIT, WAGON_PATIENCE,
@@ -40,6 +40,20 @@ test('a new game has a castle per player on the start sites, with named units in
   assert.equal(footprint('castle', 0, 0).length, 7, 'a castle covers a cell and its six neighbours');
   assert.deepEqual(JSON.parse(JSON.stringify(state)), state);
   assert.deepEqual(newGame(board), state, 'the same seed names the same units');
+});
+
+test('games seat 1 to 8 players, on maps that grow with them', () => {
+  for (const players of [1, 8]) {
+    const board = createBoard({ ...BOARD_OPTIONS, seed: 9, players });
+    assert.equal(board.starts.length, players + 1, 'a site per player, and the lair\'s');
+    for (const mode of players > 1 ? ['coop', 'ffa'] : ['coop']) {
+      const state = newGame(board, { mode });
+      assert.deepEqual(checkState(board, state), [], `${players} players, ${mode}`);
+      assert.equal(seatsOf(state), players);
+      assert.equal(Object.values(state.buildings).filter((b) => b.type === 'castle').length, players);
+    }
+  }
+  assert.ok(createBoard({ ...BOARD_OPTIONS, seed: 9, players: 8 }).list.length > 3 * createBoard({ ...BOARD_OPTIONS, seed: 9 }).list.length);
 });
 
 // --- breeding, levels and skills ---------------------------------------------
@@ -407,7 +421,7 @@ test('allies don\'t strike each other; the Dark Lord\'s lair strikes by itself',
     { id: 'b1', q: 0, r: 0 }, { id: 'b2', owner: 1, q: 2, r: 0 }, { id: 'b3', owner: 2, type: 'lair', q: -3, r: 0 },
   ], [...unitsIn('b1', 3, 10), ...unitsIn('b2', 3, 20, 1)]);
   state.mode = 'coop';
-  state.players = [{ ...state.players[0], team: 0 }, { ...state.players[1], team: 0 }, { id: 2, team: 1, stone: 0, food: 0, hunger: 0 }];
+  state.players = [{ ...state.players[0], team: 0 }, { ...state.players[1], team: 0 }, { id: 2, side: 8, team: 1, stone: 0, food: 0, hunger: 0 }];
   run(board, state, COMBAT_PERIOD);
   assert.equal(state.buildings.b2.hp, BUILDING_TYPES.tower.hp, 'allies left alone');
   assert.equal(state.buildings.b1.hp, BUILDING_TYPES.tower.hp - /** @type {any} */ (BUILDING_TYPES.lair.attack).damage, 'the lair struck the nearest');

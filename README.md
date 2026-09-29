@@ -22,19 +22,21 @@ Run `npm start` and open http://127.0.0.1:2567.
 
 - **Log in** with a name and the answer to a small sum. A browser stays
   logged in across visits.
-- **The lobby** lists your games and games waiting for a second player;
-  **New game** starts one, in either mode:
+- **The lobby** lists your games and games with a free seat; **New game**
+  starts one for 1 to 8 players (2 by default), on a map that grows with
+  them (18 × 12 cells for two, 36 × 24 for eight), castles in a ring
+  around the middle. It starts in either mode:
   - **Cooperation** (the default): both players are one team against the
     Dark Lord, whose lair (6000 hit points) stands in the middle of the map
     and strikes the nearest enemy within 4 cells by itself, 20 hit points a
     second. Allies never strike each other and pass through each other's
-    buildings. The players win when the lair falls, and lose when both
-    their castles have.
-  - **Free for all**: each against the other, as before; the middle of the
-    map is left empty. A game's address (`?game=…`) is also the link to
+    buildings. The players win when the lair falls, and lose when all
+    their castles have. One player alone is a game too.
+  - **Free for all** (two players or more): each against the others; the
+    middle of the map is left empty. A game's address (`?game=…`) is also the link to
   send someone. The first two players take Blue and Crimson; later visitors
   watch. **Release seat** frees a seat for a spectator to take.
-- **The game clock** runs only while both players are here. (`npm run dev`
+- **The game clock** runs only while every player is here. (`npm run dev`
   runs it with one, for trying things alone.)
 - **Your castle** covers seven cells and is its side's life (nothing can
   attack it yet). It is every unit's home, and starts with 12. The units at

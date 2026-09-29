@@ -9,8 +9,8 @@
  */
 
 import { DIRECTIONS, axialToPixel, corners, key } from '../core/hex.js';
-import { footprint, occupancy } from '../core/game.js';
-import { BUILDING_TYPES, SIDES } from '../core/rules.js';
+import { footprint, occupancy, sideOf } from '../core/game.js';
+import { BUILDING_TYPES } from '../core/rules.js';
 
 /** Base colours per terrain, before per-tile tint. */
 const TERRAIN_COLORS = {
@@ -195,7 +195,7 @@ export class BoardRenderer {
     if (view && occ) {
       for (const b of Object.values(view.buildings)) {
         const type = BUILDING_TYPES[b.type];
-        const side = SIDES[b.owner];
+        const side = sideOf(view, b.owner);
         if (!type || !side) continue;
         const isSelected = b.id === selected;
         const rolling = type.speed && b.path?.length ? b.path[0] : undefined;
@@ -259,7 +259,7 @@ export class BoardRenderer {
       const radius = Math.max(2, size * 0.1 * zoom);
       for (const u of Object.values(view.units)) {
         if (u.in !== undefined || u.q === undefined || u.r === undefined) continue;
-        const side = SIDES[u.owner];
+        const side = sideOf(view, u.owner);
         if (!side) continue;
         const p = this.between(camera, u.q, u.r, u.path?.[0], progress(u, clock));
         const j = jitter(u.id);

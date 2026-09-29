@@ -247,7 +247,7 @@ const inLobby = (page) => page.waitForFunction(() => {
 /**
  * Open a game from the lobby: the row naming these players.
  * @param {string} list 'mine' or 'open'
- * @param {string} who The row's text, such as "Ann vs —".
+ * @param {string} who The row's text, such as "Ann & —".
  */
 async function openFromLobby(page, list, who, { touch = false } = {}) {
   const row = page.locator(`#lobby-${list} li`, { hasText: who });
@@ -318,7 +318,7 @@ async function threeBrowsers(browser, url, { full, label }) {
   // Bēla logs in and finds the game in the lobby, waiting for her.
   const b = await newPlayer(browser, url, `${label}-b`, 'Bēla');
   await inLobby(b);
-  await openFromLobby(b, 'open', 'Ann vs —');
+  await openFromLobby(b, 'open', 'Ann & —');
   await waitText(b, '#seat', 'Bēla · Crimson');
   await waitMatch(a, '#time', /^0:0[1-9]$/);
 
@@ -436,7 +436,7 @@ async function threeBrowsers(browser, url, { full, label }) {
   await waitText(b, '#seat', 'Bēla · Crimson');
   await b.click('#to-lobby');
   await inLobby(b);
-  await openFromLobby(b, 'mine', 'Ann vs Bēla');
+  await openFromLobby(b, 'mine', 'Ann & Bēla');
   await waitText(b, '#seat', 'Bēla · Crimson');
 
   // Cai follows the invitation link, logs in, and watches.

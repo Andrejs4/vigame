@@ -35,8 +35,10 @@ function row(game, action) {
   const li = document.createElement('li');
   const who = document.createElement('span');
   who.className = 'who';
+  // Teammates with "&", rivals with "vs".
+  const between = game.mode === 'coop' ? ' & ' : ' vs ';
   game.seats.forEach((holder, i) => {
-    if (i) who.append(' vs ');
+    if (i) who.append(between);
     const name = document.createElement('span');
     name.textContent = holder ? holder.name || '?' : '—';
     name.style.color = holder ? SIDES[i]?.accent ?? '' : '';
@@ -73,6 +75,7 @@ export function showLobby(token, me, { notice } = {}) {
   const openEmpty = /** @type {HTMLElement} */ (document.getElementById('lobby-open-empty'));
   const newButton = /** @type {HTMLButtonElement} */ (document.getElementById('lobby-new'));
   const modeSelect = /** @type {HTMLSelectElement} */ (document.getElementById('lobby-mode'));
+  const playersSelect = /** @type {HTMLSelectElement} */ (document.getElementById('lobby-players'));
   const rename = /** @type {HTMLElement} */ (document.getElementById('lobby-rename'));
 
   /** @param {string} [text] */
@@ -108,7 +111,7 @@ export function showLobby(token, me, { notice } = {}) {
   newButton.onclick = async () => {
     newButton.disabled = true;
     try {
-      const res = await post('api/games', { token, mode: modeSelect.value });
+      const res = await post('api/games', { token, mode: modeSelect.value, players: Number(playersSelect.value) });
       if (!res.ok) throw new Error(await reason(res));
       const { id } = await res.json();
       location.search = gameHref(id);

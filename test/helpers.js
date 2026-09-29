@@ -80,7 +80,7 @@ export function stateWith(buildings, units = [], seed = 1) {
     tick: 0,
     rng: 1,
     nextId: Math.max(0, ...ids) + 1,
-    players: [{ id: 0, team: 0, stone: 1000, food: 0, hunger: 0 }, { id: 1, team: 1, stone: 1000, food: 0, hunger: 0 }],
+    players: [{ id: 0, side: 0, team: 0, stone: 1000, food: 0, hunger: 0 }, { id: 1, side: 1, team: 1, stone: 1000, food: 0, hunger: 0 }],
     buildings: Object.fromEntries(buildings.map((b) => [b.id, building(b)])),
     units: Object.fromEntries(units.map((u) => [u.id, unit(u)])),
   };

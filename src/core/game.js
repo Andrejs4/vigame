@@ -38,7 +38,7 @@ import { distance, key, neighbors, parseKey } from './hex.js';
 import { tileAt } from './board.js';
 import { unitName } from './names.js';
 import {
-  BUILDING_TYPES, BUILD_RANGE, DEFAULT_MODE, MODES, SEATS, COMBAT_PERIOD, DEPART_GAP, FOOD_PER_UNIT, KILL_EVEN, KILL_MAX, KILL_STEP, KILL_XP, MELEE_DAMAGE, MELEE_RANGE,
+  BUILDING_TYPES, BUILD_RANGE, DARK_LORD, DEFAULT_MODE, MAX_PLAYERS, MODES, COMBAT_PERIOD, DEPART_GAP, FOOD_PER_UNIT, KILL_EVEN, KILL_MAX, KILL_STEP, KILL_XP, MELEE_DAMAGE, MELEE_RANGE,
   RANGED_DAMAGE, RANGED_RANGE, REPAIR_WORK, FOOD_PERIOD, FOOD_STORE, HUNGER_LINE, LEVEL_GROWTH,
   LEVEL_RATE, LEVEL_XP, MAX_HUNGER, MAX_LEVEL, SIDES, SKILLS, SKILL_XP, START_STONE, START_UNITS, STARVE_CHANCE,
   UNIT_LIMIT, WAGON_PATIENCE, WALK_TICKS, WORK_BASE,
@@ -106,6 +106,7 @@ import {
  * @property {number} stone
  * @property {number} food
  * @property {number} hunger From 0 to MAX_HUNGER.
+ * @property {number} side Its name and colours: an index into SIDES.
  * @property {number} team Sides on one team don't fight each other.
  * @property {number} [lost] The tick its castle (or lair) fell: the side is out of the game.
  */
@@ -152,7 +153,7 @@ export function levelXp(level) {
  * The opening position: a castle per player, on the board's start sites,
  * each with its first units; in cooperation, the players on one team and
  * the Dark Lord's lair in the middle.
- * @param {Board} board
+ * @param {Board} board Made for as many players (`createBoard`'s `players`).
  * @param {{ mode?: string }} [options]
  * @returns {GameState}
  */
@@ -170,10 +171,12 @@ export function newGame(board, { mode = DEFAULT_MODE } = {}) {
     units: {},
   };
   const coop = mode === 'coop';
-  const sides = coop ? SIDES.length : SEATS;
-  board.starts.slice(0, sides).forEach((start, owner) => {
-    const npc = Boolean(SIDES[owner].npc);
-    state.players.push({ id: owner, team: coop ? Number(npc) : owner, stone: npc ? 0 : START_STONE, food: 0, hunger: 0 });
+  // The board's last site is the lair's; the others are the players'.
+  const players = board.starts.length - 1;
+  board.starts.slice(0, coop ? players + 1 : players).forEach((start, owner) => {
+    const npc = owner === players;
+    const side = npc ? DARK_LORD : owner;
+    state.players.push({ id: owner, side, team: coop ? Number(npc) : owner, stone: npc ? 0 : START_STONE, food: 0, hunger: 0 });
     const id = newId(state, 'b');
     const type = npc ? 'lair' : 'castle';
     const hp = BUILDING_TYPES[type].hp;
@@ -181,6 +184,23 @@ export function newGame(board, { mode = DEFAULT_MODE } = {}) {
     if (!npc) for (let i = 0; i < START_UNITS; i++) newUnit(state, owner, id);
   });
   return state;
+}
+
+/**
+ * A side's name and colours: an entry of SIDES.
+ * @param {Pick<GameState, 'players'>} state
+ * @param {number} owner
+ */
+export function sideOf(state, owner) {
+  return SIDES[state.players[owner]?.side ?? owner] ?? SIDES[0];
+}
+
+/**
+ * How many players a game seats: its sides, less the Dark Lord.
+ * @param {Pick<GameState, 'players'>} state
+ */
+export function seatsOf(state) {
+  return state.players.filter((p) => !SIDES[p.side]?.npc).length;
 }
 
 /**
@@ -1297,12 +1317,13 @@ export function checkState(board, raw) {
   if (!Number.isSafeInteger(state.rng) || state.rng < 0) fail('bad rng');
   if (!Number.isSafeInteger(state.nextId) || state.nextId < 1) fail('bad nextId');
   const isCount = (/** @type {unknown} */ n, /** @type {number} */ below) => Number.isSafeInteger(n) && Number(n) >= 0 && Number(n) < below;
-  if (!Array.isArray(state.players) || !state.players.every((p, i) => p?.id === i) || state.players.length > SIDES.length) {
+  if (!Array.isArray(state.players) || !state.players.every((p, i) => p?.id === i) || state.players.length > MAX_PLAYERS + 1) {
     return [...problems, 'bad players'];
   }
   if (!Object.hasOwn(MODES, state.mode)) fail('bad mode');
   state.players.forEach((p, i) => {
     if (!Number.isInteger(p.team)) fail(`side ${i}: bad team`);
+    if (!Number.isInteger(p.side) || !SIDES[p.side]) fail(`side ${i}: bad palette`);
     if (!isCount(p.stone, Infinity) || !isCount(p.food, Infinity)) fail(`side ${i}: bad stock`);
     if (!isCount(p.hunger, MAX_HUNGER + 1)) fail(`side ${i}: bad hunger`);
     if (p.lost !== undefined && !isCount(p.lost, state.tick + 1)) fail(`side ${i}: bad lost`);

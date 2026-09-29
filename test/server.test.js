@@ -200,6 +200,12 @@ test('new games are stored with a castle per side, and listed; unknown ones are 
   const ffaGame = await (await fetch(`${base}/api/games/${(await ffa.json()).id}`)).json();
   assert.equal(ffaGame.state.mode, 'ffa');
   assert.equal((await post('/api/games', { token: TOKENS.a, mode: 'solo' })).status, 400);
+  const eight = await post('/api/games', { token: TOKENS.a, players: 8 });
+  assert.equal(eight.status, 201);
+  assert.equal((await (await fetch(`${base}/api/games/${(await eight.json()).id}`)).json()).seats.length, 8);
+  for (const bad of [{ players: 0 }, { players: 9 }, { players: 1, mode: 'ffa' }]) {
+    assert.equal((await post('/api/games', { token: TOKENS.a, ...bad })).status, 400, JSON.stringify(bad));
+  }
   assert.equal(lobby.find((g) => g.id === id)?.tick, 0);
   assert.deepEqual(await (await fetch(`${base}/api/games/${id}/commands`)).json(), []);
 

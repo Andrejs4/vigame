@@ -7,9 +7,9 @@
 import { bounds, key, pixelToAxial } from '../core/hex.js';
 import { BOARD_OPTIONS, TERRAIN, createBoard, tileAt } from '../core/board.js';
 import {
-  capacityOf, castleOf, crewOf, depthOf, foodStore, isDugOut, maxHp, nearStanding, occupancy, upgradeCost,
+  capacityOf, castleOf, crewOf, depthOf, foodStore, isDugOut, maxHp, nearStanding, occupancy, seatsOf, sideOf, upgradeCost,
 } from '../core/game.js';
-import { BUILDING_TYPES, SIDES, SKILLS, TICKS_PER_SECOND, UNIT_LIMIT } from '../core/rules.js';
+import { BUILDING_TYPES, SKILLS, TICKS_PER_SECOND, UNIT_LIMIT } from '../core/rules.js';
 import { serverBase } from './api.js';
 import { Camera } from './camera.js';
 import { BoardRenderer } from './render.js';
@@ -61,6 +61,7 @@ export async function startGame(net, me) {
   stage.hidden = false;
 
   let board = createBoard({ ...BOARD_OPTIONS, seed: 0 });
+  let boardPlayers = 0;
   const camera = new Camera();
   let renderer = new BoardRenderer(canvas, board);
 
@@ -104,8 +105,10 @@ export async function startGame(net, me) {
    * @param {import('./net.js').GameView} next
    */
   function onState(next) {
-    if (next.seed !== board.seed) {
-      board = createBoard({ ...BOARD_OPTIONS, seed: next.seed });
+    const players = seatsOf(next);
+    if (next.seed !== board.seed || players !== boardPlayers) {
+      boardPlayers = players;
+      board = createBoard({ ...BOARD_OPTIONS, seed: next.seed, players });
       renderer = new BoardRenderer(canvas, board);
       renderer.showCoords = showCoords;
       recenter();
@@ -155,16 +158,17 @@ export async function startGame(net, me) {
       const players = view?.players ?? [];
       const standing = [...new Set(players.filter((p) => p.lost === undefined).map((p) => p.team))];
       const winners = standing.length === 1 && players.some((p) => p.lost !== undefined) ? standing[0] : null;
-      const names = players.filter((p) => p.team === winners).map((p) => SIDES[p.id]?.name).join(' and ');
+      const names = players.filter((p) => p.team === winners).map((p) => sideOf({ players }, p.id).name).join(' and ');
       const outcome = winners === null ? '' : seat === null
         ? ` · ${names} won`
         : players[seat]?.team === winners ? ' · you won' : ' · you lost';
       hud.time.textContent = `${formatTime(view?.tick ?? 0)}${paused ? ' · paused' : ''}${outcome}`;
-      hud.time.title = paused ? 'The game waits until both players are here' : '';
+      hud.time.title = paused ? 'The game waits until every player is here' : '';
     }
     if (hud.seat) {
-      hud.seat.textContent = `${me.name} · ${seat === null ? 'Spectator' : SIDES[seat].name}`;
-      hud.seat.style.color = seat === null ? '' : SIDES[seat].accent;
+      const mine = seat !== null && view ? sideOf(view, seat) : null;
+      hud.seat.textContent = `${me.name} · ${mine ? mine.name : 'Spectator'}`;
+      hud.seat.style.color = mine ? mine.accent : '';
     }
     if (hud.units) {
       hud.units.textContent = seat !== null && occ ? `${occ.unitCount[seat] ?? 0} / ${UNIT_LIMIT}` : '—';
@@ -177,7 +181,7 @@ export async function startGame(net, me) {
       const b = selected ? view?.buildings[selected] : null;
       if (b) {
         hud.selection.textContent = describe(b);
-        hud.selection.style.color = SIDES[b.owner]?.accent ?? '';
+        hud.selection.style.color = view ? sideOf(view, b.owner).accent : '';
       } else {
         hud.selection.textContent = 'none';
         hud.selection.style.color = '';

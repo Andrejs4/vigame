@@ -26,7 +26,7 @@ import { ErrorCode, Room, ServerError, logger } from '@colyseus/core';
 
 import { BOARD_OPTIONS, createBoard, tileAt } from '../src/core/board.js';
 import { advance, applyCommand, checkState, newGame, publicView } from '../src/core/game.js';
-import { SEATS, TICKS_PER_SECOND } from '../src/core/rules.js';
+import { DEFAULT_MODE, MODES, TICKS_PER_SECOND } from '../src/core/rules.js';
 import { GameState, ViewerState, syncGame, syncSeats } from './schema.js';
 
 /** What a player token must look like: long, random, URL-safe. */
@@ -85,12 +85,13 @@ export function replay(board, game, commands, seq = 0) {
  * @param {(after: number) => import('./storage.js').SavedCommand[]} commandsAfter
  */
 export function restoreGame(saved, commandsAfter) {
-  const board = createBoard({ ...BOARD_OPTIONS, seed: saved.seed });
+  const board = createBoard({ ...BOARD_OPTIONS, seed: saved.seed, players: saved.seats.length });
   if (checkState(board, saved.state).length === 0) {
     const game = /** @type {import('../src/core/game.js').GameState} */ (saved.state);
     return { board, game, seq: replay(board, game, commandsAfter(saved.seq), saved.seq) };
   }
-  const game = newGame(board);
+  const mode = /** @type {any} */ (saved.state)?.mode;
+  const game = newGame(board, { mode: Object.hasOwn(MODES, mode) ? mode : DEFAULT_MODE });
   return { board, game, seq: replay(board, game, commandsAfter(0)) };
 }
 
@@ -214,7 +215,7 @@ export class GameRoom extends Room {
     this.seq = seq;
     this.snapshotAt = game.tick;
     /** @type {Array<string | null>} */
-    this.seats = Array.from({ length: SEATS }, (_, i) => saved.seats[i] ?? null);
+    this.seats = saved.seats.map((pid) => pid ?? null);
 
     const state = new GameState();
     syncGame(state, publicView(game));

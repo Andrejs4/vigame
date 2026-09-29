@@ -29,7 +29,7 @@ import express from 'express';
 import { BOARD_OPTIONS, createBoard } from '../src/core/board.js';
 import { newGame } from '../src/core/game.js';
 import { cleanPlayerName } from '../src/core/player.js';
-import { DEFAULT_MODE, MODES, SEATS, TICKS_PER_SECOND } from '../src/core/rules.js';
+import { DEFAULT_MODE, DEFAULT_PLAYERS, MAX_PLAYERS, MIN_PLAYERS, MODES, TICKS_PER_SECOND } from '../src/core/rules.js';
 import { createChallenges } from './challenge.js';
 import { gameRoom, isToken, playerId, signedIn } from './room.js';
 import { openStorage } from './storage.js';
@@ -44,13 +44,13 @@ const GAME_ID = /^[\w-]{1,64}$/;
 /**
  * Start a new game and store it.
  * @param {import('./storage.js').Storage} storage
- * @param {{ seed?: number, mode?: string }} [options]
+ * @param {{ seed?: number, mode?: string, players?: number }} [options]
  * @returns {string} The new game's id.
  */
-export function startGame(storage, { seed = randomInt(1, 2 ** 31), mode = DEFAULT_MODE } = {}) {
+export function startGame(storage, { seed = randomInt(1, 2 ** 31), mode = DEFAULT_MODE, players = DEFAULT_PLAYERS } = {}) {
   const id = randomBytes(6).toString('base64url');
-  const state = newGame(createBoard({ ...BOARD_OPTIONS, seed }), { mode });
-  storage.createGame({ id, seed, state, seats: Array.from({ length: SEATS }, () => null) });
+  const state = newGame(createBoard({ ...BOARD_OPTIONS, seed, players }), { mode });
+  storage.createGame({ id, seed, state, seats: Array.from({ length: players }, () => null) });
   return id;
 }
 
@@ -128,8 +128,13 @@ export async function startGameServer({
       app.post('/api/games', (req, res) => {
         if (!signedIn(storage, req.body?.token)) return void res.status(401).json({ error: 'sign in first' });
         const mode = req.body?.mode ?? DEFAULT_MODE;
+        const players = req.body?.players ?? DEFAULT_PLAYERS;
         if (typeof mode !== 'string' || !Object.hasOwn(MODES, mode)) return void res.status(400).json({ error: 'unknown mode' });
-        res.status(201).json({ id: startGame(storage, { mode }) });
+        if (!Number.isInteger(players) || players < MIN_PLAYERS || players > MAX_PLAYERS) {
+          return void res.status(400).json({ error: `players must be ${MIN_PLAYERS} to ${MAX_PLAYERS}` });
+        }
+        if (mode === 'ffa' && players < 2) return void res.status(400).json({ error: 'free for all needs two players' });
+        res.status(201).json({ id: startGame(storage, { mode, players }) });
       });
       app.get('/api/games', (_req, res) => {
         /** @type {Map<string, string>} */
