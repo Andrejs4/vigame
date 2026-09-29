@@ -10,11 +10,13 @@ The core is `src/core/game.js`, with its numbers in `src/core/rules.js` and the 
 `src/core/board.js`. It is the whole game as one plain JSON object, plus the
 functions that change it:
 
-- `newGame(board)`: the opening position, a castle per side with its first units.
+- `newGame(board, { mode })`: the opening position: a castle per player
+  with its first units, and in cooperation the Dark Lord's lair.
 - `applyCommand(board, state, side, command)`: what a player does (build,
   choose a building's crew, upgrade, move a wagon). It checks everything
   first and either changes the state or refuses with a reason.
-- `advance(board, state)`: one tick of time (work, wagons, walking).
+- `advance(board, state)`: one tick of time (fighting, food, work, wagons,
+  walking).
 - `occupancy(state)`, `crewOf(state, id)`: what is where, and who works
   where, worked out from the state.
 - `checkState(board, state)`: every broken invariant, if any.
@@ -197,7 +199,7 @@ way before they take effect.
 - **Joining**: the page joins with `joinOrCreate('game', { gameId, token })`.
   Colyseus sends everyone asking for one game to the same room; the room
   also refuses to open a game that already has a room in this process.
-- **The first two players** take the seats. A seat belongs to the player,
+- **The first players to join** take the seats, as many as the game has. A seat belongs to the player,
   not the connection: it survives reloads, leaving, and the room closing,
   until the player releases it.
 - **A dropped connection** keeps its place, and the clock keeps running, for

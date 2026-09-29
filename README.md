@@ -5,8 +5,9 @@ Each side has a castle, home to its units, who raise new ones. Players
 build towers, wagons, pits and farms and choose each one's crew from their
 named units, who walk there and get better at the work. Pits dig stone,
 which pays for towers, farms and upgrades; castles and farms grow food.
-There is no combat yet: the structure is in place, and the rules and
-numbers are placeholders.
+Units in buildings and bands fight whatever enemy comes in reach, either
+together against the Dark Lord or each side for itself. The rules work
+end to end; the numbers are placeholders.
 
 The game core is plain data and pure functions (`src/core/`), with no
 screen, network or clock of its own. The game server runs it, and tests play
@@ -25,7 +26,11 @@ Run `npm start` and open http://127.0.0.1:2567.
 - **The lobby** lists your games and games with a free seat; **New game**
   starts one for 1 to 8 players (2 by default), on a map that grows with
   them (18 × 12 cells for two, 36 × 24 for eight), castles in a ring
-  around the middle. It starts in either mode:
+  around the middle. A game's address (`?game=…`) is also the link to send
+  someone. Players who join take the seats in order (Blue, Crimson, Green,
+  Gold, Teal, Orange, Rose, Silver); once they are full, visitors watch.
+  **Release seat** frees a seat for a spectator to take. A game is in
+  either mode:
   - **Cooperation** (the default): all the players are one team against the
     Dark Lord, whose lair (6000 hit points) stands in the middle of the map
     and strikes the nearest enemy within 4 cells by itself, 20 hit points a
@@ -33,13 +38,11 @@ Run `npm start` and open http://127.0.0.1:2567.
     buildings. The players win when the lair falls, and lose when all
     their castles have. One player alone is a game too.
   - **Free for all** (two players or more): each against the others; the
-    middle of the map is left empty. A game's address (`?game=…`) is also the link to
-  send someone. The first two players take Blue and Crimson; later visitors
-  watch. **Release seat** frees a seat for a spectator to take.
+    middle of the map is left empty.
 - **The game clock** runs only while every player is here. (`npm run dev`
   runs it with one, for trying things alone.)
-- **Your castle** covers seven cells and is its side's life (nothing can
-  attack it yet). It is every unit's home, and starts with 12. The units at
+- **Your castle** covers seven cells and is its side's life: when it falls,
+  your side has lost. It is every unit's home, and starts with 12. The units at
   home raise new ones: the more of them, and the better they breed, the
   sooner. It takes in all its units, however many, but stops breeding
   while it holds more than its room.
@@ -51,8 +54,10 @@ Run `npm start` and open http://127.0.0.1:2567.
   building, ranged and close combat, and a killing blow most). A skill
   can't pass the unit's level; it climbs faster than the level, then waits
   for it. Each level takes 1.1 times the work of the one before, so the
-  last ones are all but out of reach. Only breeding, building, farming and
-  running do anything yet.
+  last ones are all but out of reach. Every skill counts: breeding speeds
+  the castle's births, building digging and mending, farming the harvest,
+  running walking, and ranged attack and close combat the damage and kill
+  chance of a unit's strikes.
 - **Crews**: units walk only when they're given to a building's crew or sent
   home. Select one of your buildings and press **Crew…** for a list of your
   units: tick up to what it holds. Those you untick go home; those you tick
@@ -96,14 +101,15 @@ Run `npm start` and open http://127.0.0.1:2567.
   open or in a band take every strike. A strike kills a unit with a chance
   set by the striker's skill against the unit's level: 10% when they
   match, up to 50% at most, and under 1% once the unit is 50 levels ahead
-  (a stand-in until units get their dice).
+  (a stand-in until units get their dice). The strike that brings a
+  building down or kills a unit is a killing blow, worth 600 experience.
+  Units walking in the open don't strike; only those inside a building or
+  band do.
 - **Targets**: select one of your buildings, press **Attack…**, then click
   an enemy building. A building that can't move strikes its target while it
   is in reach, and the nearest enemy otherwise; a wagon or band goes after
   it until it's close enough for close combat. Driving a wagon or band by
-  hand drops its target. The strike
-  that brings a building down or kills a unit is a killing blow, worth 600
-  experience.
+  hand drops its target.
 - **Losing**: a side whose castle falls has lost, and can give no more
   commands; its units stay and still fight from wherever they are. A team
   wins once no other team has a castle (or lair) standing.
@@ -217,15 +223,20 @@ http://127.0.0.1:2567;` with the same headers.
 
 ```js
 {
-  version: 1, seed: 1337, tick: 420, rng: 123456789, nextId: 58,
-  players: [{ id: 0, stone: 140, food: 620, hunger: 0 }, { id: 1, stone: 200, food: 300, hunger: 5 }],
+  version: 6, mode: 'coop', seed: 1337, tick: 420, rng: 123456789, nextId: 58,
+  players: [                                                // by owner number
+    { id: 0, side: 0, team: 0, stone: 140, food: 620, hunger: 0 },
+    { id: 1, side: 1, team: 0, stone: 200, food: 300, hunger: 5 },
+    { id: 2, side: 8, team: 1, stone: 0, food: 0, hunger: 0 },  // the Dark Lord
+  ],
   buildings: {
     b1: { id: 'b1', owner: 0, type: 'castle', grade: 1, q: 2, r: 5, hp: 2000,
           work: 5200 },                                      // toward the next unit
     b30: { id: 'b30', owner: 0, type: 'pit', grade: 1, q: 5, r: 3, hp: 800,
            work: 1200, dug: 47 },                            // 47 stone so far: depth 2
-    b31: { id: 'b31', owner: 0, type: 'wagon', grade: 1, q: 6, r: 4, hp: 300,
-           path: [[7, 4], [8, 4]], since: 410, until: 430 }, // rolling to 7,4
+    b31: { id: 'b31', owner: 0, type: 'wagon', grade: 1, q: 6, r: 4, hp: 280,
+           path: [[7, 4], [8, 4]], since: 410, until: 430,  // rolling to 7,4
+           target: 'b27', mend: 40 },                       // after b27; being mended
   },
   units: {
     u3: { id: 'u3', owner: 0, name: 'Hawise Reeve', level: 4, xp: 120,
@@ -239,7 +250,8 @@ http://127.0.0.1:2567;` with the same headers.
 }
 ```
 
-- The map isn't stored: every client builds it from `seed`.
+- The map isn't stored: every client builds it from `seed` and the number
+  of players.
 - Time is ticks, ten a second. Movement is a route plus the ticks it set off
   and arrives at its next cell, so a unit's record changes once per cell,
   not every tick, and a screen draws it between cells by the clock.
@@ -251,10 +263,11 @@ http://127.0.0.1:2567;` with the same headers.
   - `{ type: 'build', kind, q, r, units? }`: a tower, wagon, pit, farm or band, with a crew if `units` lists one;
   - `{ type: 'crew', building, units }`: that building's whole crew (`[]` sends them all home);
   - `{ type: 'upgrade', building }`;
-  - `{ type: 'move', building, q, r }`: a wagon.
-- `advance(board, state)` runs one tick: collapses, every minute food and a
-  meal, empty bands breaking up, work in castles, pits and farms, wagons
-  and bands, walking.
+  - `{ type: 'move', building, q, r }`: a wagon or band;
+  - `{ type: 'target', building, target }`: an enemy building to go for (`''` clears it).
+- `advance(board, state)` runs one tick: every second a round of fighting,
+  collapses, every minute food and a meal, empty bands breaking up, mending
+  and work in castles, pits and farms, wagons and bands, walking.
 - The core never reads the clock or `Math.random`; dice come from `rng`. The
   same commands at the same ticks always give the same game, which the
   server's saves and a future simulation harness rely on.
@@ -299,8 +312,8 @@ HTTP API:
 | `POST /api/me` | Who a token belongs to: `{ token }` gives `{ pid, name }`, or `null` if it hasn't signed in. |
 | `GET /api/challenge` | A sum to answer when signing in: `{ id, question }`. Each one answers once and lasts 10 minutes. |
 | `POST /api/players` | Signs in (or renames): `{ token, name, challenge, answer }` gives `{ pid, name }`. `400` for a bad token or name, `403` for a wrong answer. |
-| `POST /api/games` | Starts a game with a random map: `{ token }` of a signed-in player gives `201 { id }`, otherwise `401`. |
-| `GET /api/games` | The 50 most recently active games, for the lobby, with who holds each seat: `{ pid, name }` or `null`. |
+| `POST /api/games` | Starts a game with a random map: `{ token, mode?, players? }` of a signed-in player (`mode` `coop` or `ffa`, `players` 1 to 8; by default a cooperation game for two) gives `201 { id }`; `401` if not signed in, `400` for a bad mode or number. |
+| `GET /api/games` | The 50 most recently active games, for the lobby, with their mode and who holds each seat: `{ pid, name }` or `null`. |
 | `GET /api/games/:id` | One game: its seed, latest snapshot and seats. |
 | `GET /api/games/:id/commands` | Its command log, with each command's tick. |
 
@@ -317,12 +330,17 @@ opening position.
 [docs/architecture.md](docs/architecture.md) covers the design and what
 comes next.
 
-- Combat is a first cut: a unit dies to a single lucky strike until units
-  get their dice, and only buildings can be picked as targets. A fallen castle loses the game, but the other side's
-  buildings and units stay on the map.
-- There is no dark metal yet.
-- Of the six skills, ranged attack and close combat do nothing yet; towers
-  and wagons hold crews but give them nothing to do. Towers don't repair.
+- Combat is a first cut:
+  - Units walking in the open never strike back; only units inside a
+    building or band fight.
+  - A unit dies to a single lucky strike until units get their dice.
+  - Only buildings can be picked as targets, not bands or single units.
+- The Dark Lord only has his lair: it strikes whatever comes within 4
+  cells, but he builds nothing, raises no units and never attacks.
+- A won game doesn't end: the clock keeps running, a defeated side's units
+  stay and still fight, and the lobby doesn't mark finished games.
+- There is no dark metal yet (it is to come from killing monsters), and
+  food has no use beyond keeping hunger down.
 - A simulation harness: the core can already play games with no players (the
   tests do), but there are no bots or reports yet.
 - Game server:
