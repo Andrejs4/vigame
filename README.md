@@ -168,6 +168,12 @@ Run `npm start` and open http://127.0.0.1:2567.
   clears the selection.
 - Every viewer's picked hex shows as a ring: solid for yours, dashed for
   others.
+- A building shows its hit points in a bar over it while it is hurt or
+  selected. A hit flashes it red and floats up the points lost; a building
+  that falls crumbles, and a unit that dies leaves a cross (with how many,
+  when several die inside a building). The page works these out by comparing
+  each update from the server with the one before, so they are its best
+  guess: the server doesn't say who struck whom.
 
 ## Working on it
 
@@ -214,6 +220,7 @@ have one, install it with `npx playwright install chromium`.
 | `src/client/net.js` | The connection to a game on the server. |
 | `src/client/camera.js`, `render.js` | Pan and zoom, and the canvas renderer: terrain, buildings, marching units between cells, picks, hover. |
 | `src/client/minimap.js` | The minimap: a few pixels a cell, repainted at most twice a second and only when a pixel changes. |
+| `src/client/effects.js` | Hits, falls and deaths, worked out from each update and the one before, for the renderer to play. |
 | `server/app.js` | The game server: Colyseus, the HTTP API, the page's files, the monitor. |
 | `server/room.js` | `GameRoom`, one per game: runs the core's clock, logs and applies commands, snapshots. |
 | `server/schema.js` | The room state Colyseus syncs: a generic mirror of the core's view. |
@@ -382,6 +389,8 @@ comes next.
   rules; he builds nothing, raises no units and spends no dark metal.
   Raiders only wander.
 - Food has no use beyond keeping hunger down; dark metal only buys wagons.
+- Graphics are shapes and letters, with no pictures yet, and combat shows
+  hits but not who struck them.
 - A simulation harness: the core can already play games with no players (the
   tests do), but there are no bots or reports yet.
 - Game server:

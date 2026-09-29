@@ -98,6 +98,7 @@ commands.
 | `client/net.js` | The connection to a game: commands out, the core's view in. |
 | `client/camera.js`, `render.js` | Pan and zoom, and canvas drawing. The renderer sits behind a small interface so PixiJS can replace it. |
 | `client/minimap.js` | The whole board at a few pixels a cell; pressing it moves the camera. |
+| `client/effects.js` | Hits, falls and deaths, inferred by comparing each update with the one before: the server sends states, not events. |
 
 - **No prediction.** A command takes effect on the server's next tick, a
   tenth of a second at most, which is normal for a strategy game.

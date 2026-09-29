@@ -405,6 +405,28 @@ async function threeBrowsers(browser, url, { full, label }) {
   assert.ok(bb > br + 25, `Blue's castle is not blue (${br}, ${bb})`);
   assert.ok(cr > cb + 25, `Crimson's castle is not red (${cr}, ${cb})`);
 
+  // Effects, made up from the last update as if Crimson's castle was hit, a
+  // tower fell and a unit died: they draw, then stop.
+  const played = await a.evaluate(async () => {
+    const g = /** @type {any} */ (window).__vigame;
+    const view = g.view;
+    const castle = Object.values(view.buildings).find((b) => b.type === 'castle' && b.owner === 1);
+    const prev = {
+      ...view,
+      buildings: { ...view.buildings, ghost: { id: 'ghost', type: 'tower', owner: 1, grade: 1, hp: 0, q: castle.q + 3, r: castle.r } },
+      units: { ...view.units, ghost: { id: 'ghost', owner: 0, name: 'Ghost', level: 1, q: castle.q - 3, r: castle.r } },
+    };
+    const next = { ...view, buildings: { ...view.buildings, [castle.id]: { ...castle, hp: castle.hp - 40 } } };
+    g.effects.update(prev, next, performance.now());
+    return g.effects.list.map((e) => e.kind).sort();
+  });
+  assert.deepEqual(played, ['death', 'fall', 'hit']);
+  await a.waitForTimeout(250);
+  await a.screenshot({ path: join(OUT, 'effects.png') });
+  await a.waitForTimeout(1200);
+  await frames(a);
+  assert.equal(await a.evaluate(() => /** @type {any} */ (window).__vigame.effects.list.length), 0, 'effects did not stop');
+
   // A drag pans rather than clicks.
   const camBefore = await a.evaluate(() => ({ .../** @type {any} */ (window).__vigame.camera }));
   await a.mouse.move(640, 420);

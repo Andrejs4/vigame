@@ -12,6 +12,7 @@ import {
 import { BUILDING_TYPES, SKILLS, TICKS_PER_SECOND, UNIT_LIMIT } from '../core/rules.js';
 import { serverBase } from './api.js';
 import { Camera } from './camera.js';
+import { Effects } from './effects.js';
 import { Minimap } from './minimap.js';
 import { BoardRenderer } from './render.js';
 
@@ -82,6 +83,10 @@ export async function startGame(net, me) {
   let occ = null;
   /** Whether anything is on the move, so the board must be redrawn every frame. */
   let moving = false;
+  /** Hits, falls and deaths, worked out from each update and the one before. */
+  const effects = new Effects();
+  /** Whether an effect played last frame, so the frame after the last one clears it. */
+  let playing = false;
   /** @type {{ q: number, r: number } | null} */
   let hover = null;
   /** @type {Array<import('./net.js').NetPeer>} */
@@ -123,6 +128,7 @@ export async function startGame(net, me) {
       minimap = new Minimap(mapCanvas, mapFrame, board);
       recenter();
     }
+    effects.update(view, next, performance.now());
     view = next;
     minimap.show(next);
     occ = occupancy(next);
@@ -660,9 +666,11 @@ export async function startGame(net, me) {
     // board from ever redrawing again.
     requestAnimationFrame(frame);
     minimap.paint(time);
-    if (!needsDraw && !moving) return;
+    const played = playing;
+    playing = effects.playing(time);
+    if (!needsDraw && !moving && !playing && !played) return;
     needsDraw = false;
-    renderer.draw({ camera, view, clock: net.clock(), selected, highlights, hover, peers });
+    renderer.draw({ camera, view, clock: net.clock(), selected, highlights, hover, peers, effects, now: time });
     minimap.frameView(camera, viewW, viewH);
   }
 
@@ -691,6 +699,7 @@ export async function startGame(net, me) {
       get highlights() { return [...highlights]; },
       get peers() { return peers; },
       get minimap() { return minimap; },
+      effects,
       net,
       camera,
       forceDraw: () => { needsDraw = true; },
