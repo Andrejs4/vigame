@@ -181,7 +181,9 @@ export const RAID_ROAM = 4;
 /**
  * The Dark Lord's horde. From HORDE_START, every HORDE_PERIOD his lair sends
  * out a wave, each bigger than the last: wave n is ceil(n / 2) ghouls and
- * floor(n / 3) ogres, as long as he has fewer than HORDE_MAX out. They cost
+ * floor(n / 3) ogres, as long as he has fewer than HORDE_MAX out. With more
+ * than two players, waves and HORDE_MAX grow by the square root of
+ * players / 2: twice as big at eight. They cost
  * him nothing, and hunt by themselves (`hunts` on a building type).
  */
 export const HORDE_START = 2 * 60 * TICKS_PER_SECOND;
@@ -248,6 +250,9 @@ export const REPAIR_WORK = 100;
  * @property {number} [through] The share of strikes on it that reach a unit
  *   inside instead: none for a castle, tower or wagon.
  * @property {boolean} [life] Its side's life: when it falls, the side has lost.
+ * @property {boolean} [scales] The Dark Lord's: its hit points grow with the
+ *   number of players, by players / 2 (never less than for two), so four
+ *   times at eight (`lordScale` in game.js).
  * @property {boolean} [hunts] One of the Dark Lord's horde, which moves and
  *   fights by itself: it goes for the nearest enemy farm, or castle once no
  *   farm is left; it turns on any building that strikes it, and on the
@@ -269,7 +274,7 @@ export const BUILDING_TYPES = {
     raise: 12000,
   },
   wagon: {
-    name: 'Wagon', size: 1, capacity: 10, grades: 1, hp: 300, build: true, cost: 0, metal: 15, nearCastle: true,
+    name: 'Wagon', size: 1, capacity: 15, grades: 1, hp: 300, build: true, cost: 0, metal: 15, nearCastle: true,
     skill: 'melee', speed: 2 * TICKS_PER_SECOND, raise: 9000,
   },
   pit: {
@@ -282,7 +287,7 @@ export const BUILDING_TYPES = {
   },
   lair: {
     name: 'Lair', size: 7, capacity: 0, grades: 1, hp: 6000, build: false, cost: 0,
-    skill: 'melee', life: true, attack: { damage: 20, skill: 30, reach: 4 },
+    skill: 'melee', life: true, attack: { damage: 20, skill: 30, reach: 4 }, scales: true,
   },
   raider: {
     name: 'Raider', size: 1, capacity: 0, grades: 1, hp: 300, build: false, cost: 0,
@@ -290,11 +295,11 @@ export const BUILDING_TYPES = {
   },
   ghoul: {
     name: 'Ghoul', size: 1, capacity: 0, grades: 1, hp: 120, build: false, cost: 0,
-    skill: 'melee', speed: TICKS_PER_SECOND, attack: { damage: 6, skill: 10, reach: 1 }, loot: 2, hunts: true,
+    skill: 'melee', speed: TICKS_PER_SECOND, attack: { damage: 6, skill: 10, reach: 1 }, loot: 2, hunts: true, scales: true,
   },
   ogre: {
     name: 'Ogre', size: 1, capacity: 0, grades: 1, hp: 600, build: false, cost: 0,
-    skill: 'melee', speed: 4 * TICKS_PER_SECOND, attack: { damage: 25, skill: 30, reach: 1 }, loot: 6, hunts: true,
+    skill: 'melee', speed: 4 * TICKS_PER_SECOND, attack: { damage: 25, skill: 30, reach: 1 }, loot: 6, hunts: true, scales: true,
   },
   band: {
     name: 'Band', size: 1, capacity: 30, grades: 1, hp: 0, build: true, cost: 0,

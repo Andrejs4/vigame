@@ -192,8 +192,10 @@ export function newGame(board, { mode = DEFAULT_MODE } = {}) {
     });
     const id = newId(state, 'b');
     const type = npc ? 'lair' : 'castle';
-    const hp = BUILDING_TYPES[type].hp;
-    state.buildings[id] = { id, owner, type, grade: 1, q: start.q, r: start.r, hp, ...(npc ? {} : { work: 0 }) };
+    /** @type {Building} */
+    const b = { id, owner, type, grade: 1, q: start.q, r: start.r, hp: 0, ...(npc ? {} : { work: 0 }) };
+    b.hp = maxHp(state, b); // the lair comes last, once every player is counted
+    state.buildings[id] = b;
     if (!npc) for (let i = 0; i < START_UNITS; i++) newUnit(state, owner, id);
   });
   // The raiders: a side of their own, against everyone, with nothing yet.
@@ -331,11 +333,24 @@ export function capacityOf(b) {
 }
 
 /**
- * A building's hit points when unharmed: half while it is going up.
+ * How much stronger the Dark Lord is for the number of players: players / 2,
+ * never less than 1, so 4 at eight players. His buildings' hit points grow
+ * by it, and his waves by its square root.
+ * @param {Pick<GameState, 'players'>} state
+ */
+export function lordScale(state) {
+  return Math.max(1, seatsOf(state) / 2);
+}
+
+/**
+ * A building's hit points when unharmed: half while it is going up, and
+ * more for the Dark Lord's with more players (`lordScale`).
+ * @param {Pick<GameState, 'players'>} state
  * @param {Building} b
  */
-export function maxHp(b) {
-  const full = BUILDING_TYPES[b.type].hp * b.grade;
+export function maxHp(state, b) {
+  const type = BUILDING_TYPES[b.type];
+  const full = Math.round(type.hp * b.grade * (type.scales ? lordScale(state) : 1));
   return isRising(b) ? Math.ceil(full / 2) : full;
 }
 
@@ -810,7 +825,7 @@ function build(board, state, occ, player, cmd) {
   /** @type {Building} */
   const b = { id: `b${state.nextId}`, owner: player, type: kind, grade: 1, q: at.q, r: at.r };
   if (type.raise) b.raised = 0;
-  if (type.hp) b.hp = maxHp(b);
+  if (type.hp) b.hp = maxHp(state, b);
   if (type.work !== undefined) b.work = 0;
   if (type.depth !== undefined) b.dug = 0;
   // Crew the new building before it exists, so a crew that can't get there
@@ -1241,16 +1256,20 @@ function summon(board, state) {
   const lair = lord && Object.values(state.buildings).find((b) => b.owner === lord.id && b.type === 'lair');
   if (!lord || !lair) return;
   const wave = (state.tick - HORDE_START) / HORDE_PERIOD + 1;
+  const more = (/** @type {number} */ n) => Math.round(n * Math.sqrt(lordScale(state))); // twice at eight players
   const out = Object.values(state.buildings).filter((b) => b.owner === lord.id && BUILDING_TYPES[b.type].hunts).length;
-  const kinds = [...Array(Math.ceil(wave / 2)).fill('ghoul'), ...Array(Math.floor(wave / 3)).fill('ogre')]
-    .slice(0, Math.max(0, HORDE_MAX - out));
+  const kinds = [...Array(more(Math.ceil(wave / 2))).fill('ghoul'), ...Array(more(Math.floor(wave / 3))).fill('ogre')]
+    .slice(0, Math.max(0, more(HORDE_MAX) - out));
   const taken = occupancy(state).buildingAt;
   const free = board.list.filter((t) => t.passable && !taken.has(key(t.q, t.r)) && distance(t, lair) >= 2 && distance(t, lair) <= 3);
   for (const kind of kinds) {
     if (!free.length) return;
     const [cell] = free.splice(Math.floor(random(state) * free.length), 1);
     const id = newId(state, 'b');
-    state.buildings[id] = { id, owner: lord.id, type: kind, grade: 1, q: cell.q, r: cell.r, hp: BUILDING_TYPES[kind].hp };
+    /** @type {Building} */
+    const b = { id, owner: lord.id, type: kind, grade: 1, q: cell.q, r: cell.r, hp: 0 };
+    b.hp = maxHp(state, b);
+    state.buildings[id] = b;
   }
 }
 
@@ -1313,7 +1332,7 @@ export function isDugOut(b) {
 function mend(state, occ) {
   for (const b of Object.values(state.buildings)) {
     const inside = /** @type {string[]} */ (occ.inside.get(b.id));
-    if (b.hp === undefined || b.hp <= 0 || b.hp >= maxHp(b) || !inside.length) continue;
+    if (b.hp === undefined || b.hp <= 0 || b.hp >= maxHp(state, b) || !inside.length) continue;
     let done = b.mend ?? 0;
     for (const id of inside) {
       const u = state.units[id];
@@ -1321,8 +1340,8 @@ function mend(state, occ) {
       done += WORK_BASE + u.skills.build;
       practise(u, 'build');
     }
-    b.hp = Math.min(maxHp(b), b.hp + Math.floor(done / REPAIR_WORK));
-    if (b.hp < maxHp(b)) b.mend = done % REPAIR_WORK;
+    b.hp = Math.min(maxHp(state, b), b.hp + Math.floor(done / REPAIR_WORK));
+    if (b.hp < maxHp(state, b)) b.mend = done % REPAIR_WORK;
     else delete b.mend;
   }
 }
@@ -1345,7 +1364,7 @@ function raise(state, occ) {
     const rising = isRising(b);
     if (!rising && b.upgrading === undefined) continue;
     const inside = /** @type {string[]} */ (occ.inside.get(b.id));
-    if (!inside.length || /** @type {number} */ (b.hp) < maxHp(b)) continue;
+    if (!inside.length || /** @type {number} */ (b.hp) < maxHp(state, b)) continue;
     busy.add(b.id);
     let done = /** @type {number} */ (rising ? b.raised : b.upgrading);
     for (const id of inside) {
@@ -1360,9 +1379,9 @@ function raise(state, occ) {
       continue;
     }
     if (rising) {
-      const half = maxHp(b);
+      const half = maxHp(state, b);
       delete b.raised;
-      b.hp = /** @type {number} */ (b.hp) + maxHp(b) - half;
+      b.hp = /** @type {number} */ (b.hp) + maxHp(state, b) - half;
     } else {
       delete b.upgrading;
       b.grade += 1;
@@ -1409,7 +1428,7 @@ function work(board, state, occ) {
     if (type.yields === 'unit' && (inside.length >= capacityOf(b) || occ.unitCount[b.owner] >= UNIT_LIMIT)) continue;
     // Its units mend it while it is damaged and work on an upgrade while
     // there is one; what it does by itself goes on.
-    const elsewhere = b.upgrading !== undefined || busy.has(b.id) || (b.hp !== undefined && b.hp < maxHp(b));
+    const elsewhere = b.upgrading !== undefined || busy.has(b.id) || (b.hp !== undefined && b.hp < maxHp(state, b));
     const workers = elsewhere ? [] : inside;
     if (!workers.length && !type.idleWork) continue;
 
@@ -1667,7 +1686,7 @@ export function checkState(board, raw) {
     if (b.upgrading !== undefined && !(type.raise && b.raised === undefined && b.grade < type.grades && isCount(b.upgrading, raiseWork(b)))) {
       fail(`building ${id}: bad upgrading`);
     }
-    if (type.hp ? !(Number.isSafeInteger(b.hp) && b.hp >= 1 && b.hp <= maxHp(b)) : b.hp !== undefined) {
+    if (type.hp ? !(Number.isSafeInteger(b.hp) && b.hp >= 1 && b.hp <= maxHp(state, b)) : b.hp !== undefined) {
       fail(`building ${id}: bad hp`);
     }
     if (b.mend !== undefined && !(type.hp && isCount(b.mend, REPAIR_WORK))) fail(`building ${id}: bad mend`);

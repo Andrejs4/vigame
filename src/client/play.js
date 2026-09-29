@@ -254,7 +254,7 @@ export async function startGame(net, me) {
       if (type.depth !== undefined) parts.push(isDugOut(b) ? 'dug out' : `depth ${depthOf(b)}/${type.depth}, ${b.dug} stone`);
       if (type.yields === 'food') parts.push(`next food ${done}`);
     }
-    if (b.hp !== undefined) parts.push(`HP ${b.hp}/${maxHp(b)}`);
+    if (b.hp !== undefined && view) parts.push(`HP ${b.hp}/${maxHp(view, b)}`);
     const target = b.target ? view?.buildings[b.target] : null;
     if (target) parts.push(`attacking the ${BUILDING_TYPES[target.type].name.toLowerCase()}`);
     return parts.join(' · ');

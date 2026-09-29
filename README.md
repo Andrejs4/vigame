@@ -42,8 +42,11 @@ Run `npm start` and open http://127.0.0.1:2567.
     cost him nothing. Each goes for the nearest farm, and for a castle once
     no farm is left; it turns on any building that strikes it, and on the
     nearest one when its way is blocked. Bringing one down yields 2 dark
-    metal (a ghoul) or 6 (an ogre). Whatever dark metal the Dark Lord
-    collects he keeps, and does nothing with yet. Allies never strike each
+    metal (a ghoul) or 6 (an ogre). With more than two players he grows:
+    his lair's and his horde's hit points by players / 2 (four times at
+    eight), and his waves and their cap by the square root of that (twice
+    at eight). Whatever dark metal the Dark Lord collects he keeps, and
+    does nothing with yet. Allies never strike each
     other and pass through each other's buildings. The players win when the lair falls, and lose when all
     their castles have. One player alone is a game too.
   - **Free for all** (two players or more): each against the others; the
@@ -146,7 +149,7 @@ Run `npm start` and open http://127.0.0.1:2567.
   one per player. The side that brings one down gets 10 dark metal: the
   only way to get it, and what wagons are built with.
 - **Wagons** are buildings that move. Select one, then click a cell to drive
-  it there, two seconds a cell; its crew rides along inside. Wagons can't
+  it there, two seconds a cell; its crew, up to 15, rides along inside. Wagons can't
   pass through other buildings, each other included: a blocked wagon waits,
   then looks for another way, and stops if there is none. Whoever brings a
   wagon down (another player, the Dark Lord, raiders) gets half its price in

@@ -530,6 +530,25 @@ test('in cooperation the Dark Lord\'s lair sends out ever bigger waves of ghouls
   assert.ok(!Object.values(alone.buildings).some((b) => BUILDING_TYPES[b.type].hunts), 'no horde without the Dark Lord');
 });
 
+test('the Dark Lord grows with the players: four times the hit points and twice the waves at eight', () => {
+  const lairOf = (/** @type {number} */ players) => Object.values(newGame(createBoard({ ...BOARD_OPTIONS, seed: 3, players })).buildings)
+    .find((b) => b.type === 'lair');
+  assert.equal(lairOf(2)?.hp, BUILDING_TYPES.lair.hp);
+  assert.equal(lairOf(8)?.hp, 4 * BUILDING_TYPES.lair.hp);
+
+  // Eight seats around a lair of the Dark Lord's, only one of them with a castle.
+  const board = openBoard(9);
+  const game = stateWith([{ id: 'b1', type: 'castle', q: -8, r: 0 }, { id: 'b2', owner: 1, type: 'lair', q: 3, r: 0 }]);
+  game.players[1].side = DARK_LORD;
+  for (let side = 1; side <= 7; side++) {
+    game.players.push({ id: game.players.length, side, team: 0, stone: 0, metal: 0, food: 0, hunger: 0 });
+  }
+  game.buildings.b2.hp = 4 * BUILDING_TYPES.lair.hp;
+  run(board, game, HORDE_START);
+  const horde = Object.values(game.buildings).filter((b) => BUILDING_TYPES[b.type].hunts);
+  assert.deepEqual(horde.map((b) => [b.type, b.hp]), [['ghoul', 4 * BUILDING_TYPES.ghoul.hp], ['ghoul', 4 * BUILDING_TYPES.ghoul.hp]]);
+});
+
 test('the horde goes for the nearest farm, turns on a building that strikes it, and on castles once no farm is left', () => {
   const board = openBoard(7);
   const sites = [
