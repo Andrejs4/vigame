@@ -44,8 +44,9 @@ persistence.
 - A new state field or entity field needs no change to the server or the
   sync: the room mirrors `publicView` generically. Change `publicView` only
   to hide something from players, or to keep a counter that changes every
-  tick out of it (units' experience is hidden for that): a changed field
-  resends its whole unit or building to every player.
+  tick out of it (units' experience is hidden for that, and sides' tallies
+  until the game is over): a changed field resends its whole unit or
+  building to every player.
 - Sides: `state.players` has one record per owner number: the players,
   then in cooperation the Dark Lord, then always the raiders. A record's
   `side` picks its name and colours in `SIDES` (use `sideOf`, never

@@ -5,7 +5,7 @@
 import { TERRAIN } from '../src/core/board.js';
 import { STATE_VERSION, advance, checkState } from '../src/core/game.js';
 import { hexagon, key } from '../src/core/hex.js';
-import { BUILDING_TYPES, SKILLS } from '../src/core/rules.js';
+import { BUILDING_TYPES, POINTS, SKILLS } from '../src/core/rules.js';
 
 /** Every skill at `level`. */
 export const skillsAt = (/** @type {number} */ level) => Object.fromEntries(Object.keys(SKILLS).map((s) => [s, level]));
@@ -47,6 +47,11 @@ export function openBoard(radius, except = {}, options = {}) {
   return boardFrom({ ...terrain, ...except }, options);
 }
 
+/** A side's tally with nothing done yet. */
+export function noTally() {
+  return /** @type {import('../src/core/game.js').Tally} */ (Object.fromEntries(Object.keys(POINTS).map((k) => [k, 0])));
+}
+
 /**
  * A two-side state with exactly these buildings and units, for tests that
  * set up a position by hand. Buildings default to unharmed towers at 0,0
@@ -83,8 +88,8 @@ export function stateWith(buildings, units = [], seed = 1) {
     rng: 1,
     nextId: Math.max(0, ...ids) + 1,
     players: [
-      { id: 0, side: 0, team: 0, stone: 1000, metal: 1000, food: 0, hunger: 0 },
-      { id: 1, side: 1, team: 1, stone: 1000, metal: 1000, food: 0, hunger: 0 },
+      { id: 0, side: 0, team: 0, stone: 1000, metal: 1000, food: 0, hunger: 0, tally: noTally() },
+      { id: 1, side: 1, team: 1, stone: 1000, metal: 1000, food: 0, hunger: 0, tally: noTally() },
     ],
     buildings: Object.fromEntries(buildings.map((b) => [b.id, building(b)])),
     units: Object.fromEntries(units.map((u) => [u.id, unit(u)])),

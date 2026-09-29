@@ -163,6 +163,13 @@ export async function startGameServer({
         if (!saved) return void res.status(404).json({ error: 'no such game' });
         res.json(saved);
       });
+      // Who holds each seat, by name: for the table at a game's end, which
+      // names players who have left as well as those still here.
+      app.get('/api/games/:id/seats', (req, res) => {
+        const saved = GAME_ID.test(req.params.id) ? storage.loadGame(req.params.id) : null;
+        if (!saved) return void res.status(404).json({ error: 'no such game' });
+        res.set('cache-control', 'no-store').json(saved.seats.map((pid) => (pid ? { pid, name: storage.loadPlayer(pid)?.name ?? '' } : null)));
+      });
       app.get('/api/games/:id/commands', (req, res) => {
         const saved = GAME_ID.test(req.params.id) ? storage.loadGame(req.params.id) : null;
         if (!saved) return void res.status(404).json({ error: 'no such game' });

@@ -211,6 +211,15 @@ test('a big game\'s whole state fits the encoder\'s buffer, without the overflow
   assert.deepEqual(warnings.filter((w) => /buffer overflow/.test(w)), []);
 });
 
+test('a game\'s seats are listed by name, for those who have left too', async () => {
+  const id = await startGame();
+  const room = await join(id, TOKENS.a);
+  await leaveAll(room);
+  const seats = await (await fetch(`${base}/api/games/${id}/seats`)).json();
+  assert.deepEqual(seats.map((/** @type {any} */ s) => s?.name ?? null), ['Ann', null]);
+  assert.equal((await fetch(`${base}/api/games/nope/seats`)).status, 404);
+});
+
 test('new games are stored with a castle per side, and listed; unknown ones are 404', async () => {
   const id = await startGame();
   const game = await (await fetch(`${base}/api/games/${id}`)).json();

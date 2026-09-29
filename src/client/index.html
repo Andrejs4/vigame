@@ -65,6 +65,9 @@
     <h2>Waiting for a player</h2>
     <ul class="games" id="lobby-open"></ul>
     <p class="empty" id="lobby-open-empty">No one is waiting right now.</p>
+    <h2>Recently finished</h2>
+    <ul class="games" id="lobby-done"></ul>
+    <p class="empty" id="lobby-done-empty">No game has ended yet.</p>
   </div>
 </main>
 
@@ -110,6 +113,7 @@
     </div>
     <button id="toggle-coords" aria-pressed="false">Coordinates</button>
     <button id="seat-button" hidden>Release seat</button>
+    <button id="scores-button" hidden>Scores</button>
     <a class="button" id="to-lobby" href="">Lobby</a>
   </div>
 
@@ -159,6 +163,22 @@
       <button id="crew-ok" value="ok" class="primary">Send</button>
     </div>
   </form>
+</dialog>
+
+<dialog id="scores" aria-labelledby="scores-title">
+  <h2 id="scores-title">Game over</h2>
+  <p class="hint" id="scores-outcome"></p>
+  <div class="scores-wrap">
+    <table class="scores">
+      <thead><tr id="scores-head"></tr></thead>
+      <tbody id="scores-body"></tbody>
+    </table>
+  </div>
+  <div class="crew-foot">
+    <span></span>
+    <button id="scores-close">Keep watching</button>
+    <a class="button primary" id="scores-leave" href="">Leave the match</a>
+  </div>
 </dialog>
 
 </body>

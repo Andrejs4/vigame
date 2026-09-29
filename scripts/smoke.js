@@ -17,6 +17,9 @@ import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
 
 import { startGameServer } from '../server/app.js';
+import { playerId } from '../server/room.js';
+import { BOARD_OPTIONS, createBoard } from '../src/core/board.js';
+import { checkState, newGame } from '../src/core/game.js';
 import { axialToPixel, distance } from '../src/core/hex.js';
 import { BUILDING_TYPES } from '../src/core/rules.js';
 import { PICTURES } from '../src/client/tokens.js';
@@ -321,6 +324,50 @@ async function newPlayer(browser, url, label, name, options, expectedError) {
 }
 
 // --- scenarios ---------------------------------------------------------------
+
+/**
+ * A finished game, saved as it ended: the lobby lists it under Recently
+ * finished, and opening it shows its table of points, with the name of the
+ * player who held the seat; the table closes, comes back from Scores, and
+ * Leave the match goes back to the lobby.
+ * @param {import('playwright').Browser} browser
+ * @param {string} url
+ */
+async function finished(browser, url) {
+  const page = await newPlayer(browser, url, 'finished', 'Fay');
+  await inLobby(page);
+  const token = await page.evaluate(() => localStorage.getItem('vigame.token'));
+  const seed = 5;
+  const board = createBoard({ ...BOARD_OPTIONS, seed, players: 1 });
+  const state = newGame(board, { mode: 'coop' });
+  Object.assign(state, { tick: 3000, over: 3000, winner: 0 });
+  state.players[1].lost = 3000;
+  Object.assign(state.players[0].tally, { kills: 12, damage: 4321, castles: 1, born: 9, stone: 30, food: 25, built: 3, upgrades: 2, won: 1 });
+  Object.assign(state.players[1].tally, { kills: 5, damage: 800 });
+  assert.deepEqual(checkState(board, state), []);
+  games.storage.createGame({ id: 'finished-game', seed, state, seats: [playerId(/** @type {string} */ (token))] });
+
+  const row = page.locator('#lobby-done li', { hasText: 'Fay' });
+  await row.waitFor({ timeout: 10000 });
+  await row.locator('a').click();
+  await inGame(page);
+  await page.waitForSelector('#scores[open]');
+  assert.equal(await text(page, '#scores-title'), 'You won');
+  // Fay: 120 + 432 + 500 + 45 + 30 + 2 + 60 + 100 + 500; the Dark Lord: 50 + 80.
+  await page.waitForFunction(() => document.querySelector('#scores-body tr td')?.textContent === 'Fay · Blue');
+  const rows = await page.$$eval('#scores-body tr', (trs) => trs.map((tr) => [tr.cells[0].textContent, tr.cells[tr.cells.length - 1].textContent]));
+  assert.deepEqual(rows, [['Fay · Blue', '1789'], ['Dark Lord', '130']]);
+  await page.screenshot({ path: join(OUT, 'scores.png') });
+
+  await page.click('#scores-close');
+  assert.equal(await page.evaluate(() => /** @type {any} */ (window).__vigame.scoresOpen), false);
+  assert.equal(await page.locator('#seat-button').isHidden(), true, 'no seat to give up once it is over');
+  await page.click('#scores-button');
+  await page.waitForSelector('#scores[open]');
+  await page.click('#scores-leave');
+  await inLobby(page);
+  await page.context().close();
+}
 
 /**
  * Three browsers through the game server: login, lobby, a game, and the
@@ -711,6 +758,7 @@ const scenarios = /** @type {Array<[string, () => Promise<void>]>} */ ([
   ['login, lobby and a game, three browsers', () => threeBrowsers(browser, games.url, { full: true, label: 'direct' })],
   ['the same under a subfolder, behind a proxy', () => threeBrowsers(browser, proxied.url, { full: false, label: 'proxied' })],
   ['on a phone', () => phone(browser, games.url)],
+  ['a finished game\'s points', () => finished(browser, games.url)],
 ]).filter(([name]) => name.includes(only));
 
 let failed = 0;

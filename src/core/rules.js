@@ -199,6 +199,18 @@ export const HORDE_PERIOD = 60 * TICKS_PER_SECOND;
 export const HORDE_MAX = 24;
 
 /**
+ * Points, for the table at a game's end: what each thing in a side's tally
+ * (see Player in game.js) is worth, rounded down in each line. Enemy units
+ * killed; hit points taken off enemy buildings; enemy buildings brought
+ * down, and enemy castles and lairs; units born; stone dug; food grown by
+ * crews; buildings finished; grades reached by upgrading (a castle's third
+ * grade counts 3); and winning.
+ */
+export const POINTS = Object.freeze({
+  kills: 10, damage: 0.1, felled: 50, castles: 500, born: 5, stone: 1, food: 0.1, built: 20, upgrades: 50, won: 500,
+});
+
+/**
  * Bringing down a building bought with dark metal (a wagon) yields the
  * striker's side this share of its price.
  */
