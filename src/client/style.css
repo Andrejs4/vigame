@@ -233,6 +233,7 @@ dl { margin: 0; }
   cursor: pointer;
 }
 .crew-list input { width: 16px; height: 16px; margin: 0; accent-color: var(--amber); }
+.crew-list label { user-select: none; } /* a mouse drags across rows to tick them */
 .crew-list .stats, .crew-list .where { font: 12px var(--mono); color: var(--ink-dim); }
 .crew-list .where { grid-column: 2 / 4; }
 .crew-list label:has(input:disabled) { opacity: 0.5; cursor: not-allowed; }

@@ -78,6 +78,7 @@ test('a castle\'s units raise new ones, sooner the more there are and the better
   runUntil(board, state, () => Object.keys(state.units).length > 10);
   const [born] = Object.values(state.units).slice(-1);
   assert.deepEqual(born, { ...born, id: 'u20', owner: 0, level: 1, xp: 0, skills: skillsAt(0), in: 'b1' });
+  assert.equal(born.born, state.tick, 'it knows when it was born');
   assert.match(born.name, /^\w+ \w+$/);
 });
 
@@ -996,7 +997,7 @@ test('the public view hides the dice, the id counter and experience, and cuts ro
   const view = publicView(state);
   assert.equal('rng' in view, false);
   assert.equal('nextId' in view, false);
-  assert.deepEqual(Object.keys(view.units.u10).sort(), ['id', 'level', 'name', 'owner', 'path', 'q', 'r', 'since', 'skills', 'to', 'until']);
+  assert.deepEqual(Object.keys(view.units.u10).sort(), ['born', 'id', 'level', 'name', 'owner', 'path', 'q', 'r', 'since', 'skills', 'to', 'until']);
   assert.deepEqual(view.units.u10.path, [[1, 0]]);
   assert.equal(state.units.u10.path?.length, 3, 'the state keeps the whole route');
   assert.deepEqual(occupancy(view).onCell.get('0,0'), ['u10'], 'a view has the state\'s shape, so the same lookups work on it');

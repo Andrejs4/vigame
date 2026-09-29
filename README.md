@@ -78,7 +78,9 @@ Run `npm start` and open http://127.0.0.1:2567.
   chance of a unit's strikes.
 - **Crews**: units walk only when they're given to a building's crew or sent
   home. Select one of your buildings and press **Crew…** for a list of your
-  units: tick up to what it holds. Those you untick go home; those you tick
+  units, each with its level, skill and age in minutes: tick up to what it
+  holds (with a mouse, drag down the list to tick or untick a run of
+  them). Those you untick go home; those you tick
   come from wherever they are, one after another, two seconds a cell on open
   ground and four on scrub, less the better they run. Water is impassable.
   **Return** sends the whole crew home. A unit left with nowhere to go (its
@@ -194,7 +196,7 @@ Run `npm start` and open http://127.0.0.1:2567.
   in the corner shows the whole board and a frame around what you see;
   press or drag on it to look there.
   **Coordinates** shows axial `q,r` labels. Escape cancels building and
-  clears the selection. **How to play**, in the legend, folds away; this
+  clears the selection; **A** is Attack. **How to play**, in the legend, folds away; this
   browser remembers whether it is open.
 - Every viewer's picked hex shows as a ring: solid for yours, dashed for
   others.
