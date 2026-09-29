@@ -508,7 +508,8 @@ export async function startGame(net, me) {
       name.textContent = u.name;
       const stats = document.createElement('span');
       stats.className = 'stats';
-      stats.textContent = `Lv ${u.level} · ${SKILLS[skill]} ${u.skills[skill]}`;
+      const age = Math.max(0, Math.floor((view.tick - (u.born ?? view.tick)) / (60 * TICKS_PER_SECOND)));
+      stats.textContent = `Lv ${u.level} · ${SKILLS[skill]} ${u.skills[skill]} · ${age} min`;
       const where = document.createElement('span');
       where.className = 'where';
       where.textContent = whereIs(u, target);
@@ -529,6 +530,44 @@ export async function startGame(net, me) {
       sync();
     };
     sync();
+
+    // With a mouse, a press on a row ticks or unticks it, and dragging on
+    // does the same to every row it passes over. On a touch screen a drag
+    // scrolls the list, so there it is a tap a row.
+    /** Tick or untick a box as a click would, within the limit. */
+    const setBox = (/** @type {HTMLInputElement} */ box, /** @type {boolean} */ on) => {
+      if (box.checked === on || (on && box.disabled)) return;
+      box.checked = on;
+      if (on) chosen.add(box.value);
+      else chosen.delete(box.value);
+      sync();
+    };
+    const boxAt = (/** @type {EventTarget | null} */ t) => (
+      t instanceof Element ? t.closest('label')?.querySelector('input') ?? null : null);
+    /** While the mouse drags: whether it ticks (true) or unticks. */
+    /** @type {boolean | null} */
+    let painting = null;
+    /** The press did what its click would, so that click does nothing. */
+    let pressed = false;
+    crewParts.list.onpointerdown = (e) => {
+      const box = boxAt(e.target);
+      if (e.pointerType !== 'mouse' || e.button !== 0 || !box || box.disabled) return;
+      painting = !box.checked;
+      pressed = true;
+      setBox(box, painting);
+    };
+    crewParts.list.onpointerover = (e) => {
+      if (painting === null) return;
+      // The button came up somewhere else.
+      if (!(e.buttons & 1)) painting = null;
+      else if (boxAt(e.target)) setBox(/** @type {HTMLInputElement} */ (boxAt(e.target)), painting);
+    };
+    crewParts.list.onpointerup = () => { painting = null; };
+    crewParts.list.onclick = (e) => {
+      // Clicks from the keyboard (space on a box) carry no detail and go ahead.
+      if (pressed && e.detail > 0) e.preventDefault();
+      pressed = false;
+    };
 
     crewDialog.returnValue = '';
     crewTarget = target;
@@ -779,6 +818,16 @@ export async function startGame(net, me) {
     selected = null;
     refreshHighlights();
     updateHud();
+  });
+
+  // A, as the Attack button (its A is bold), unless typing or in a dialog.
+  addEventListener('keydown', (e) => {
+    if (e.key !== 'a' && e.key !== 'A') return;
+    if (e.repeat || e.ctrlKey || e.metaKey || e.altKey || crewDialog.open || scoresDialog.open) return;
+    if (e.target instanceof Element && e.target.closest('input, select, textarea, [contenteditable]')) return;
+    if (attackButton.disabled) return;
+    e.preventDefault();
+    attackButton.click();
   });
 
   for (const button of buildButtons) {

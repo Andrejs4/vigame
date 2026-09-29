@@ -80,6 +80,8 @@ import {
  * @property {number} owner
  * @property {string} name
  * @property {number} level From 1 to MAX_LEVEL.
+ * @property {number} born The tick it was born, for its age: set once, so
+ *   growing older sends nobody anything.
  * @property {number} xp Experience toward the next level.
  * @property {Record<Skill, number>} skills Each from 0 up to `level`.
  * @property {Record<Skill, number>} practice Experience toward each skill's
@@ -145,7 +147,7 @@ import {
  */
 
 /** Bump when GameState changes shape, and teach `checkState` the new one. */
-export const STATE_VERSION = 9;
+export const STATE_VERSION = 10;
 
 const SKILL_NAMES = /** @type {Skill[]} */ (Object.keys(SKILLS));
 
@@ -286,7 +288,7 @@ function noSkills() {
 function newUnit(state, owner, building) {
   const id = newId(state, 'u');
   const name = unitName(() => random(state));
-  state.units[id] = { id, owner, name, level: 1, xp: 0, skills: noSkills(), practice: noSkills(), in: building };
+  state.units[id] = { id, owner, name, level: 1, born: state.tick, xp: 0, skills: noSkills(), practice: noSkills(), in: building };
   return id;
 }
 
@@ -1818,6 +1820,7 @@ export function checkState(board, raw) {
     if (!isOwner(u.owner)) { fail(`unit ${id}: bad owner`); continue; }
     counts[u.owner] += 1;
     if (typeof u.name !== 'string' || !u.name || u.name.length > 40) fail(`unit ${id}: bad name`);
+    if (!isCount(u.born, state.tick + 1)) fail(`unit ${id}: bad born`);
     if (!Number.isInteger(u.level) || u.level < 1 || u.level > MAX_LEVEL) {
       fail(`unit ${id}: bad level`);
     } else {

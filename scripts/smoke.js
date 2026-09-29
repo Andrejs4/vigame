@@ -574,9 +574,24 @@ async function threeBrowsers(browser, url, { full, label }) {
   // up. The page lets go of it all and says so.
   const site = await buildWith(a, 'pit', blue, { crew: 1 });
   await selectBuilding(a, site);
-  await a.click('#attack-button');
+  await a.keyboard.press('a');
+  assert.equal(await a.evaluate(() => /** @type {any} */ (window).__vigame.aiming), site.id, 'A aims, as Attack does');
   await a.click('#crew-button');
   await a.waitForSelector('#crew[open]');
+  // Each unit shows its age; a mouse drag down the list ticks each row it crosses.
+  assert.match(await a.locator('#crew-list .stats').first().textContent() ?? '', /· \d+ min$/);
+  assert.equal(await text(a, '#crew-count'), '1 of 8');
+  const ids = await a.$$eval('#crew-list input:not(:checked)', (els) => els.slice(0, 3).map((e) => /** @type {HTMLInputElement} */ (e).value));
+  const rowOf = (/** @type {string} */ id) => a.locator(`#crew-list input[value="${id}"]`).locator('xpath=..').boundingBox();
+  const first = /** @type {{ x: number, y: number, height: number }} */ (await rowOf(ids[0]));
+  const last = /** @type {{ x: number, y: number, height: number }} */ (await rowOf(ids[2]));
+  await a.mouse.move(first.x + 30, first.y + first.height / 2);
+  await a.mouse.down();
+  await a.mouse.move(last.x + 30, last.y + last.height / 2, { steps: 10 });
+  await a.mouse.up();
+  const ticked = await a.$$eval('#crew-list input:checked', (els) => els.map((e) => /** @type {HTMLInputElement} */ (e).value));
+  assert.ok(ids.every((id) => ticked.includes(id)), `the drag ticked ${ticked} rather than ${ids}`);
+  assert.equal(await text(a, '#crew-count'), '4 of 8');
   assert.deepEqual(await a.evaluate(() => /** @type {any} */ (window).__vigame.net.send({ type: 'abort', building: /** @type {any} */ (window).__vigame.crewTarget })), { ok: true });
   await a.waitForSelector('#crew', { state: 'hidden' });
   await waitText(a, '#message', 'Your pit is gone.');

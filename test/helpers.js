@@ -78,7 +78,7 @@ export function stateWith(buildings, units = [], seed = 1) {
     };
   };
   const unit = (/** @type {Partial<import('../src/core/game.js').Unit>} */ u) => ({
-    owner: 0, name: 'Test Unit', level: 1, xp: 0, skills: skillsAt(0), practice: skillsAt(0), ...u,
+    owner: 0, name: 'Test Unit', level: 1, born: 0, xp: 0, skills: skillsAt(0), practice: skillsAt(0), ...u,
   });
   return {
     version: STATE_VERSION,
