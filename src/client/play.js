@@ -12,6 +12,7 @@ import {
 import { BUILDING_TYPES, SKILLS, TICKS_PER_SECOND, UNIT_LIMIT } from '../core/rules.js';
 import { serverBase } from './api.js';
 import { Camera } from './camera.js';
+import { Minimap } from './minimap.js';
 import { BoardRenderer } from './render.js';
 
 /** @param {number} tick */
@@ -30,6 +31,9 @@ function formatTime(tick) {
 export async function startGame(net, me) {
   const stage = /** @type {HTMLElement} */ (document.getElementById('stage'));
   const canvas = /** @type {HTMLCanvasElement} */ (document.getElementById('board'));
+  const mapCanvas = /** @type {HTMLCanvasElement} */ (document.getElementById('minimap-canvas'));
+  const mapFrame = /** @type {HTMLElement} */ (document.getElementById('minimap-frame'));
+  const controls = /** @type {HTMLElement} */ (document.getElementById('controls'));
   const hud = {
     time: document.getElementById('time'),
     seat: document.getElementById('seat'),
@@ -64,6 +68,10 @@ export async function startGame(net, me) {
   let boardPlayers = 0;
   const camera = new Camera();
   let renderer = new BoardRenderer(canvas, board);
+  let minimap = new Minimap(mapCanvas, mapFrame, board);
+  /** The main view's size, in CSS pixels. */
+  let viewW = 0;
+  let viewH = 0;
 
   /** The game as the server last reported it. */
   /** @type {import('./net.js').GameView | null} */
@@ -111,9 +119,11 @@ export async function startGame(net, me) {
       board = createBoard({ ...BOARD_OPTIONS, seed: next.seed, players });
       renderer = new BoardRenderer(canvas, board);
       renderer.showCoords = showCoords;
+      minimap = new Minimap(mapCanvas, mapFrame, board);
       recenter();
     }
     view = next;
+    minimap.show(next);
     occ = occupancy(next);
     moving = Object.values(next.units).some((u) => u.path) || Object.values(next.buildings).some((b) => b.path);
     if (selected && !next.buildings[selected]) selected = null;
@@ -424,6 +434,8 @@ export async function startGame(net, me) {
     const rect = canvas.getBoundingClientRect();
     canvas.width = Math.round(rect.width * dpr);
     canvas.height = Math.round(rect.height * dpr);
+    viewW = rect.width;
+    viewH = rect.height;
     needsDraw = true;
   }
 
@@ -516,6 +528,36 @@ export async function startGame(net, me) {
     needsDraw = true;
   }, { passive: false });
 
+  // Pressing or dragging on the minimap looks there, at the same zoom.
+  /** @type {number | null} */
+  let mapPointer = null;
+  /** @param {PointerEvent} e */
+  const lookAt = (e) => {
+    const w = minimap.worldAt(e.clientX, e.clientY);
+    camera.centreOn(w.x, w.y, viewW, viewH);
+    needsDraw = true;
+  };
+  mapCanvas.addEventListener('pointerdown', (e) => {
+    if (mapPointer !== null) return;
+    mapPointer = e.pointerId;
+    mapCanvas.setPointerCapture(e.pointerId);
+    lookAt(e);
+  });
+  mapCanvas.addEventListener('pointermove', (e) => {
+    if (e.pointerId === mapPointer) lookAt(e);
+  });
+  for (const type of ['pointerup', 'pointercancel']) {
+    mapCanvas.addEventListener(type, (e) => {
+      if (/** @type {PointerEvent} */ (e).pointerId === mapPointer) mapPointer = null;
+    });
+  }
+
+  // On a phone the minimap sits just above the controls, whose height
+  // depends on how their buttons wrap.
+  new ResizeObserver(() => {
+    stage.style.setProperty('--controls-height', `${controls.offsetHeight}px`);
+  }).observe(controls);
+
   addEventListener('keydown', (e) => {
     // Escape in the crew chooser closes just the chooser.
     if (e.key !== 'Escape' || crewDialog.open || (!placing && !selected && !aiming)) return;
@@ -597,13 +639,16 @@ export async function startGame(net, me) {
 
   // --- run -----------------------------------------------------------------
 
-  function frame() {
+  /** @param {number} time */
+  function frame(time) {
     // Queue the next frame first, so one frame that throws cannot stop the
     // board from ever redrawing again.
     requestAnimationFrame(frame);
+    minimap.paint(time);
     if (!needsDraw && !moving) return;
     needsDraw = false;
     renderer.draw({ camera, view, clock: net.clock(), selected, highlights, hover, peers });
+    minimap.frameView(camera, viewW, viewH);
   }
 
   resize();
@@ -630,6 +675,7 @@ export async function startGame(net, me) {
       get aiming() { return aiming; },
       get highlights() { return [...highlights]; },
       get peers() { return peers; },
+      get minimap() { return minimap; },
       net,
       camera,
       forceDraw: () => { needsDraw = true; },

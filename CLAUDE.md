@@ -69,6 +69,10 @@ persistence.
 - The page runs no game rules. It draws what the server sends, using the
   core's read-only helpers (`occupancy`, `footprint`, `nearStanding`, the
   board from its seed and player count), and sends commands.
+- The board redraws only when something changed or moves (`needsDraw`,
+  `moving` in play.js). The minimap is stricter: at most twice a second, only
+  after a server update, and only if a pixel differs; its view frame is an
+  element, so panning never repaints it. Keep it that way as it grows.
 - Views switch with a page load: `?game=<id>` is a game, anything else the
   lobby, and the login page comes first while the browser isn't signed in.
 

@@ -110,6 +110,13 @@
     <a class="button" id="to-lobby" href="">Lobby</a>
   </div>
 
+  <div class="hud" id="minimap">
+    <div class="minimap-box">
+      <canvas id="minimap-canvas" aria-label="Map of the whole board: press or drag on it to look there"></canvas>
+      <div class="minimap-frame" id="minimap-frame"></div>
+    </div>
+  </div>
+
   <div class="hud" id="legend">
     <div><span class="swatch" style="background:hsl(104,32%,40%)"></span>Grass &mdash; build, 2 s a cell on foot</div>
     <div><span class="swatch" style="background:hsl(88,38%,48%)"></span>Meadow &mdash; build, 2 s a cell on foot</div>
@@ -126,7 +133,8 @@
       wagon can't pass other buildings; a band passes anything of yours,
       gives no cover, and breaks up when it has nobody. Units in buildings
       and bands strike enemies in reach; press Attack, then an enemy
-      building, to choose their target. Drag to pan, wheel to zoom.
+      building, to choose their target. Drag to pan, wheel to zoom; press
+      the minimap to look anywhere.
     </div>
   </div>
 </div>

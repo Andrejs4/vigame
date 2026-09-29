@@ -21,6 +21,16 @@ const TERRAIN_COLORS = {
 };
 
 /**
+ * A cell's ground colour: its terrain's, shifted a little by the tile's tint.
+ * @param {import('../core/board.js').Tile} tile
+ */
+export function groundColor(tile) {
+  const base = TERRAIN_COLORS[tile.terrain];
+  const lift = (tile.tint - 0.5) * 7;
+  return hsl(base.h + (tile.tint - 0.5) * 8, base.s, base.l + lift);
+}
+
+/**
  * Which neighbour lies across each edge of a pointy-top hex, for the edge
  * from corner i to corner i + 1 (see `corners` in hex.js).
  */
@@ -160,10 +170,8 @@ export class BoardRenderer {
 
     // Pass 1: terrain fill.
     for (const { tile, cx, cy } of visible) {
-      const base = TERRAIN_COLORS[tile.terrain];
-      const lift = (tile.tint - 0.5) * 7;
       this.hexPath(cx, cy, zoom);
-      ctx.fillStyle = hsl(base.h + (tile.tint - 0.5) * 8, base.s, base.l + lift);
+      ctx.fillStyle = groundColor(tile);
       ctx.fill();
     }
 

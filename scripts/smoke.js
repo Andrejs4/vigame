@@ -361,6 +361,18 @@ async function threeBrowsers(browser, url, { full, label }) {
   await a.mouse.up();
   const camAfter = await a.evaluate(() => ({ .../** @type {any} */ (window).__vigame.camera }));
   assert.ok(Math.abs(camAfter.x - camBefore.x) > 10, 'drag did not pan');
+
+  // Pressing the minimap's top left corner looks there. It repaints at most
+  // twice a second.
+  const map = /** @type {{ x: number, y: number }} */ (await a.locator('#minimap-canvas').boundingBox());
+  await a.mouse.click(map.x + 4, map.y + 4);
+  const camMap = await a.evaluate(() => ({ .../** @type {any} */ (window).__vigame.camera }));
+  assert.ok(camMap.x < camAfter.x - 10 && camMap.y < camAfter.y - 10, 'the minimap did not move the view');
+  const { paints, seconds } = await a.evaluate(() => ({
+    paints: /** @type {any} */ (window).__vigame.minimap.paints,
+    seconds: performance.now() / 1000,
+  }));
+  assert.ok(paints >= 1 && paints <= seconds * 2 + 1, `the minimap repainted ${paints} times in ${seconds.toFixed(1)} s`);
   await a.click('#recenter');
 
   // Ann upgrades her tower; Bēla sees it.
@@ -486,6 +498,7 @@ async function phone(browser, url) {
       innerHeight,
       status: box('status'),
       controls: box('controls'),
+      minimap: box('minimap'),
       legendShown: getComputedStyle(document.getElementById('legend')).display !== 'none',
     };
   });
@@ -493,6 +506,8 @@ async function phone(browser, url) {
   assert.ok(layout.controls.bottom <= layout.innerHeight && layout.controls.left >= 0
     && layout.controls.right <= layout.innerWidth, 'controls are off-screen');
   assert.ok(layout.controls.top > layout.status.bottom, 'controls overlap the status panel');
+  assert.ok(layout.minimap.top > layout.status.bottom && layout.minimap.bottom < layout.controls.top
+    && layout.minimap.right <= layout.innerWidth, 'the minimap overlaps the panels or the screen edge');
   assert.equal(layout.legendShown, false);
 
   const castle = await castleOf(page, 0);

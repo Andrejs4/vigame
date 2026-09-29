@@ -73,7 +73,18 @@ export class Camera {
     if (box.width <= 0 || box.height <= 0) return;
     const z = Math.min((viewW - padding * 2) / box.width, (viewH - padding * 2) / box.height);
     this.zoom = Math.min(this.maxZoom, Math.max(this.minZoom, z));
-    this.x = box.minX + box.width / 2 - viewW / (2 * this.zoom);
-    this.y = box.minY + box.height / 2 - viewH / (2 * this.zoom);
+    this.centreOn(box.minX + box.width / 2, box.minY + box.height / 2, viewW, viewH);
+  }
+
+  /**
+   * Put a world point in the middle of the viewport, keeping the zoom.
+   * @param {number} wx
+   * @param {number} wy
+   * @param {number} viewW
+   * @param {number} viewH
+   */
+  centreOn(wx, wy, viewW, viewH) {
+    this.x = wx - viewW / (2 * this.zoom);
+    this.y = wy - viewH / (2 * this.zoom);
   }
 }

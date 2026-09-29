@@ -133,7 +133,9 @@ Run `npm start` and open http://127.0.0.1:2567.
   at the pace of its slowest walker.
 - **Pits** don't stop units or bands: they cross any pit, yours or the
   enemy's. Wagons can't enter a pit and go around it.
-- Drag to pan, and use the wheel or the − / + buttons to zoom.
+- Drag to pan, and use the wheel or the − / + buttons to zoom. The minimap
+  in the corner shows the whole board and a frame around what you see;
+  press or drag on it to look there.
   **Coordinates** shows axial `q,r` labels. Escape cancels building and
   clears the selection.
 - Every viewer's picked hex shows as a ring: solid for yours, dashed for
@@ -183,6 +185,7 @@ have one, install it with `npx playwright install chromium`.
 | `src/client/play.js` | The game view: input, HUD, controls. |
 | `src/client/net.js` | The connection to a game on the server. |
 | `src/client/camera.js`, `render.js` | Pan and zoom, and the canvas renderer: terrain, buildings, marching units between cells, picks, hover. |
+| `src/client/minimap.js` | The minimap: a few pixels a cell, repainted at most twice a second and only when a pixel changes. |
 | `server/app.js` | The game server: Colyseus, the HTTP API, the page's files, the monitor. |
 | `server/room.js` | `GameRoom`, one per game: runs the core's clock, logs and applies commands, snapshots. |
 | `server/schema.js` | The room state Colyseus syncs: a generic mirror of the core's view. |
