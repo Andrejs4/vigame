@@ -507,9 +507,11 @@ test('raiders turn up now and then; bringing one down yields dark metal', () => 
 });
 
 test('in cooperation the Dark Lord\'s lair sends out ever bigger waves of ghouls and ogres', () => {
-  const board = createBoard({ ...BOARD_OPTIONS, seed: 3 });
-  const game = newGame(board);
-  const lord = game.players.findIndex((p) => p.side === DARK_LORD);
+  // A castle out of the lair's reach, so neither brings the other down first.
+  const board = openBoard(9);
+  const game = stateWith([{ id: 'b1', type: 'castle', q: -8, r: 0 }, { id: 'b2', owner: 1, type: 'lair', q: 3, r: 0 }]);
+  const lord = 1;
+  game.players[lord].side = DARK_LORD;
   const horde = () => Object.values(game.buildings).filter((b) => b.owner === lord && BUILDING_TYPES[b.type].hunts);
   run(board, game, HORDE_START - 1);
   assert.equal(horde().length, 0, 'nothing before the first wave');
@@ -522,8 +524,9 @@ test('in cooperation the Dark Lord\'s lair sends out ever bigger waves of ghouls
   run(board, game, 2 * HORDE_PERIOD - COMBAT_PERIOD);
   assert.ok(horde().some((b) => b.type === 'ogre'), 'the third wave brings an ogre');
 
-  const alone = newGame(board, { mode: 'ffa' });
-  run(board, alone, HORDE_START);
+  const map = createBoard({ ...BOARD_OPTIONS, seed: 3 });
+  const alone = newGame(map, { mode: 'ffa' });
+  run(map, alone, HORDE_START);
   assert.ok(!Object.values(alone.buildings).some((b) => BUILDING_TYPES[b.type].hunts), 'no horde without the Dark Lord');
 });
 
@@ -539,7 +542,7 @@ test('the horde goes for the nearest farm, turns on a building that strikes it, 
   run(board, state, COMBAT_PERIOD);
   assert.equal(state.buildings.b4.target, 'b2', 'the nearest farm');
 
-  const struck = stateWith([...sites, { id: 'b5', q: 5, r: 3 }], unitsIn('b5', 2, 10));
+  const struck = stateWith([...sites, { id: 'b5', q: 5, r: -3 }], unitsIn('b5', 2, 10));
   run(board, struck, COMBAT_PERIOD);
   assert.equal(struck.buildings.b4.target, 'b5', 'the tower that struck it');
 
