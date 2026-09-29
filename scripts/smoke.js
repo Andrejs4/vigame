@@ -19,6 +19,7 @@ import { chromium } from 'playwright';
 import { startGameServer } from '../server/app.js';
 import { axialToPixel, distance } from '../src/core/hex.js';
 import { BUILDING_TYPES } from '../src/core/rules.js';
+import { PICTURES } from '../src/client/tokens.js';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const OUT = join(ROOT, 'smoke-output');
@@ -385,6 +386,8 @@ async function threeBrowsers(browser, url, { full, label }) {
     await b.screenshot({ path: join(OUT, 'game-crimson.png') });
   }
   await waitInside(b, tower.id, 1);
+  // Every picture arrived, here and behind the proxy alike.
+  await a.waitForFunction((n) => /** @type {any} */ (window).__vigame.tokens.images.size === n, PICTURES.length);
   if (!full) {
     for (const p of [a, b]) await p.context().close();
     return;
@@ -404,6 +407,37 @@ async function threeBrowsers(browser, url, { full, label }) {
   const [cr, , cb] = await tint(crimson);
   assert.ok(bb > br + 25, `Blue's castle is not blue (${br}, ${bb})`);
   assert.ok(cr > cb + 25, `Crimson's castle is not red (${cr}, ${cb})`);
+
+  // Effects, made up from the last update as if Crimson's castle was hit, a
+  // tower fell and a unit died: they draw, then stop.
+  const played = await a.evaluate(async () => {
+    const g = /** @type {any} */ (window).__vigame;
+    const view = g.view;
+    const castle = Object.values(view.buildings).find((b) => b.type === 'castle' && b.owner === 1);
+    const prev = {
+      ...view,
+      buildings: { ...view.buildings, ghost: { id: 'ghost', type: 'tower', owner: 1, grade: 1, hp: 0, q: castle.q - 3, r: castle.r + 2 } },
+      units: { ...view.units, ghost: { id: 'ghost', owner: 0, name: 'Ghost', level: 1, q: castle.q - 3, r: castle.r } },
+    };
+    const next = { ...view, buildings: { ...view.buildings, [castle.id]: { ...castle, hp: castle.hp - 40 } } };
+    g.effects.update(prev, next, performance.now());
+    return g.effects.list.map((e) => e.kind).sort();
+  });
+  assert.deepEqual(played, ['death', 'fall', 'hit']);
+  await a.waitForTimeout(100);
+  await a.screenshot({ path: join(OUT, 'effects.png') });
+  await a.waitForTimeout(1200);
+  await frames(a);
+  assert.equal(await a.evaluate(() => /** @type {any} */ (window).__vigame.effects.list.length), 0, 'effects did not stop');
+
+  // Sounds: Ann's accepted build was heard, and Mute toggles them.
+  const log = await a.evaluate(() => /** @type {any} */ (window).__vigame.sounds.log);
+  assert.ok(log.includes('ok'), `no sound for an accepted command (heard: ${log.join(', ')})`);
+  for (const muted of [true, false]) {
+    await a.click('#mute-button');
+    assert.equal(await a.evaluate(() => /** @type {any} */ (window).__vigame.sounds.muted), muted);
+    assert.equal(await a.getAttribute('#mute-button', 'aria-pressed'), String(muted));
+  }
 
   // A drag pans rather than clicks.
   const camBefore = await a.evaluate(() => ({ .../** @type {any} */ (window).__vigame.camera }));
@@ -467,6 +501,22 @@ async function threeBrowsers(browser, url, { full, label }) {
   await a.waitForFunction((id) => !Object.values(/** @type {any} */ (window).__vigame.view.units)
     .some((u) => u.to === id || u.in === id), pit.id);
   await a.keyboard.press('Escape');
+
+  // A building gone while the page holds it: Ann starts another pit, aims
+  // it, opens its crew chooser, and meanwhile (as from another tab) gives it
+  // up. The page lets go of it all and says so.
+  const site = await buildWith(a, 'pit', blue, { crew: 1 });
+  await selectBuilding(a, site);
+  await a.click('#attack-button');
+  await a.click('#crew-button');
+  await a.waitForSelector('#crew[open]');
+  assert.deepEqual(await a.evaluate(() => /** @type {any} */ (window).__vigame.net.send({ type: 'abort', building: /** @type {any} */ (window).__vigame.crewTarget })), { ok: true });
+  await a.waitForSelector('#crew', { state: 'hidden' });
+  await waitText(a, '#message', 'Your pit is gone.');
+  assert.deepEqual(await a.evaluate(() => {
+    const v = /** @type {any} */ (window).__vigame;
+    return [v.selected, v.aiming, v.crewTarget];
+  }), [null, null, null], 'the page let go of the pit');
 
   // Bēla forms a band next to her castle (who goes is chosen as it forms),
   // then leads it; its members go along inside.

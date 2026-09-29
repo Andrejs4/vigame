@@ -34,11 +34,11 @@ Run `npm start` and open http://127.0.0.1:2567.
   - **Cooperation** (the default): all the players are one team against the
     Dark Lord, whose lair (6000 hit points) stands in the middle of the map
     and strikes the nearest enemy within 4 cells by itself, 20 hit points a
-    second. From the second minute it sends out his horde, a wave a minute,
+    second, and against units as a level-60 fighter. From the second minute it sends out his horde, a wave a minute,
     each bigger than the last (wave n: n/2 ghouls rounded up and n/3 ogres
     rounded down, at most 24 out at once). **Ghouls** are small and fast
-    (120 hit points, a cell a second, 6 a strike); **ogres** are slow and
-    tougher (600 hit points, 4 s a cell, 25 a strike). They need no units and
+    (120 hit points, a cell a second, 6 a strike, level 10); **ogres** are
+    slow and tougher (600 hit points, 4 s a cell, 25 a strike, level 35). They need no units and
     cost him nothing. Each goes for the nearest farm, and for a castle once
     no farm is left; it turns on any building that strikes it, and on the
     nearest one when its way is blocked. Bringing one down yields 2 dark
@@ -127,7 +127,8 @@ Run `npm start` and open http://127.0.0.1:2567.
   Some strikes on a building get through to a unit inside: half on a farm,
   a quarter on a pit, none on a castle, tower or wagon. Units out in the
   open or in a band take every strike. A strike kills a unit with a chance
-  set by the striker's skill against the unit's level: 10% when they
+  set by the striker's skill against the unit's level (the lair, raiders
+  and the horde strike at a level of their own): 10% when they
   match, up to 50% at most, and under 1% once the unit is 50 levels ahead
   (a stand-in until units get their dice). The strike that brings a
   building down or kills a unit is a killing blow, worth 600 experience.
@@ -144,7 +145,8 @@ Run `npm start` and open http://127.0.0.1:2567.
   stops, commands are refused, the page says who won, and the lobby lists
   the game as finished.
 - **Raiders** turn up in every game: wandering hostile wagons, against
-  everyone, that strike whatever comes within 2 cells. Every minute and a
+  everyone, that strike whatever comes within 2 cells (10 a strike, level
+  20). Every minute and a
   half one may appear on open ground away from the castles, up to 2 plus
   one per player. The side that brings one down gets 10 dark metal: the
   only way to get it, and what wagons are built with.
@@ -168,6 +170,29 @@ Run `npm start` and open http://127.0.0.1:2567.
   clears the selection.
 - Every viewer's picked hex shows as a ring: solid for yours, dashed for
   others.
+- Buildings and units are round tokens in their side's colour, with a
+  picture on each (from [game-icons.net](https://game-icons.net), CC BY
+  3.0; see `src/client/art/CREDITS.md`). A building going up shows faint,
+  and firms up as it rises. Zoomed far out, units are dots.
+- A building shows its hit points in a bar over it while it is hurt or
+  selected. A hit flashes it red and floats up the points lost; a building
+  that falls crumbles, and a unit that dies leaves a cross (with how many,
+  when several die inside a building). The page works these out by comparing
+  each update from the server with the one before, so they are its best
+  guess: the server doesn't say who struck whom.
+- Gentle sounds, made on the spot like an old MIDI synth (no sound files):
+  a blip when a command is taken and a low buzz when it's refused, a tick
+  on selecting, a thud when your building is hit and a click when a unit
+  dies (both only on screen), a falling run of notes when your building
+  falls and a chord when an enemy's does on screen, a fanfare when yours
+  is finished or upgraded, a chime for a new unit, a horn when the horde
+  comes out, and a jingle when the game is won or lost. They start at your
+  first click or key in a game, as browsers require. **Mute** silences
+  them; this browser remembers it.
+- When the building you have selected, are aiming with or are choosing a
+  crew for is destroyed or given up, the page lets go of it (closing the
+  crew chooser) and says so. A command that still names it is refused with
+  "that building is gone".
 
 ## Working on it
 
@@ -214,6 +239,9 @@ have one, install it with `npx playwright install chromium`.
 | `src/client/net.js` | The connection to a game on the server. |
 | `src/client/camera.js`, `render.js` | Pan and zoom, and the canvas renderer: terrain, buildings, marching units between cells, picks, hover. |
 | `src/client/minimap.js` | The minimap: a few pixels a cell, repainted at most twice a second and only when a pixel changes. |
+| `src/client/effects.js` | Hits, falls and deaths, worked out from each update and the one before, for the renderer to play. |
+| `src/client/sounds.js` | Sounds: which ones an update calls for, and a small synthesizer that plays them. |
+| `src/client/tokens.js`, `art/` | The pictures (SVG, credited in `art/CREDITS.md`) and the tokens made of them, painted once per colour and size. |
 | `server/app.js` | The game server: Colyseus, the HTTP API, the page's files, the monitor. |
 | `server/room.js` | `GameRoom`, one per game: runs the core's clock, logs and applies commands, snapshots. |
 | `server/schema.js` | The room state Colyseus syncs: a generic mirror of the core's view. |
@@ -382,6 +410,9 @@ comes next.
   rules; he builds nothing, raises no units and spends no dark metal.
   Raiders only wander.
 - Food has no use beyond keeping hunger down; dark metal only buys wagons.
+- Graphics are tokens on flat hexes: nothing faces a way or moves but by
+  sliding, the ground has no texture, and combat shows hits but not who
+  struck them.
 - A simulation harness: the core can already play games with no players (the
   tests do), but there are no bots or reports yet.
 - Game server:

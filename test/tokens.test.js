@@ -1,0 +1,27 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+
+import { BUILDING_TYPES } from '../src/core/rules.js';
+import { PICTURES } from '../src/client/tokens.js';
+
+const ART = new URL('../src/client/art/', import.meta.url);
+
+test('every building type, and a unit, has a picture', () => {
+  for (const kind of [...Object.keys(BUILDING_TYPES), 'unit']) assert.ok(PICTURES.includes(kind), `no picture for ${kind}`);
+});
+
+test('the pictures are small, plain, one-colour SVGs, and credited', () => {
+  const credits = readFileSync(new URL('CREDITS.md', ART), 'utf8');
+  for (const name of PICTURES) {
+    const svg = readFileSync(new URL(`${name}.svg`, ART), 'utf8');
+    assert.ok(svg.length < 8000, `${name}.svg is ${svg.length} bytes`);
+    // Firefox draws an SVG on a canvas only with its size given.
+    assert.match(svg, /^<svg xmlns="http:\/\/www\.w3\.org\/2000\/svg" viewBox="0 0 512 512" width="512" height="512">/);
+    // Nothing but paths: no scripts, styles, links or colours of its own.
+    const tags = svg.match(/<\/?[a-z]+/g) ?? [];
+    assert.deepEqual([...new Set(tags)].sort(), ['</svg', '<path', '<svg'], `${name}.svg has more than paths`);
+    assert.doesNotMatch(svg, /fill=|href|style/, `${name}.svg carries a colour or a link`);
+    assert.ok(credits.includes(`\`${name}.svg\``), `${name}.svg is not in art/CREDITS.md`);
+  }
+});

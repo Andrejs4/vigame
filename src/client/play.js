@@ -4,7 +4,7 @@
  * player's clicks on as commands.
  */
 
-import { bounds, key, pixelToAxial } from '../core/hex.js';
+import { axialToPixel, bounds, key, pixelToAxial } from '../core/hex.js';
 import { BOARD_OPTIONS, TERRAIN, createBoard, tileAt } from '../core/board.js';
 import {
   capacityOf, castleOf, crewOf, depthOf, foodStore, inBuildRange, isDugOut, isRising, maxHp, occupancy, raiseWork, seatsOf, sideOf, upgradeCost,
@@ -12,8 +12,11 @@ import {
 import { BUILDING_TYPES, SKILLS, TICKS_PER_SECOND, UNIT_LIMIT } from '../core/rules.js';
 import { serverBase } from './api.js';
 import { Camera } from './camera.js';
+import { Effects } from './effects.js';
 import { Minimap } from './minimap.js';
 import { BoardRenderer } from './render.js';
+import { Sounds, soundsFor } from './sounds.js';
+import { Tokens } from './tokens.js';
 
 /** @param {number} tick */
 function formatTime(tick) {
@@ -51,6 +54,7 @@ export async function startGame(net, me) {
   const returnButton = /** @type {HTMLButtonElement} */ (document.getElementById('return-button'));
   const abortButton = /** @type {HTMLButtonElement} */ (document.getElementById('abort-button'));
   const attackButton = /** @type {HTMLButtonElement} */ (document.getElementById('attack-button'));
+  const muteButton = /** @type {HTMLButtonElement} */ (document.getElementById('mute-button'));
   const crewDialog = /** @type {HTMLDialogElement} */ (document.getElementById('crew'));
   const crewParts = {
     title: /** @type {HTMLElement} */ (document.getElementById('crew-title')),
@@ -68,7 +72,9 @@ export async function startGame(net, me) {
   let board = createBoard({ ...BOARD_OPTIONS, seed: 0 });
   let boardPlayers = 0;
   const camera = new Camera();
-  let renderer = new BoardRenderer(canvas, board);
+  // The pictures arrive after the first draws; each one redraws the board.
+  const tokens = new Tokens(() => { needsDraw = true; });
+  let renderer = new BoardRenderer(canvas, board, tokens);
   let minimap = new Minimap(mapCanvas, mapFrame, board);
   /** The main view's size, in CSS pixels. */
   let viewW = 0;
@@ -82,6 +88,11 @@ export async function startGame(net, me) {
   let occ = null;
   /** Whether anything is on the move, so the board must be redrawn every frame. */
   let moving = false;
+  /** Hits, falls and deaths, worked out from each update and the one before. */
+  const effects = new Effects();
+  /** Whether an effect played last frame, so the frame after the last one clears it. */
+  let playing = false;
+  const sounds = new Sounds();
   /** @type {{ q: number, r: number } | null} */
   let hover = null;
   /** @type {Array<import('./net.js').NetPeer>} */
@@ -95,6 +106,9 @@ export async function startGame(net, me) {
   /** The building whose target is being chosen, after pressing Attack. */
   /** @type {string | null} */
   let aiming = null;
+  /** The building the open crew chooser is for (null for a new one). */
+  /** @type {string | null} */
+  let crewTarget = null;
   /** @type {Set<string>} */
   let highlights = new Set();
   let showCoords = false;
@@ -118,11 +132,14 @@ export async function startGame(net, me) {
     if (next.seed !== board.seed || players !== boardPlayers) {
       boardPlayers = players;
       board = createBoard({ ...BOARD_OPTIONS, seed: next.seed, players });
-      renderer = new BoardRenderer(canvas, board);
+      renderer = new BoardRenderer(canvas, board, tokens);
       renderer.showCoords = showCoords;
       minimap = new Minimap(mapCanvas, mapFrame, board);
       recenter();
     }
+    const fresh = effects.update(view, next, performance.now());
+    for (const { name, pan } of soundsFor({ prev: view, next, fresh, seat: net.seat(), where: panOf })) sounds.play(name, pan);
+    if (view) letGo(view, next, fresh);
     view = next;
     minimap.show(next);
     occ = occupancy(next);
@@ -131,6 +148,45 @@ export async function startGame(net, me) {
     refreshHighlights();
     updateHud();
     needsDraw = true;
+  }
+
+  /**
+   * When the building the player has selected, is aiming with, or is
+   * choosing a crew for is gone, let go of it (the selection itself clears
+   * in onState) and say what became of it.
+   * @param {import('./net.js').GameView} prev
+   * @param {import('./net.js').GameView} next
+   * @param {import('./effects.js').Effect[]} fresh What the effects made of the change.
+   */
+  function letGo(prev, next, fresh) {
+    const held = [selected, aiming, crewDialog.open ? crewTarget : null];
+    const gone = held.find((id) => id !== null && prev.buildings[id] && !next.buildings[id]);
+    if (!gone) return;
+    if (aiming !== null && !next.buildings[aiming]) aiming = null;
+    if (crewDialog.open && crewTarget !== null && !next.buildings[crewTarget]) {
+      // The dialog tells of its closing a moment later; let go of it now.
+      crewTarget = null;
+      crewDialog.close('');
+    }
+    const b = prev.buildings[gone];
+    const type = BUILDING_TYPES[b.type];
+    const side = sideOf(prev, b.owner).name;
+    const whose = b.owner === net.seat() ? 'Your' : `${side}${side.endsWith('s') ? "'" : "'s"}`;
+    const fate = fresh.some((e) => e.kind === 'fall' && e.building?.id === gone) ? 'was destroyed' : type.band ? 'broke up' : 'is gone';
+    flash(`${whose} ${type.name.toLowerCase()} ${fate}.`);
+  }
+
+  /**
+   * Where a cell is across the board's view, from -1 (left) to 1 (right),
+   * or null when it is out of view: for the sounds.
+   * @param {number} q
+   * @param {number} r
+   */
+  function panOf(q, r) {
+    const w = axialToPixel(q, r, board.hexSize);
+    const p = camera.toScreen(w.x, w.y);
+    if (p.x < 0 || p.y < 0 || p.x > viewW || p.y > viewH) return null;
+    return (p.x / viewW) * 2 - 1;
   }
 
   /** Whether this viewer can give commands right now. */
@@ -243,9 +299,11 @@ export async function startGame(net, me) {
     const done = `${Math.floor((100 * (b.work ?? 0)) / (type.work ?? 1))}%`;
     if (b.type === 'castle') {
       parts.push(`${occ?.inside.get(b.id)?.length ?? 0}/${capacityOf(b)} at home`, `next unit ${done}`);
-    } else {
+    } else if (type.capacity) {
       parts.push(`crew ${view ? crewOf(view, b.id).length : 0}/${capacityOf(b)}`);
     }
+    // The lair, raiders and the horde fight by themselves, at a level of their own.
+    if (type.attack) parts.push(`level ${type.attack.skill}`);
     const toward = (/** @type {number} */ sofar) => `${Math.floor((100 * sofar) / raiseWork(b))}%`;
     if (b.upgrading !== undefined) parts.push(`upgrading ${toward(b.upgrading)}`);
     if (isRising(b)) {
@@ -338,9 +396,11 @@ export async function startGame(net, me) {
     sync();
 
     crewDialog.returnValue = '';
+    crewTarget = target;
     crewDialog.showModal();
     return new Promise((resolve) => {
       crewDialog.addEventListener('close', () => {
+        crewTarget = null;
         resolve(crewDialog.returnValue === 'ok' ? units.filter((u) => chosen.has(u.id)).map((u) => u.id) : null);
       }, { once: true });
     });
@@ -367,6 +427,7 @@ export async function startGame(net, me) {
    */
   async function give(cmd, what) {
     const outcome = await net.send(cmd);
+    sounds.play(outcome.ok ? 'ok' : 'no');
     if (!outcome.ok) flash(`Can't ${what}: ${outcome.reason}.`);
     return outcome.ok;
   }
@@ -428,6 +489,7 @@ export async function startGame(net, me) {
     }
     if (here) {
       selected = here === selected ? null : here;
+      if (selected) sounds.play('select');
     } else if (selected && isMine(selected) && BUILDING_TYPES[view.buildings[selected].type].speed && canCommand()) {
       await give({ type: 'move', building: selected, q: at.q, r: at.r }, 'go there');
       return;
@@ -624,6 +686,15 @@ export async function startGame(net, me) {
     if (selected) give({ type: 'crew', building: selected, units: [] }, 'send them home');
   });
 
+  // Browsers let a page start its audio only once the player clicks or presses a key.
+  addEventListener('pointerdown', () => sounds.wake(), { capture: true });
+  addEventListener('keydown', () => sounds.wake(), { capture: true });
+  muteButton.setAttribute('aria-pressed', String(sounds.muted));
+  muteButton.addEventListener('click', () => {
+    sounds.setMuted(!sounds.muted);
+    muteButton.setAttribute('aria-pressed', String(sounds.muted));
+  });
+
   seatButton.addEventListener('click', () => {
     if (net.seat() !== null) net.releaseSeat();
     else net.claimSeat();
@@ -660,9 +731,11 @@ export async function startGame(net, me) {
     // board from ever redrawing again.
     requestAnimationFrame(frame);
     minimap.paint(time);
-    if (!needsDraw && !moving) return;
+    const played = playing;
+    playing = effects.playing(time);
+    if (!needsDraw && !moving && !playing && !played) return;
     needsDraw = false;
-    renderer.draw({ camera, view, clock: net.clock(), selected, highlights, hover, peers });
+    renderer.draw({ camera, view, clock: net.clock(), selected, highlights, hover, peers, effects, now: time });
     minimap.frameView(camera, viewW, viewH);
   }
 
@@ -688,9 +761,13 @@ export async function startGame(net, me) {
       get selected() { return selected; },
       get placing() { return placing; },
       get aiming() { return aiming; },
+      get crewTarget() { return crewTarget; },
       get highlights() { return [...highlights]; },
       get peers() { return peers; },
       get minimap() { return minimap; },
+      effects,
+      tokens,
+      sounds,
       net,
       camera,
       forceDraw: () => { needsDraw = true; },
