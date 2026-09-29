@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { BOARD_OPTIONS, createBoard } from '../src/core/board.js';
 import {
   advance, applyCommand, capacityOf, checkState, crewOf, footprint, levelXp, newGame, occupancy, publicView, random,
-  isRising, killChance, seatsOf, starveChance,
+  depthOf, isRising, killChance, maxHp, seatsOf, starveChance,
 } from '../src/core/game.js';
 import {
   BUILDING_TYPES, COMBAT_PERIOD, DARK_LORD, HORDE_PERIOD, HORDE_START, RAIDERS, RAID_PERIOD, SALVAGE, FOOD_PER_UNIT, FOOD_PERIOD, KILL_XP, LEVEL_RATE, RANGED_DAMAGE, LEVEL_XP, MAX_LEVEL, SKILL_XP, START_UNITS, UNIT_LIMIT, WAGON_PATIENCE,
@@ -65,7 +65,7 @@ test('a castle\'s units raise new ones, sooner the more there are and the better
   const firstBirth = (units) => {
     const state = stateWith([{ id: 'b1', type: 'castle' }], units);
     const before = Object.keys(state.units).length;
-    return runUntil(board, state, () => Object.keys(state.units).length > before);
+    return runUntil(board, state, () => Object.keys(state.units).length > before, 2 * work);
   };
   const ten = unitsIn('b1', 10, 10);
   assert.equal(firstBirth(ten), Math.ceil(work / (10 * WORK_BASE + idleWork)));
@@ -243,6 +243,17 @@ test('a pit goes up at half its hit points once its crew gets there, then they d
   assert.equal(state.players[0].stone, stone + 1, 'straight into the stock');
 });
 
+test('a pit a grade deeper gains a grade\'s hit points', () => {
+  const board = openBoard(4);
+  const { work, perDepth, hp } = BUILDING_TYPES.pit;
+  const state = stateWith([{ id: 'b1', type: 'pit', q: 1, r: 0, dug: /** @type {number} */ (perDepth) - 1, work: /** @type {number} */ (work) - 1 }], unitsIn('b1', 1, 10));
+  assert.equal(maxHp(state, state.buildings.b1), hp);
+  run(board, state, 1);
+  assert.equal(depthOf(state.buildings.b1), 1);
+  assert.equal(state.buildings.b1.hp, 2 * hp);
+  assert.equal(maxHp(state, state.buildings.b1), 2 * hp);
+});
+
 test('a dug-out pit sends its crew home, and takes no other', () => {
   const board = openBoard(5);
   const { work, depth, perDepth } = BUILDING_TYPES.pit;
@@ -344,14 +355,14 @@ test('a side eats every minute; short shares make it hungry, full ones less so',
   const crowd = stateWith([{ id: 'b1', type: 'castle' }], unitsIn('b1', 100, 1000));
   crowd.players[0].food = 7;
   run(board, crowd, FOOD_PERIOD);
-  // 7 + 300 from the castle, shared by 100: 3 each, 7 left over.
-  assert.deepEqual([crowd.players[0].food, crowd.players[0].hunger], [7, 2]);
+  // 7 + 250 from the castle (for half its 50), shared by 100: 2 each, 57 left over.
+  assert.deepEqual([crowd.players[0].food, crowd.players[0].hunger], [57, 3]);
 
   // In a tower, so nobody is born meanwhile.
   const fed = stateWith([{ id: 'b1', type: 'castle' }, { id: 'b2', q: 3, r: 0 }], unitsIn('b2', 10, 1000));
   fed.players[0].hunger = 20;
   run(board, fed, FOOD_PERIOD);
-  assert.deepEqual([fed.players[0].food, fed.players[0].hunger], [300 - 10 * FOOD_PER_UNIT, 15]);
+  assert.deepEqual([fed.players[0].food, fed.players[0].hunger], [250 - 10 * FOOD_PER_UNIT, 15]);
 });
 
 test('at full hunger units may starve, the more likely the lower their level', () => {

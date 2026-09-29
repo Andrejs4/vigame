@@ -56,9 +56,10 @@ Run `npm start` and open http://127.0.0.1:2567.
 - **Your castle** covers seven cells and is its side's life: when it falls,
   your side has lost. It is every unit's home, and starts with 12. The units at
   home raise new ones: the more of them, and the better they breed, the
-  sooner. With nobody at home it still raises one every two minutes by
-  itself, even while damaged or upgraded. It takes in all its units, however many, but
-  stops breeding while it holds more than its room.
+  sooner. With nobody at home it still raises one every four minutes by
+  itself, even while damaged or upgraded. It has room for 50 units a grade
+  (50, 100, 150); it takes in all its units, however many, but stops
+  breeding while it holds more than its room.
 - **Units** each have a medieval name, a level from 1 to 100, and six
   skills: breeding, ranged attack, close combat, building (which covers
   repairing and digging), farming and running. Work trains the skill it
@@ -96,13 +97,14 @@ Run `npm start` and open http://127.0.0.1:2567.
   with a dashed outline. **Abort** gives it up: its crew, inside or on the
   way, goes home, and what it cost is lost.
 - **Pits**: the crew, up to 8, digs stone, faster the more of them and the
-  better they build; every 20 stone the pit is a grade deeper. At depth 5 it
-  is dug out and the crew goes home.
+  better they build (an unskilled unit alone digs a stone in 48 s); every
+  20 stone the pit is a grade deeper, and 800 hit points sturdier. At depth
+  5 it is dug out and the crew goes home.
 - **Food**: a unit eats 10 a minute. Every minute the castle yields enough
-  for half the units it can hold, and each farm a little (20) even with
+  for half the units it can hold, and each farm a little (10) even with
   nobody working it; a farm's crew (up to 6) grows more, faster the better
   they farm. A side stores at most 10 minutes' food for its castle's full
-  house (6000 at grade 1); the rest spoils.
+  house (5000 at grade 1); the rest spoils.
 - **Hunger**: one number per side, 0 to 100%. At each meal, if there isn't
   enough, the food is shared evenly and what doesn't divide waits for the
   next meal. A share under 5 raises hunger by the shortfall; over 5 lowers
@@ -117,7 +119,8 @@ Run `npm start` and open http://127.0.0.1:2567.
   crew still fights, and mends the building first when it's damaged (and
   out of the fight), but a
   castle's units don't breed (the castle's own slow breeding goes on).
-- **Hit points**: every building has them, a castle 2000 and a pit 800. At
+- **Hit points**: every building has them, a castle 2000 and a pit 800 (more
+  as it is dug deeper). At
   none left it collapses at once, and whoever was inside is left standing
   there. While a building is damaged, the units inside mend it instead of
   their usual work, faster the better they build: 0.4 hit points a second

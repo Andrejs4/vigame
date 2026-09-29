@@ -243,6 +243,7 @@ export const REPAIR_WORK = 500;
  * @property {'unit' | 'stone' | 'food'} [yields]
  * @property {number} [base] Food a farm yields every FOOD_PERIOD, worked or not.
  * @property {number} [perDepth] Stone a pit yields for each grade of depth.
+ *   Each grade of depth adds `hp` to its hit points, as an upgrade does.
  * @property {number} [depth] A pit's last grade of depth. Once there it is
  *   dug out, and its crew goes home.
  * @property {number} [speed] Ticks per cell on open ground. Only moving buildings have one;
@@ -268,8 +269,8 @@ export const REPAIR_WORK = 500;
 /** @type {Record<string, BuildingType>} */
 export const BUILDING_TYPES = {
   castle: {
-    name: 'Castle', size: 7, capacity: 60, grades: 3, hp: 2000, build: false, cost: 0, upgrade: 200, reach: 1, life: true,
-    skill: 'breeding', work: 12000, yields: 'unit', idleWork: 10, raise: 36000,
+    name: 'Castle', size: 7, capacity: 50, grades: 3, hp: 2000, build: false, cost: 0, upgrade: 200, reach: 1, life: true,
+    skill: 'breeding', work: 24000, yields: 'unit', idleWork: 10, raise: 36000,
   },
   tower: {
     name: 'Tower', size: 1, capacity: 20, grades: 3, hp: 500, build: true, cost: 60, upgrade: 60, reach: 2, skill: 'ranged',
@@ -281,11 +282,11 @@ export const BUILDING_TYPES = {
   },
   pit: {
     name: 'Pit', size: 1, capacity: 8, grades: 1, hp: 800, build: true, cost: 0,
-    skill: 'build', work: 2400, yields: 'stone', perDepth: 20, depth: 5, through: 0.25, raise: 3000,
+    skill: 'build', work: 9600, yields: 'stone', perDepth: 20, depth: 5, through: 0.25, raise: 3000,
   },
   farm: {
     name: 'Farm', size: 1, capacity: 6, grades: 1, hp: 200, build: true, cost: 30,
-    skill: 'farming', work: 300, yields: 'food', base: 20, through: 0.5, raise: 6000,
+    skill: 'farming', work: 600, yields: 'food', base: 10, through: 0.5, raise: 6000,
   },
   lair: {
     name: 'Lair', size: 7, capacity: 0, grades: 1, hp: 18000, build: false, cost: 0,

@@ -343,14 +343,16 @@ export function lordScale(state) {
 }
 
 /**
- * A building's hit points when unharmed: half while it is going up, and
- * more for the Dark Lord's with more players (`lordScale`).
+ * A building's hit points when unharmed: its type's for each grade, and for
+ * each grade of depth a pit is dug; half while it is going up; and more for
+ * the Dark Lord's with more players (`lordScale`).
  * @param {Pick<GameState, 'players'>} state
  * @param {Building} b
  */
 export function maxHp(state, b) {
   const type = BUILDING_TYPES[b.type];
-  const full = Math.round(type.hp * b.grade * (type.scales ? lordScale(state) : 1));
+  const grades = b.grade + (type.depth !== undefined ? depthOf(b) : 0);
+  const full = Math.round(type.hp * grades * (type.scales ? lordScale(state) : 1));
   return isRising(b) ? Math.ceil(full / 2) : full;
 }
 
@@ -1500,8 +1502,11 @@ function work(board, state, occ) {
     } else if (type.yields === 'food') {
       addFood(state, b.owner, 1);
     } else {
+      const depth = depthOf(b);
       stock.stone += 1;
       b.dug = /** @type {number} */ (b.dug) + 1;
+      // A grade deeper is sturdier by a grade's hit points, as an upgrade is.
+      if (depthOf(b) > depth && b.hp !== undefined) b.hp += type.hp;
       if (isDugOut(b)) {
         b.work = 0;
         sendHome(board, state, occ, b);
