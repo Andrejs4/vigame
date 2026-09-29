@@ -178,6 +178,16 @@ export const RAID_CLEAR = 6;
 /** How far a raider wanders at a time, in cells. */
 export const RAID_ROAM = 4;
 
+/**
+ * The Dark Lord's horde. From HORDE_START, every HORDE_PERIOD his lair sends
+ * out a wave, each bigger than the last: wave n is ceil(n / 2) ghouls and
+ * floor(n / 3) ogres, as long as he has fewer than HORDE_MAX out. They cost
+ * him nothing, and hunt by themselves (`hunts` on a building type).
+ */
+export const HORDE_START = 2 * 60 * TICKS_PER_SECOND;
+export const HORDE_PERIOD = 60 * TICKS_PER_SECOND;
+export const HORDE_MAX = 24;
+
 /** Dark metal each side starts with. */
 export const START_METAL = 0;
 
@@ -231,6 +241,10 @@ export const REPAIR_WORK = 100;
  * @property {number} [through] The share of strikes on it that reach a unit
  *   inside instead: none for a castle, tower or wagon.
  * @property {boolean} [life] Its side's life: when it falls, the side has lost.
+ * @property {boolean} [hunts] One of the Dark Lord's horde, which moves and
+ *   fights by itself: it goes for the nearest enemy farm, or castle once no
+ *   farm is left; it turns on any building that strikes it, and on the
+ *   nearest enemy building when its way is blocked.
  * @property {{ damage: number, skill: number, reach: number }} [attack] A
  *   building that strikes by itself, once every COMBAT_PERIOD: `damage` off a
  *   building, or a kill roll as a striker of `skill` against a unit, at the
@@ -266,6 +280,14 @@ export const BUILDING_TYPES = {
   raider: {
     name: 'Raider', size: 1, capacity: 0, grades: 1, hp: 300, build: false, cost: 0,
     skill: 'melee', speed: 3 * TICKS_PER_SECOND, attack: { damage: 10, skill: 20, reach: 2 }, loot: 10,
+  },
+  ghoul: {
+    name: 'Ghoul', size: 1, capacity: 0, grades: 1, hp: 120, build: false, cost: 0,
+    skill: 'melee', speed: TICKS_PER_SECOND, attack: { damage: 6, skill: 10, reach: 1 }, loot: 2, hunts: true,
+  },
+  ogre: {
+    name: 'Ogre', size: 1, capacity: 0, grades: 1, hp: 600, build: false, cost: 0,
+    skill: 'melee', speed: 4 * TICKS_PER_SECOND, attack: { damage: 25, skill: 30, reach: 1 }, loot: 6, hunts: true,
   },
   band: {
     name: 'Band', size: 1, capacity: 30, grades: 1, hp: 0, build: true, cost: 0,

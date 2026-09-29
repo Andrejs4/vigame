@@ -40,7 +40,7 @@ import { distance, key, neighbors, parseKey } from './hex.js';
 import { tileAt } from './board.js';
 import { unitName } from './names.js';
 import {
-  BUILDING_TYPES, BUILD_RANGE, DARK_LORD, RAIDERS, RAID_CHANCE, RAID_CLEAR, RAID_MAX, RAID_PERIOD, RAID_ROAM, START_METAL, DEFAULT_MODE, MAX_PLAYERS, MODES, COMBAT_PERIOD, DEPART_GAP, FOOD_PER_UNIT, KILL_EVEN, KILL_MAX, KILL_STEP, KILL_XP, MELEE_DAMAGE, MELEE_RANGE,
+  BUILDING_TYPES, BUILD_RANGE, DARK_LORD, HORDE_MAX, HORDE_PERIOD, HORDE_START, RAIDERS, RAID_CHANCE, RAID_CLEAR, RAID_MAX, RAID_PERIOD, RAID_ROAM, START_METAL, DEFAULT_MODE, MAX_PLAYERS, MODES, COMBAT_PERIOD, DEPART_GAP, FOOD_PER_UNIT, KILL_EVEN, KILL_MAX, KILL_STEP, KILL_XP, MELEE_DAMAGE, MELEE_RANGE,
   RANGED_DAMAGE, RANGED_RANGE, REPAIR_WORK, FOOD_PERIOD, FOOD_STORE, HUNGER_LINE, LEVEL_GROWTH,
   LEVEL_RATE, LEVEL_XP, MAX_HUNGER, MAX_LEVEL, SIDES, SKILLS, SKILL_XP, START_STONE, START_UNITS, STARVE_CHANCE,
   UNIT_LIMIT, WAGON_PATIENCE, WALK_TICKS, WORK_BASE,
@@ -772,8 +772,8 @@ function aim(state, player, cmd) {
   }
   const t = typeof cmd.target === 'string' && Object.hasOwn(state.buildings, cmd.target) ? state.buildings[cmd.target] : null;
   if (!t || allied(state, t.owner, player)) return refuse('not an enemy');
-  b.target = t.id;
-  if (BUILDING_TYPES[b.type].speed) delete b.path; // it sets off after the target at the next strike
+  if (BUILDING_TYPES[b.type].speed) turnTo(b, t.id); // it sets off after the target at the next strike
+  else b.target = t.id;
   return { ok: true };
 }
 
@@ -950,6 +950,7 @@ export function advance(board, state) {
   for (const b of Object.values(state.buildings)) if (/** @type {number} */ (b.hp) <= 0) collapse(state, b);
   settle(state);
   if (state.tick % RAID_PERIOD === 0) raid(board, state);
+  if (state.tick >= HORDE_START && (state.tick - HORDE_START) % HORDE_PERIOD === 0) summon(board, state);
   if (state.tick % FOOD_PERIOD === 0) {
     harvest(state);
     for (const p of state.players) eat(state, p);
@@ -1081,14 +1082,16 @@ function fight(board, state, occ) {
   /**
    * One strike: `damage` off a building (unless it gets through to a unit
    * inside), or a kill roll as a striker of `skill` against a unit. Bringing
-   * down a building with loot gives it to the striker's side.
+   * down a building with loot gives it to the striker's side. One of the
+   * horde turns on the building that struck it.
    * @param {{ t: typeof targets[number] }} target
    * @param {number} owner The striker's side.
    * @param {number} damage
    * @param {number} skill
+   * @param {string} [from] The building striking, or whose units strike.
    * @returns {boolean} Whether it brought a building down or killed.
    */
-  const strike = ({ t }, owner, damage, skill) => {
+  const strike = ({ t }, owner, damage, skill, from) => {
     const hit = t.building;
     // Some strikes on a building get through to a unit inside.
     const sheltered = hit ? /** @type {string[]} */ (occ.inside.get(hit.id) ?? []).filter((x) => state.units[x]) : [];
@@ -1097,6 +1100,7 @@ function fight(board, state, occ) {
     const through = hit && sheltered.length && random(state) < cover;
     if (hit && !through) {
       hit.hp = Math.max(0, /** @type {number} */ (hit.hp) - damage);
+      if (from !== undefined && from !== hit.target && BUILDING_TYPES[hit.type].hunts) turnTo(hit, from);
       if (hit.hp > 0) return false;
       state.players[owner].metal += BUILDING_TYPES[hit.type].loot ?? 0;
       return true;
@@ -1112,13 +1116,14 @@ function fight(board, state, occ) {
    * @param {Unit} u
    * @param {Array<{ t: typeof targets[number], d: number }>} near
    * @param {number} reach
+   * @param {string} [from] The building it strikes from.
    */
-  const unitStrikes = (u, near, reach) => {
+  const unitStrikes = (u, near, reach, from) => {
     const target = near.find((x) => x.d <= reach && standing(x));
     if (!target) return false;
     const melee = target.d <= MELEE_RANGE;
     const skill = melee ? 'melee' : 'ranged';
-    const killed = strike(target, u.owner, (melee ? MELEE_DAMAGE : RANGED_DAMAGE) + u.skills[skill], u.skills[skill]);
+    const killed = strike(target, u.owner, (melee ? MELEE_DAMAGE : RANGED_DAMAGE) + u.skills[skill], u.skills[skill], from);
     practise(u, skill, killed ? KILL_XP : 0);
     return true;
   };
@@ -1126,6 +1131,7 @@ function fight(board, state, occ) {
   for (const b of Object.values(state.buildings)) {
     if (b.target !== undefined && state.buildings[b.target]?.owner === undefined) delete b.target;
     const type = BUILDING_TYPES[b.type];
+    if (type.hunts && b.target === undefined) hunt(state, b);
     if (type.speed && b.target !== undefined && !isRising(b)) chase(board, state, occ, b);
     const inside = /** @type {string[]} */ (occ.inside.get(b.id));
     if (!inside.length && !type.attack) continue;
@@ -1133,11 +1139,11 @@ function fight(board, state, occ) {
     const near = inReach(footprint(b.type, b.q, b.r), b.owner, Math.max(unitReach, type.attack?.reach ?? 0), b.target);
     if (type.attack) {
       const target = near.find((x) => x.d <= /** @type {{ reach: number }} */ (type.attack).reach && standing(x));
-      if (target) strike(target, b.owner, type.attack.damage, type.attack.skill);
+      if (target) strike(target, b.owner, type.attack.damage, type.attack.skill, b.id);
     }
     for (const id of inside) {
       const u = state.units[id];
-      if (u && !unitStrikes(u, near, unitReach)) break;
+      if (u && !unitStrikes(u, near, unitReach, b.id)) break;
     }
   }
   for (const u of Object.values(state.units)) {
@@ -1149,7 +1155,9 @@ function fight(board, state, occ) {
 
 /**
  * A wagon or band with a target and nowhere to go heads for it, and stops
- * once it is close enough for close combat.
+ * once it is close enough for close combat. One of the horde with no way
+ * there turns on the nearest other enemy building, which is likely what
+ * stands in its way.
  * @param {Board} board
  * @param {GameState} state
  * @param {Occupancy} occ
@@ -1164,10 +1172,84 @@ function chase(board, state, occ, b) {
   const goals = new Set(cells.map((c) => key(c.q, c.r)));
   const blocked = wayFor(state, occ, b);
   const route = findPath(board, b, t, (k) => !goals.has(k) && blocked(k));
-  if (!route) return;
+  if (!route) {
+    const other = BUILDING_TYPES[b.type].hunts && nearestEnemy(state, b, (x) => x.id !== t.id && x.hp !== undefined);
+    if (other) turnTo(b, other.id);
+    return;
+  }
   const stop = route.findIndex(([q, r]) => near({ q, r }));
   const path = route.slice(0, stop + 1);
   if (path.length) b.path = path;
+}
+
+/**
+ * Point a moving building at a new target. It finishes the step it is
+ * taking, then goes after it.
+ * @param {Building} b
+ * @param {string} target
+ */
+function turnTo(b, target) {
+  b.target = target;
+  if (b.until !== undefined && b.path?.length) b.path = [b.path[0]];
+  else delete b.path;
+  delete b.waiting;
+}
+
+/**
+ * The enemy building nearest to one of the horde, of those `which` takes.
+ * @param {GameState} state
+ * @param {Building} b
+ * @param {(t: Building) => boolean} which
+ * @returns {Building | null}
+ */
+function nearestEnemy(state, b, which) {
+  let best = null;
+  let bestDistance = Infinity;
+  for (const t of Object.values(state.buildings)) {
+    if (allied(state, t.owner, b.owner) || !which(t)) continue;
+    const d = Math.min(...footprint(t.type, t.q, t.r).map((c) => distance(c, b)));
+    if (d < bestDistance) {
+      best = t;
+      bestDistance = d;
+    }
+  }
+  return best;
+}
+
+/**
+ * One of the horde with nothing to go for picks the nearest enemy farm, or
+ * castle once no farm is left.
+ * @param {GameState} state
+ * @param {Building} b
+ */
+function hunt(state, b) {
+  const prey = nearestEnemy(state, b, (t) => t.type === 'farm') ?? nearestEnemy(state, b, (t) => t.type === 'castle');
+  if (prey) turnTo(b, prey.id);
+}
+
+/**
+ * The Dark Lord's lair sends out a wave of his horde, each bigger than the
+ * last (see HORDE_START in rules.js), onto open cells around it, while he
+ * has fewer than HORDE_MAX out.
+ * @param {Board} board
+ * @param {GameState} state
+ */
+function summon(board, state) {
+  const lord = state.players.find((p) => p.side === DARK_LORD && p.lost === undefined);
+  const lair = lord && Object.values(state.buildings).find((b) => b.owner === lord.id && b.type === 'lair');
+  if (!lord || !lair) return;
+  const wave = (state.tick - HORDE_START) / HORDE_PERIOD + 1;
+  const out = Object.values(state.buildings).filter((b) => b.owner === lord.id && BUILDING_TYPES[b.type].hunts).length;
+  const kinds = [...Array(Math.ceil(wave / 2)).fill('ghoul'), ...Array(Math.floor(wave / 3)).fill('ogre')]
+    .slice(0, Math.max(0, HORDE_MAX - out));
+  const taken = occupancy(state).buildingAt;
+  const free = board.list.filter((t) => t.passable && !taken.has(key(t.q, t.r)) && distance(t, lair) >= 2 && distance(t, lair) <= 3);
+  for (const kind of kinds) {
+    if (!free.length) return;
+    const [cell] = free.splice(Math.floor(random(state) * free.length), 1);
+    const id = newId(state, 'b');
+    state.buildings[id] = { id, owner: lord.id, type: kind, grade: 1, q: cell.q, r: cell.r, hp: BUILDING_TYPES[kind].hp };
+  }
 }
 
 /**

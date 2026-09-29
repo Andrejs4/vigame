@@ -7,7 +7,7 @@ import {
   isRising, killChance, seatsOf, starveChance,
 } from '../src/core/game.js';
 import {
-  BUILDING_TYPES, COMBAT_PERIOD, RAIDERS, RAID_PERIOD, FOOD_PER_UNIT, FOOD_PERIOD, KILL_XP, LEVEL_RATE, RANGED_DAMAGE, LEVEL_XP, MAX_LEVEL, SKILL_XP, START_UNITS, UNIT_LIMIT, WAGON_PATIENCE,
+  BUILDING_TYPES, COMBAT_PERIOD, DARK_LORD, HORDE_PERIOD, HORDE_START, RAIDERS, RAID_PERIOD, FOOD_PER_UNIT, FOOD_PERIOD, KILL_XP, LEVEL_RATE, RANGED_DAMAGE, LEVEL_XP, MAX_LEVEL, SKILL_XP, START_UNITS, UNIT_LIMIT, WAGON_PATIENCE,
   WALK_TICKS, WORK_BASE,
 } from '../src/core/rules.js';
 import { distance } from '../src/core/hex.js';
@@ -504,6 +504,48 @@ test('raiders turn up now and then; bringing one down yields dark metal', () => 
   run(openBoard(4), state, COMBAT_PERIOD);
   assert.equal(state.buildings.b2, undefined);
   assert.equal(state.players[0].metal, metal + /** @type {number} */ (BUILDING_TYPES.raider.loot));
+});
+
+test('in cooperation the Dark Lord\'s lair sends out ever bigger waves of ghouls and ogres', () => {
+  const board = createBoard({ ...BOARD_OPTIONS, seed: 3 });
+  const game = newGame(board);
+  const lord = game.players.findIndex((p) => p.side === DARK_LORD);
+  const horde = () => Object.values(game.buildings).filter((b) => b.owner === lord && BUILDING_TYPES[b.type].hunts);
+  run(board, game, HORDE_START - 1);
+  assert.equal(horde().length, 0, 'nothing before the first wave');
+  run(board, game, 1);
+  const [first] = horde();
+  assert.deepEqual(horde().map((b) => b.type), ['ghoul'], 'the first wave: a ghoul');
+  run(board, game, COMBAT_PERIOD);
+  const prey = game.buildings[first.id].target;
+  assert.equal(prey && game.buildings[prey].type, 'castle', 'no farms yet, so it goes for a castle');
+  run(board, game, 2 * HORDE_PERIOD - COMBAT_PERIOD);
+  assert.ok(horde().some((b) => b.type === 'ogre'), 'the third wave brings an ogre');
+
+  const alone = newGame(board, { mode: 'ffa' });
+  run(board, alone, HORDE_START);
+  assert.ok(!Object.values(alone.buildings).some((b) => BUILDING_TYPES[b.type].hunts), 'no horde without the Dark Lord');
+});
+
+test('the horde goes for the nearest farm, turns on a building that strikes it, and on castles once no farm is left', () => {
+  const board = openBoard(7);
+  const sites = [
+    { id: 'b1', type: 'castle', q: -5, r: 0 },
+    { id: 'b2', type: 'farm', q: 3, r: 0 },
+    { id: 'b3', type: 'farm', q: 6, r: -3 },
+    { id: 'b4', owner: 1, type: 'ogre', q: 5, r: 0 },
+  ];
+  const state = stateWith(sites);
+  run(board, state, COMBAT_PERIOD);
+  assert.equal(state.buildings.b4.target, 'b2', 'the nearest farm');
+
+  const struck = stateWith([...sites, { id: 'b5', q: 5, r: 3 }], unitsIn('b5', 2, 10));
+  run(board, struck, COMBAT_PERIOD);
+  assert.equal(struck.buildings.b4.target, 'b5', 'the tower that struck it');
+
+  const bare = stateWith([sites[0], sites[3]]);
+  run(board, bare, COMBAT_PERIOD);
+  assert.equal(bare.buildings.b4.target, 'b1', 'no farm left: the castle');
 });
 
 test('wagons cost dark metal and go up only near the castle; bands can be aimed at', () => {

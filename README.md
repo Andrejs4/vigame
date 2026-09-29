@@ -34,8 +34,17 @@ Run `npm start` and open http://127.0.0.1:2567.
   - **Cooperation** (the default): all the players are one team against the
     Dark Lord, whose lair (6000 hit points) stands in the middle of the map
     and strikes the nearest enemy within 4 cells by itself, 20 hit points a
-    second. Allies never strike each other and pass through each other's
-    buildings. The players win when the lair falls, and lose when all
+    second. From the second minute it sends out his horde, a wave a minute,
+    each bigger than the last (wave n: n/2 ghouls rounded up and n/3 ogres
+    rounded down, at most 24 out at once). **Ghouls** are small and fast
+    (120 hit points, a cell a second, 6 a strike); **ogres** are slow and
+    tougher (600 hit points, 4 s a cell, 25 a strike). They need no units and
+    cost him nothing. Each goes for the nearest farm, and for a castle once
+    no farm is left; it turns on any building that strikes it, and on the
+    nearest one when its way is blocked. Bringing one down yields 2 dark
+    metal (a ghoul) or 6 (an ogre). Whatever dark metal the Dark Lord
+    collects he keeps, and does nothing with yet. Allies never strike each
+    other and pass through each other's buildings. The players win when the lair falls, and lose when all
     their castles have. One player alone is a game too.
   - **Free for all** (two players or more): each against the others; the
     middle of the map is left empty.
@@ -187,7 +196,7 @@ have one, install it with `npx playwright install chromium`.
 | `src/core/` | Pure modules, shared by the server and the page, with no DOM, network or clock. |
 | `src/core/hex.js` | Pointy-top axial hex math: neighbours, distance, lines, pixel conversion, board shapes. |
 | `src/core/board.js` | Seeded terrain, with what each terrain allows, and the castle and lair sites; same seed and player count, same map everywhere. |
-| `src/core/rules.js` | The numbers: tick rate, sides and modes, skills and experience, food and hunger, fighting, raiders, building types. |
+| `src/core/rules.js` | The numbers: tick rate, sides and modes, skills and experience, food and hunger, fighting, raiders, the Dark Lord's horde, building types. |
 | `src/core/names.js` | Medieval names for units. |
 | `src/core/game.js` | The game core: the state as plain JSON, `applyCommand`, `advance` (one tick), `occupancy`, `checkState`, `publicView`. Deterministic. |
 | `src/core/player.js` | Player-name rules, checked on the page and on the server. |
@@ -364,9 +373,9 @@ comes next.
 
 - Combat is a first cut: a unit dies to a single lucky strike until units
   get their dice, and single units can't be picked as targets.
-- The Dark Lord only has his lair: it strikes whatever comes within 4
-  cells, but he builds nothing, raises no units and never attacks. Raiders
-  only wander.
+- The Dark Lord's horde only hunts farms and castles, by the simplest
+  rules; he builds nothing, raises no units and spends no dark metal.
+  Raiders only wander.
 - Food has no use beyond keeping hunger down; dark metal only buys wagons.
 - A simulation harness: the core can already play games with no players (the
   tests do), but there are no bots or reports yet.
