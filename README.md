@@ -26,7 +26,7 @@ Run `npm start` and open http://127.0.0.1:2567.
   starts one for 1 to 8 players (2 by default), on a map that grows with
   them (18 × 12 cells for two, 36 × 24 for eight), castles in a ring
   around the middle. It starts in either mode:
-  - **Cooperation** (the default): both players are one team against the
+  - **Cooperation** (the default): all the players are one team against the
     Dark Lord, whose lair (6000 hit points) stands in the middle of the map
     and strikes the nearest enemy within 4 cells by itself, 20 hit points a
     second. Allies never strike each other and pass through each other's
@@ -269,7 +269,7 @@ experience points, which change every tick a unit works.
 ## The game server
 
 The server runs each game's core in a Colyseus room, ten ticks a second
-while both players are present, and mirrors the core's view into the room
+while every player is present, and mirrors the core's view into the room
 state: each building and unit as its own JSON entry, which Colyseus sends
 only when it changes. The page sends commands, never state:
 
