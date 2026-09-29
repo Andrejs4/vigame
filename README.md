@@ -32,13 +32,13 @@ Run `npm start` and open http://127.0.0.1:2567.
   **Release seat** frees a seat for a spectator to take. A game is in
   either mode:
   - **Cooperation** (the default): all the players are one team against the
-    Dark Lord, whose lair (18000 hit points) stands in the middle of the map
+    Dark Lord, whose lair (36000 hit points) stands in the middle of the map
     and strikes the nearest enemy within 4 cells by itself, 40 hit points a
     second, and against units as a level-60 fighter. From the second minute it sends out his horde, a wave a minute,
     each bigger than the last (wave n: n/2 ghouls rounded up and n/3 ogres
     rounded down, at most 24 out at once). **Ghouls** are small and fast
-    (600 hit points, a cell a second, 12 a strike, level 10); **ogres** are
-    slow and tougher (3000 hit points, 4 s a cell, 50 a strike, level 35). They need no units and
+    (1200 hit points, a cell a second, 12 a strike, level 10); **ogres** are
+    slow and tougher (6000 hit points, 4 s a cell, 50 a strike, level 35). They need no units and
     cost him nothing. Each goes for the nearest farm, and for a castle once
     no farm is left; it turns on any building that strikes it, and on the
     nearest one when its way is blocked. Bringing one down yields 2 dark

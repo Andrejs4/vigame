@@ -300,7 +300,7 @@ export const BUILDING_TYPES = {
     skill: 'farming', work: 600, yields: 'food', base: 10, through: 0.5, raise: 6000,
   },
   lair: {
-    name: 'Lair', size: 7, capacity: 0, grades: 1, hp: 18000, build: false, cost: 0,
+    name: 'Lair', size: 7, capacity: 0, grades: 1, hp: 36000, build: false, cost: 0,
     skill: 'melee', life: true, attack: { damage: 40, skill: 60, reach: 4 }, scales: true,
   },
   raider: {
@@ -308,11 +308,11 @@ export const BUILDING_TYPES = {
     skill: 'melee', speed: 3 * TICKS_PER_SECOND, attack: { damage: 10, skill: 20, reach: 2 }, loot: 10,
   },
   ghoul: {
-    name: 'Ghoul', size: 1, capacity: 0, grades: 1, hp: 600, build: false, cost: 0,
+    name: 'Ghoul', size: 1, capacity: 0, grades: 1, hp: 1200, build: false, cost: 0,
     skill: 'melee', speed: TICKS_PER_SECOND, attack: { damage: 12, skill: 10, reach: 1 }, loot: 2, hunts: true, scales: true,
   },
   ogre: {
-    name: 'Ogre', size: 1, capacity: 0, grades: 1, hp: 3000, build: false, cost: 0,
+    name: 'Ogre', size: 1, capacity: 0, grades: 1, hp: 6000, build: false, cost: 0,
     skill: 'melee', speed: 4 * TICKS_PER_SECOND, attack: { damage: 50, skill: 35, reach: 1 }, loot: 6, hunts: true, scales: true,
   },
   band: {
