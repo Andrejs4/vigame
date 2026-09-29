@@ -63,7 +63,9 @@ Run `npm start` and open http://127.0.0.1:2567.
 - **Units** each have a medieval name, a level from 1 to 100, and six
   skills: breeding, ranged attack, close combat, building (which covers
   repairing and digging), farming and running. Work trains the skill it
-  uses, and the unit's level with it: every skill at the same pace, the
+  uses, and the unit's level with it: every skill at the same pace (a
+  strike trains ranged or close combat five times as much as a tick of
+  other work, since units strike only once a second), the
   level faster the fiercer the work (breeding least, then running, farming,
   building, ranged and close combat, and a killing blow most). A skill
   can't pass the unit's level; it climbs faster than the level, then waits
@@ -107,9 +109,11 @@ Run `npm start` and open http://127.0.0.1:2567.
   house (4000 at grade 1); the rest spoils.
 - **Hunger**: one number per side, 0 to 100%. At each meal, if there isn't
   enough, the food is shared evenly and what doesn't divide waits for the
-  next meal. A share under 5 raises hunger by the shortfall; over 5 lowers
-  it by the excess. At 100%, every unit may starve at each meal: about 5%
-  at level 1, 0.6% at level 50, never at 100.
+  next meal. Hunger follows how short the meals fall: each meal moves it a
+  quarter of the way toward the shortfall, so full meals bring it down to
+  0%, half rations to 50%, and nothing at all up to 100% (in about a
+  quarter of an hour). At 100%, every unit may starve at each meal: about
+  5% at level 1, 0.6% at level 50, never at 100.
 - **Upgrade** the selected building, for stone: the castle 200 × its grade,
   a tower 60 × its grade. Then its crew works on it, as on a new building,
   instead of their usual work, which trains their building skill: each grade

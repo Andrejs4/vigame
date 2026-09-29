@@ -139,7 +139,7 @@ test('an older database is upgraded: turn-based games are dropped, players kept'
     storage.close();
 
     const check = new Database(file, { readonly: true });
-    assert.equal(check.pragma('user_version', { simple: true }), 14);
+    assert.equal(check.pragma('user_version', { simple: true }), 15);
     check.close();
   } finally {
     rmSync(dir, { recursive: true, force: true });

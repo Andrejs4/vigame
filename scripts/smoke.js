@@ -464,13 +464,13 @@ async function threeBrowsers(browser, url, { full, label }) {
   // Once her tower stands, Ann looks at its crew and upgrades it; Bēla sees it.
   await a.keyboard.press('Escape');
   await selectBuilding(a, tower);
-  await waitMatch(a, '#selection', /^Tower \(grade 1\) · crew \d+\/\d+ · going up \d+%/);
+  await waitMatch(a, '#selection', /^Tower \(grade 1\) · crew \d+\/\d+ · going up\s+\d+%/);
   await a.waitForFunction((id) => /** @type {any} */ (window).__vigame.view.buildings[id].raised === undefined, tower.id, { timeout: 60000 });
   await crewWith(a, tower, 0);
   await waitMatch(a, '#selection', /^Tower \(grade 1\) · crew \d+\/\d+ · HP/);
   // The upgrade is work for the crew too.
   await a.click('#upgrade');
-  await waitMatch(a, '#selection', /^Tower \(grade 1\) · crew \d+\/\d+ · upgrading \d+%/);
+  await waitMatch(a, '#selection', /^Tower \(grade 1\) · crew \d+\/\d+ · upgrading\s+\d+%/);
   await waitMatch(a, '#selection', /^Tower \(grade 2\)/, 60000);
   await b.waitForFunction((id) => /** @type {any} */ (window).__vigame.view.buildings[id].grade === 2, tower.id);
 

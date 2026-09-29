@@ -41,8 +41,8 @@ import { tileAt } from './board.js';
 import { unitName } from './names.js';
 import {
   BUILDING_TYPES, BUILD_RANGE, DARK_LORD, HORDE_MAX, HORDE_PERIOD, HORDE_START, RAIDERS, SALVAGE, RAID_CHANCE, RAID_CLEAR, RAID_MAX, RAID_PERIOD, RAID_ROAM, START_METAL, DEFAULT_MODE, MAX_PLAYERS, MODES, COMBAT_PERIOD, DEPART_GAP, FOOD_PER_UNIT, KILL_EVEN, KILL_MAX, KILL_STEP, KILL_XP, MELEE_DAMAGE, MELEE_RANGE,
-  RANGED_DAMAGE, RANGED_RANGE, REPAIR_WORK, FOOD_PERIOD, FOOD_STORE, HUNGER_LINE, LEVEL_GROWTH,
-  LEVEL_RATE, LEVEL_XP, MAX_HUNGER, MAX_LEVEL, SIDES, SKILLS, SKILL_XP, START_STONE, START_UNITS, STARVE_CHANCE,
+  RANGED_DAMAGE, RANGED_RANGE, REPAIR_WORK, FOOD_PERIOD, FOOD_STORE, HUNGER_PULL, LEVEL_GROWTH,
+  LEVEL_RATE, LEVEL_XP, MAX_HUNGER, MAX_LEVEL, SIDES, SKILLS, SKILL_RATE, SKILL_XP, START_STONE, START_UNITS, STARVE_CHANCE,
   UNIT_LIMIT, WAGON_PATIENCE, WALK_TICKS, WORK_BASE,
 } from './rules.js';
 
@@ -269,15 +269,15 @@ function newUnit(state, owner, building) {
 }
 
 /**
- * A tick of work with a skill: experience for the unit, as much as the work
- * is worth, and a point for the skill, which rises while it is below the
- * unit's level.
+ * A tick of work (or a strike) with a skill: experience for the unit, as
+ * much as the work is worth, and points for the skill (SKILL_RATE), which
+ * rises while it is below the unit's level.
  * @param {Unit} u
  * @param {Skill} skill
  */
 function practise(u, skill, bonus = 0) {
   gainXp(u, LEVEL_RATE[skill] + bonus);
-  const practice = Math.min(SKILL_XP, u.practice[skill] + 1);
+  const practice = Math.min(SKILL_XP, u.practice[skill] + (SKILL_RATE[skill] ?? 1));
   if (practice >= SKILL_XP && u.skills[skill] < u.level) {
     u.skills[skill] += 1;
     u.practice[skill] = 0;
@@ -1314,8 +1314,8 @@ function addFood(state, owner, food) {
 
 /**
  * A side's meal: each unit eats FOOD_PER_UNIT, or an even share of what
- * there is, and what doesn't share evenly waits for the next meal. A share
- * under HUNGER_LINE makes the side hungrier, one over it less so. At
+ * there is, and what doesn't share evenly waits for the next meal. The
+ * side's hunger moves toward how short the share fell (see HUNGER_PULL). At
  * MAX_HUNGER, units may starve, the weak more likely than the seasoned.
  * @param {GameState} state
  * @param {Player} p
@@ -1325,7 +1325,9 @@ function eat(state, p) {
   if (!units.length) return;
   const share = Math.min(FOOD_PER_UNIT, Math.floor(p.food / units.length));
   p.food -= share * units.length;
-  p.hunger = Math.max(0, Math.min(MAX_HUNGER, p.hunger + HUNGER_LINE - share));
+  // Toward the shortfall, at least a point a meal, so it gets there.
+  const gap = (MAX_HUNGER * (FOOD_PER_UNIT - share)) / FOOD_PER_UNIT - p.hunger;
+  p.hunger += gap > 0 ? Math.ceil(gap * HUNGER_PULL) : Math.floor(gap * HUNGER_PULL);
   if (p.hunger < MAX_HUNGER) return;
   for (const u of units) if (random(state) < starveChance(u.level)) delete state.units[u.id];
 }

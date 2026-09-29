@@ -24,6 +24,16 @@ function formatTime(tick) {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 }
 
+/**
+ * A percentage three digits wide, padded with figure spaces (as wide as a
+ * digit, and kept by HTML), so the text around it holds still as it counts.
+ * @param {number} part
+ * @param {number} whole
+ */
+function percent(part, whole) {
+  return `${String(Math.floor((100 * part) / whole)).padStart(3, '\u2007')}%`;
+}
+
 /** @typedef {import('../core/game.js').Building} Building */
 
 /**
@@ -296,7 +306,7 @@ export async function startGame(net, me) {
   function describe(b) {
     const type = BUILDING_TYPES[b.type];
     const parts = [type.grades > 1 ? `${type.name} (grade ${b.grade})` : type.name];
-    const done = `${Math.floor((100 * (b.work ?? 0)) / (type.work ?? 1))}%`;
+    const done = percent(b.work ?? 0, type.work ?? 1);
     if (b.type === 'castle') {
       parts.push(`${occ?.inside.get(b.id)?.length ?? 0}/${capacityOf(b)} at home`, `next unit ${done}`);
     } else if (type.capacity) {
@@ -304,7 +314,7 @@ export async function startGame(net, me) {
     }
     // The lair, raiders and the horde fight by themselves, at a level of their own.
     if (type.attack) parts.push(`level ${type.attack.skill}`);
-    const toward = (/** @type {number} */ sofar) => `${Math.floor((100 * sofar) / raiseWork(b))}%`;
+    const toward = (/** @type {number} */ sofar) => percent(sofar, raiseWork(b));
     if (b.upgrading !== undefined) parts.push(`upgrading ${toward(b.upgrading)}`);
     if (isRising(b)) {
       parts.push(`going up ${toward(b.raised ?? 0)}`);

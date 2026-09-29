@@ -105,6 +105,12 @@ export const MAX_LEVEL = 100;
 export const LEVEL_XP = 1200;
 export const LEVEL_GROWTH = 1.1;
 export const SKILL_XP = 150;
+/**
+ * Points a skill gets for each tick of work, or strike, with it: 1 unless
+ * listed. Units strike only once a COMBAT_PERIOD, so fighting skills get more.
+ * @type {Partial<Record<Skill, number>>}
+ */
+export const SKILL_RATE = { ranged: 5, melee: 5 };
 /** @type {Record<Skill, number>} */
 export const LEVEL_RATE = { breeding: 1, running: 2, farming: 3, build: 4, ranged: 5, melee: 6 };
 /** Not used until there is combat. */
@@ -124,15 +130,17 @@ export const START_STONE = 200;
  * next meal. A side stores at most FOOD_STORE periods' food for its castle's
  * full house; the rest spoils.
  *
- * A side's hunger, from 0 to MAX_HUNGER, rises by however far the share
- * fell short of HUNGER_LINE, and falls by however far it went over. At
- * MAX_HUNGER each unit may starve at each meal: a level 1 unit with a
- * STARVE_CHANCE chance, less the higher its level, down to none at 100.
+ * A side's hunger, from 0 to MAX_HUNGER, follows how short its meals fall:
+ * at each meal it moves HUNGER_PULL of the way (rounded away from where it
+ * is) toward the share's shortfall, none for a full meal, half for half
+ * rations, MAX_HUNGER for nothing at all. At MAX_HUNGER each unit may
+ * starve at each meal: a level 1 unit with a STARVE_CHANCE chance, less the
+ * higher its level, down to none at 100.
  */
 export const FOOD_PERIOD = 60 * TICKS_PER_SECOND;
 export const FOOD_PER_UNIT = 10;
 export const FOOD_STORE = 10;
-export const HUNGER_LINE = 5;
+export const HUNGER_PULL = 0.25;
 export const MAX_HUNGER = 100;
 export const STARVE_CHANCE = 0.05;
 
