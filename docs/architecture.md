@@ -102,7 +102,7 @@ commands.
   tenth of a second at most, which is normal for a strategy game.
 - **Shared helpers, not copied logic.** The page gets a view with the shape
   of the core's state, and uses the core's own read-only helpers on it: the
-  board from its seed, `occupancy`, a building's `footprint`, where one may
+  board from its seed and player count, `occupancy`, a building's `footprint`, where one may
   build. It imports them from `src/core/`, the same files the server runs,
   so nothing can drift apart.
 - **No local play.** An earlier version could run the core in the page for
@@ -121,7 +121,8 @@ commands.
   state in memory, runs `advance` on a fixed timestep
   (`setFixedTimestep`), and passes players' commands to `applyCommand`. It
   has no game rules of its own.
-- **The clock** runs only while every seat is held by a player who is here,
+- **The clock** runs only while every seat is held by a player who is here
+  (and stops for good once the game is over),
   so a game waits for an absent player instead of playing on without them.
 - **Connection**: WebSocket. Clients send only what they want to do
   (`command`, `claimSeat`, `releaseSeat`, `select`), as Colyseus requests

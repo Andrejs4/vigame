@@ -170,8 +170,8 @@ have one, install it with `npx playwright install chromium`.
 | --- | --- |
 | `src/core/` | Pure modules, shared by the server and the page, with no DOM, network or clock. |
 | `src/core/hex.js` | Pointy-top axial hex math: neighbours, distance, lines, pixel conversion, board shapes. |
-| `src/core/board.js` | Seeded terrain, with what each terrain allows, and the castle sites; same seed, same map everywhere. |
-| `src/core/rules.js` | The numbers: tick rate, sides, skills and experience, building types. |
+| `src/core/board.js` | Seeded terrain, with what each terrain allows, and the castle and lair sites; same seed and player count, same map everywhere. |
+| `src/core/rules.js` | The numbers: tick rate, sides and modes, skills and experience, food and hunger, fighting, raiders, building types. |
 | `src/core/names.js` | Medieval names for units. |
 | `src/core/game.js` | The game core: the state as plain JSON, `applyCommand`, `advance` (one tick), `occupancy`, `checkState`, `publicView`. Deterministic. |
 | `src/core/player.js` | Player-name rules, checked on the page and on the server. |
@@ -357,7 +357,9 @@ comes next.
     ten seconds; commands themselves are never lost.
   - One process only: SQLite allows a single writer. Several processes would
     need Postgres (see the architecture doc).
-  - Backups are not set up. The architecture doc suggests Litestream.
+  - Backups aren't automatic: [deploy/README.md](deploy/README.md#backups)
+    shows how to take one; the architecture doc suggests Litestream for
+    continuous ones.
   - `npm audit` reports advisories in `@colyseus/auth`, which Colyseus
     installs alongside its core; this server switches it off (`auth: false`).
   - Upgrading the database to this version drops games saved by earlier
@@ -365,6 +367,9 @@ comes next.
 - A seat is held until its player releases it, however long they are away,
   and the game waits for them.
 - The lobby lists only the 50 most recently active games.
+- Games of 5 to 8 players are untested at scale: up to 2400 units on a
+  36 × 24 map make route-finding and fighting costlier, and nobody has
+  measured how much.
 - On a phone, the 18 × 12 board is wider than the screen even at minimum
   zoom. Pinch-to-zoom and keyboard play are not wired up.
 
