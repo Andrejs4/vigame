@@ -49,8 +49,8 @@
     </select>
     <label for="lobby-players">Players</label>
     <select id="lobby-players">
-      <option value="1">1</option>
-      <option value="2" selected>2</option>
+      <option value="1" selected>1</option>
+      <option value="2">2</option>
       <option value="3">3</option>
       <option value="4">4</option>
       <option value="5">5</option>
@@ -65,6 +65,9 @@
     <h2>Waiting for a player</h2>
     <ul class="games" id="lobby-open"></ul>
     <p class="empty" id="lobby-open-empty">No one is waiting right now.</p>
+    <h2>Recently finished</h2>
+    <ul class="games" id="lobby-done"></ul>
+    <p class="empty" id="lobby-done-empty">No game has ended yet.</p>
   </div>
 </main>
 
@@ -76,13 +79,14 @@
     <dl>
       <div class="row"><dt>Time</dt><dd id="time">0:00</dd></div>
       <div class="row"><dt>You</dt><dd id="seat">&mdash;</dd></div>
+      <div class="row"><dt>Players</dt><dd id="players" title="Seated players here, of the game's seats; it blinks while the game waits for the rest">&mdash;</dd></div>
       <div class="row"><dt>Units</dt><dd id="units">&mdash;</dd></div>
       <div class="row"><dt>Stone</dt><dd id="stone">&mdash;</dd></div>
       <div class="row"><dt>Dark metal</dt><dd id="metal">&mdash;</dd></div>
       <div class="row"><dt>Food</dt><dd id="food">&mdash;</dd></div>
       <div class="row"><dt>Selected</dt><dd id="selection">none</dd></div>
       <div class="row"><dt>Tile</dt><dd id="tile">&mdash;</dd></div>
-      <div class="row"><dt>Viewers</dt><dd id="viewers">1</dd></div>
+      <div class="row"><dt>Observers</dt><dd id="observers">0</dd></div>
     </dl>
     <p class="notice" id="message" role="status" hidden></p>
   </div>
@@ -109,6 +113,7 @@
     </div>
     <button id="toggle-coords" aria-pressed="false">Coordinates</button>
     <button id="seat-button" hidden>Release seat</button>
+    <button id="scores-button" hidden>Scores</button>
     <a class="button" id="to-lobby" href="">Lobby</a>
   </div>
 
@@ -158,6 +163,22 @@
       <button id="crew-ok" value="ok" class="primary">Send</button>
     </div>
   </form>
+</dialog>
+
+<dialog id="scores" aria-labelledby="scores-title">
+  <h2 id="scores-title">Game over</h2>
+  <p class="hint" id="scores-outcome"></p>
+  <div class="scores-wrap">
+    <table class="scores">
+      <thead><tr id="scores-head"></tr></thead>
+      <tbody id="scores-body"></tbody>
+    </table>
+  </div>
+  <div class="crew-foot">
+    <span></span>
+    <button id="scores-close">Keep watching</button>
+    <a class="button primary" id="scores-leave" href="">Leave the match</a>
+  </div>
 </dialog>
 
 </body>

@@ -1,6 +1,6 @@
 /**
- * The lobby: the player's own games, games waiting for a second player, and
- * starting a new one. Opening a game goes to `?game=<id>`, the same address
+ * The lobby: the player's own games under way, games waiting for a player,
+ * the last few finished (to see their points again), and starting a new one. Opening a game goes to `?game=<id>`, the same address
  * an invitation link has.
  */
 
@@ -10,6 +10,9 @@ import { showLogin } from './login.js';
 
 /** How often the lists refresh while the lobby is open. */
 const REFRESH_MS = 5000;
+
+/** How many finished games the lobby lists. */
+const RECENT_DONE = 5;
 
 /**
  * The address of a game, relative to the lobby's.
@@ -81,6 +84,8 @@ export function showLobby(token, me, { notice } = {}) {
   const noticeOut = /** @type {HTMLElement} */ (document.getElementById('lobby-notice'));
   const mine = /** @type {HTMLElement} */ (document.getElementById('lobby-mine'));
   const open = /** @type {HTMLElement} */ (document.getElementById('lobby-open'));
+  const done = /** @type {HTMLElement} */ (document.getElementById('lobby-done'));
+  const doneEmpty = /** @type {HTMLElement} */ (document.getElementById('lobby-done-empty'));
   const mineEmpty = /** @type {HTMLElement} */ (document.getElementById('lobby-mine-empty'));
   const openEmpty = /** @type {HTMLElement} */ (document.getElementById('lobby-open-empty'));
   const newButton = /** @type {HTMLButtonElement} */ (document.getElementById('lobby-new'));
@@ -104,12 +109,16 @@ export function showLobby(token, me, { notice } = {}) {
       return;
     }
     const isMine = (/** @type {import('./api.js').GameSummary} */ g) => g.seats.some((s) => s?.pid === me.pid);
-    const mineList = games.filter(isMine);
+    const mineList = games.filter((g) => isMine(g) && g.over === null);
     const openList = games.filter((g) => !isMine(g) && g.over === null && g.seats.some((s) => s === null));
+    // Anyone's, most recent first: opening one shows its table of points.
+    const doneList = games.filter((g) => g.over !== null).slice(0, RECENT_DONE);
     mine.replaceChildren(...mineList.map((g) => row(g, 'Open')));
     open.replaceChildren(...openList.map((g) => row(g, 'Join')));
+    done.replaceChildren(...doneList.map((g) => row(g, 'Scores')));
     mineEmpty.hidden = mineList.length > 0;
     openEmpty.hidden = openList.length > 0;
+    doneEmpty.hidden = doneList.length > 0;
   }
 
   nameOut.textContent = me.name;

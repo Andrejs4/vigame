@@ -46,8 +46,13 @@ button[aria-pressed="true"] { background: rgba(255, 216, 77, 0.18); border-color
 }
 .primary:hover:not(:disabled) { background: rgba(255, 216, 77, 0.27); }
 
+/* Fades in and out while the game waits, e.g. for players to take their seats. */
+@keyframes fade-blink { 50% { opacity: 0.25; } }
+.waiting { animation: fade-blink 1.6s ease-in-out infinite; }
+
 @media (prefers-reduced-motion: reduce) {
   button, .button { transition: none; }
+  .waiting { animation: none; color: var(--amber); }
 }
 
 /* --- login and lobby ------------------------------------------------------ */
@@ -130,7 +135,11 @@ button[aria-pressed="true"] { background: rgba(255, 216, 77, 0.18); border-color
 
 #status { top: 14px; left: 14px; min-width: 216px; }
 #controls { top: 14px; right: 14px; display: flex; flex-direction: column; gap: 6px; }
-#legend { bottom: 14px; left: 14px; font-size: 12px; color: var(--ink-dim); max-width: 300px; }
+#legend {
+  bottom: 14px; left: 14px; font-size: 12px; color: var(--ink-dim); max-width: 300px;
+  /* Below the status panel, scrolling when "How to play" doesn't fit. */
+  max-height: calc(100% - var(--status-height, 0px) - 42px); overflow-y: auto;
+}
 #minimap { bottom: 14px; right: 14px; padding: 6px; }
 
 /* The minimap: the canvas holds a few pixels a cell, scaled up unsmoothed. */
@@ -187,7 +196,7 @@ dl { margin: 0; }
 }
 
 /* The crew chooser: the player's units, with the chosen ones ticked. */
-#crew {
+#crew, #scores {
   width: min(460px, calc(100vw - 32px));
   max-height: calc(100dvh - 48px);
   padding: 16px;
@@ -196,10 +205,22 @@ dl { margin: 0; }
   border: 1px solid var(--panel-edge);
   border-radius: 12px;
 }
-#crew::backdrop { background: rgba(0, 0, 0, 0.55); }
+#crew::backdrop, #scores::backdrop { background: rgba(0, 0, 0, 0.55); }
 #crew form { display: flex; flex-direction: column; gap: 10px; max-height: calc(100dvh - 82px); }
-#crew h2 { margin: 0; font-size: 15px; font-weight: 600; }
-#crew .hint { margin: 0; color: var(--ink-dim); font-size: 13px; }
+#crew h2, #scores h2 { margin: 0; font-size: 15px; font-weight: 600; }
+#crew .hint, #scores .hint { margin: 0; color: var(--ink-dim); font-size: 13px; }
+
+/* The table at a game's end: a row a side, winners first, a column a line of points. */
+#scores { width: min(760px, calc(100vw - 32px)); }
+#scores[open] { display: flex; flex-direction: column; gap: 10px; }
+.scores-wrap { overflow: auto; }
+.scores { border-collapse: collapse; width: 100%; font: 12px var(--mono); font-variant-numeric: tabular-nums; }
+.scores th, .scores td { padding: 5px 7px; text-align: right; white-space: nowrap; }
+.scores th:first-child, .scores td:first-child { text-align: left; }
+.scores thead th { color: var(--ink-dim); font-weight: 500; border-bottom: 1px solid var(--panel-edge); cursor: help; }
+.scores td { color: var(--ink-dim); }
+.scores td:first-child, .scores .total { color: var(--ink); font-weight: 600; }
+.scores tr.won td:first-child::after { content: " \2605"; color: var(--amber); }
 .crew-list {
   list-style: none; margin: 0; padding: 0;
   min-height: 0; overflow-y: auto;

@@ -23,6 +23,7 @@ import { fileURLToPath } from 'node:url';
 
 import { Server, basicAuth } from '@colyseus/core';
 import { monitor } from '@colyseus/monitor';
+import { Encoder } from '@colyseus/schema';
 import { WebSocketTransport } from '@colyseus/ws-transport';
 import express from 'express';
 
@@ -33,6 +34,15 @@ import { DEFAULT_MODE, DEFAULT_PLAYERS, MAX_PLAYERS, MIN_PLAYERS, MODES, TICKS_P
 import { createChallenges } from './challenge.js';
 import { gameRoom, isToken, playerId, signedIn } from './room.js';
 import { openStorage } from './storage.js';
+
+/**
+ * Room to encode a game's whole state, as a joining player gets it. A
+ * side's units take about 145 bytes each (300 of them about 42 KB), so this
+ * fits games of up to about 900 units; Colyseus grows the buffer for bigger
+ * ones by itself, warning in the log each time it does.
+ */
+export const STATE_BUFFER = 128 * 1024;
+Encoder.BUFFER_SIZE = STATE_BUFFER;
 
 const require = createRequire(import.meta.url);
 const SDK_BUNDLE = join(dirname(require.resolve('@colyseus/sdk/package.json')), 'dist', 'colyseus.js');
@@ -152,6 +162,13 @@ export async function startGameServer({
         const saved = GAME_ID.test(req.params.id) ? storage.loadGame(req.params.id) : null;
         if (!saved) return void res.status(404).json({ error: 'no such game' });
         res.json(saved);
+      });
+      // Who holds each seat, by name: for the table at a game's end, which
+      // names players who have left as well as those still here.
+      app.get('/api/games/:id/seats', (req, res) => {
+        const saved = GAME_ID.test(req.params.id) ? storage.loadGame(req.params.id) : null;
+        if (!saved) return void res.status(404).json({ error: 'no such game' });
+        res.set('cache-control', 'no-store').json(saved.seats.map((pid) => (pid ? { pid, name: storage.loadPlayer(pid)?.name ?? '' } : null)));
       });
       app.get('/api/games/:id/commands', (req, res) => {
         const saved = GAME_ID.test(req.params.id) ? storage.loadGame(req.params.id) : null;

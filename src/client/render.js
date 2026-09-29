@@ -112,6 +112,9 @@ function tokenHexes(type, rolling) {
   return type.size === 7 ? 2.3 : rolling ? 1.05 : 1.2;
 }
 
+/** Zoomed out past this, buildings don't show how many units are inside. */
+export const COUNT_ZOOM = 0.45;
+
 /** A unit's token, in hexes; narrower than UNIT_TOKEN_MIN pixels, a dot. */
 const UNIT_TOKEN = 0.42;
 const UNIT_TOKEN_MIN = 11;
@@ -352,7 +355,7 @@ export class BoardRenderer {
           ctx.fill();
         }
         const count = occ.inside.get(b.id)?.length ?? 0;
-        if (count && zoom > 0.45) {
+        if (count && zoom > COUNT_ZOOM) {
           const label = String(count);
           ctx.font = `600 ${Math.round(10 * zoom)}px ui-monospace, monospace`;
           const bw = ctx.measureText(label).width + 8 * zoom;

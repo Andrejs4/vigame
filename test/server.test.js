@@ -14,7 +14,7 @@ import { Client } from '@colyseus/sdk';
 import { startGameServer } from '../server/app.js';
 import { playerId, replay, restoreGame } from '../server/room.js';
 import { BOARD_OPTIONS, createBoard } from '../src/core/board.js';
-import { advance, castleOf, nearStanding, occupancy, publicView } from '../src/core/game.js';
+import { advance, castleOf, checkState, nearStanding, newGame, occupancy, publicView } from '../src/core/game.js';
 import { key } from '../src/core/hex.js';
 import { createServerNet } from '../src/client/net.js';
 import { TICKS_PER_SECOND } from '../src/core/rules.js';
@@ -57,9 +57,9 @@ function post(path, body) {
   });
 }
 
-/** Start a game over HTTP, the way the page does. */
+/** Start a game for two over HTTP, the way the page does. */
 async function startGame() {
-  const res = await post('/api/games', { token: TOKENS.a });
+  const res = await post('/api/games', { token: TOKENS.a, players: 2 });
   assert.equal(res.status, 201);
   return /** @type {string} */ ((await res.json()).id);
 }
@@ -183,6 +183,43 @@ test('the server serves the page and its modules, all by relative addresses', as
   assert.ok([403, 404].includes((await fetch(`${base}/core/%2e%2e/%2e%2e/package.json`)).status));
 });
 
+test('a big game\'s whole state fits the encoder\'s buffer, without the overflow warning', async () => {
+  // A game of two with 150 units a side at home: about 43 KB, well past
+  // Colyseus's default of 16 KB.
+  const seed = 11;
+  const board = createBoard({ ...BOARD_OPTIONS, seed, players: 2 });
+  const state = newGame(board, { mode: 'coop' });
+  for (const u of Object.values(state.units)) {
+    for (let i = 0; i < 12; i++) {
+      const id = `u${state.nextId++}`;
+      state.units[id] = { ...u, id };
+    }
+  }
+  assert.deepEqual(checkState(board, state), []);
+  server.storage.createGame({ id: 'big-game', seed, state, seats: [null, null] });
+
+  const warnings = [];
+  const warn = console.warn;
+  console.warn = (...args) => { warnings.push(args.join(' ')); };
+  try {
+    const room = await join('big-game', TOKENS.a);
+    assert.equal(Object.keys(seen(room).units).length, Object.keys(state.units).length, 'every unit arrived');
+    await leaveAll(room);
+  } finally {
+    console.warn = warn;
+  }
+  assert.deepEqual(warnings.filter((w) => /buffer overflow/.test(w)), []);
+});
+
+test('a game\'s seats are listed by name, for those who have left too', async () => {
+  const id = await startGame();
+  const room = await join(id, TOKENS.a);
+  await leaveAll(room);
+  const seats = await (await fetch(`${base}/api/games/${id}/seats`)).json();
+  assert.deepEqual(seats.map((/** @type {any} */ s) => s?.name ?? null), ['Ann', null]);
+  assert.equal((await fetch(`${base}/api/games/nope/seats`)).status, 404);
+});
+
 test('new games are stored with a castle per side, and listed; unknown ones are 404', async () => {
   const id = await startGame();
   const game = await (await fetch(`${base}/api/games/${id}`)).json();
@@ -195,7 +232,10 @@ test('new games are stored with a castle per side, and listed; unknown ones are 
   const lobby = await (await fetch(`${base}/api/games`)).json();
   assert.deepEqual(lobby.find((g) => g.id === id)?.seats, [null, null]);
   assert.equal(lobby.find((g) => g.id === id)?.mode, 'coop');
-  const ffa = await post('/api/games', { token: TOKENS.a, mode: 'ffa' });
+  const alone = await post('/api/games', { token: TOKENS.a });
+  assert.equal(alone.status, 201);
+  assert.deepEqual((await (await fetch(`${base}/api/games/${(await alone.json()).id}`)).json()).seats, [null], 'one player by default');
+  const ffa = await post('/api/games', { token: TOKENS.a, mode: 'ffa', players: 2 });
   assert.equal(ffa.status, 201);
   const ffaGame = await (await fetch(`${base}/api/games/${(await ffa.json()).id}`)).json();
   assert.equal(ffaGame.state.mode, 'ffa');

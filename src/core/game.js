@@ -40,7 +40,7 @@ import { distance, key, neighbors, parseKey } from './hex.js';
 import { tileAt } from './board.js';
 import { unitName } from './names.js';
 import {
-  BUILDING_TYPES, BUILD_RANGE, DARK_LORD, HORDE_MAX, HORDE_PERIOD, HORDE_START, RAIDERS, SALVAGE, RAID_CHANCE, RAID_CLEAR, RAID_MAX, RAID_PERIOD, RAID_ROAM, START_METAL, DEFAULT_MODE, MAX_PLAYERS, MODES, COMBAT_PERIOD, DEPART_GAP, FOOD_PER_UNIT, KILL_EVEN, KILL_MAX, KILL_STEP, KILL_XP, MELEE_DAMAGE, MELEE_RANGE,
+  BUILDING_TYPES, BUILD_RANGE, DARK_LORD, HORDE_MAX, HORDE_PERIOD, HORDE_START, POINTS, RAIDERS, SALVAGE, RAID_CHANCE, RAID_CLEAR, RAID_MAX, RAID_PERIOD, RAID_ROAM, START_METAL, DEFAULT_MODE, MAX_PLAYERS, MODES, COMBAT_PERIOD, DEPART_GAP, FOOD_PER_UNIT, KILL_EVEN, KILL_MAX, KILL_STEP, KILL_XP, MELEE_DAMAGE, MELEE_RANGE,
   RANGED_DAMAGE, RANGED_RANGE, REPAIR_WORK, FOOD_PERIOD, FOOD_STORE, HUNGER_PULL, LEVEL_GROWTH,
   LEVEL_RATE, LEVEL_XP, MAX_HUNGER, MAX_LEVEL, SIDES, SKILLS, SKILL_RATE, SKILL_XP, START_STONE, START_UNITS, STARVE_CHANCE,
   UNIT_LIMIT, WAGON_PATIENCE, WALK_TICKS, WORK_BASE,
@@ -119,7 +119,11 @@ import {
  * @property {number} side Its name and colours: an index into SIDES.
  * @property {number} team Sides on one team don't fight each other.
  * @property {number} [lost] The tick its castle (or lair) fell: the side is out of the game.
+ * @property {Tally} tally What it has done, for its points (see POINTS in
+ *   rules.js). Players see it only once the game is over.
  */
+
+/** @typedef {Record<keyof typeof POINTS, number>} Tally */
 
 /**
  * @typedef {{ type: 'build', kind: string, q: number, r: number, units?: string[] }
@@ -141,7 +145,7 @@ import {
  */
 
 /** Bump when GameState changes shape, and teach `checkState` the new one. */
-export const STATE_VERSION = 8;
+export const STATE_VERSION = 9;
 
 const SKILL_NAMES = /** @type {Skill[]} */ (Object.keys(SKILLS));
 
@@ -189,6 +193,7 @@ export function newGame(board, { mode = DEFAULT_MODE } = {}) {
     const side = npc ? DARK_LORD : owner;
     state.players.push({
       id: owner, side, team: coop ? Number(npc) : owner, stone: npc ? 0 : START_STONE, metal: START_METAL, food: 0, hunger: 0,
+      tally: newTally(),
     });
     const id = newId(state, 'b');
     const type = npc ? 'lair' : 'castle';
@@ -199,8 +204,25 @@ export function newGame(board, { mode = DEFAULT_MODE } = {}) {
     if (!npc) for (let i = 0; i < START_UNITS; i++) newUnit(state, owner, id);
   });
   // The raiders: a side of their own, against everyone, with nothing yet.
-  state.players.push({ id: state.players.length, side: RAIDERS, team: -1, stone: 0, metal: 0, food: 0, hunger: 0 });
+  state.players.push({ id: state.players.length, side: RAIDERS, team: -1, stone: 0, metal: 0, food: 0, hunger: 0, tally: newTally() });
   return state;
+}
+
+/** A tally with nothing done yet. */
+function newTally() {
+  return /** @type {Tally} */ (Object.fromEntries(Object.keys(POINTS).map((k) => [k, 0])));
+}
+
+/**
+ * A side's points from its tally: each line (see POINTS in rules.js), and
+ * their total.
+ * @param {Tally} tally
+ */
+export function pointsOf(tally) {
+  const lines = /** @type {Tally} */ (Object.fromEntries(Object.entries(POINTS).map(([k, worth]) => [
+    k, Math.floor((tally[/** @type {keyof Tally} */ (k)] ?? 0) * worth),
+  ])));
+  return { lines, total: Object.values(lines).reduce((sum, n) => sum + n, 0) };
 }
 
 /**
@@ -1007,7 +1029,9 @@ function settle(state) {
   const standing = new Set(contenders.filter((p) => p.lost === undefined).map((p) => p.team));
   if (teams.size < 2 || standing.size > 1) return;
   state.over = state.tick;
-  if (standing.size === 1) state.winner = [...standing][0];
+  if (standing.size !== 1) return;
+  state.winner = [...standing][0];
+  for (const p of contenders) if (p.team === state.winner) p.tally.won = 1;
 }
 
 /**
@@ -1130,17 +1154,24 @@ function fight(board, state, occ) {
     // A building going up covers nobody.
     const cover = !hit ? 0 : isRising(hit) ? 1 : BUILDING_TYPES[hit.type].through ?? 0;
     const through = hit && sheltered.length && random(state) < cover;
+    const tally = state.players[owner].tally;
     if (hit && !through) {
+      tally.damage += Math.min(damage, /** @type {number} */ (hit.hp));
       hit.hp = Math.max(0, /** @type {number} */ (hit.hp) - damage);
       if (from !== undefined && from !== hit.target && BUILDING_TYPES[hit.type].hunts) turnTo(hit, from);
       if (hit.hp > 0) return false;
-      const { loot, metal = 0 } = BUILDING_TYPES[hit.type];
+      const { loot, metal = 0, life } = BUILDING_TYPES[hit.type];
       state.players[owner].metal += loot ?? Math.floor(metal * SALVAGE);
+      if (life) tally.castles += 1;
+      else tally.felled += 1;
       return true;
     }
     const foe = hit ? state.units[sheltered[Math.floor(random(state) * sheltered.length)]] : /** @type {Unit} */ (t.unit);
     const killed = random(state) * 100 < killChance(skill, foe.level);
-    if (killed) delete state.units[foe.id];
+    if (killed) {
+      delete state.units[foe.id];
+      tally.kills += 1;
+    }
     return killed;
   };
 
@@ -1432,14 +1463,17 @@ function raise(state, occ) {
       else b.upgrading = done;
       continue;
     }
+    const { tally } = state.players[b.owner];
     if (rising) {
       const half = maxHp(state, b);
       delete b.raised;
       b.hp = /** @type {number} */ (b.hp) + maxHp(state, b) - half;
+      tally.built += 1;
     } else {
       delete b.upgrading;
       b.grade += 1;
       b.hp = /** @type {number} */ (b.hp) + BUILDING_TYPES[b.type].hp;
+      tally.upgrades += b.grade;
     }
   }
   return busy;
@@ -1502,11 +1536,14 @@ function work(board, state, occ) {
     if (type.yields === 'unit') {
       inside.push(newUnit(state, b.owner, b.id));
       occ.unitCount[b.owner] += 1;
+      stock.tally.born += 1;
     } else if (type.yields === 'food') {
       addFood(state, b.owner, 1);
+      stock.tally.food += 1;
     } else {
       const depth = depthOf(b);
       stock.stone += 1;
+      stock.tally.stone += 1;
       b.dug = /** @type {number} */ (b.dug) + 1;
       // A grade deeper is sturdier, as an upgrade is.
       if (depthOf(b) > depth && b.hp !== undefined) b.hp += type.hpPerDepth ?? 0;
@@ -1712,6 +1749,9 @@ export function checkState(board, raw) {
     if (!Number.isInteger(p.side) || !SIDES[p.side]) fail(`side ${i}: bad palette`);
     if (!isCount(p.stone, Infinity) || !isCount(p.food, Infinity) || !isCount(p.metal, Infinity)) fail(`side ${i}: bad stock`);
     if (!isCount(p.hunger, MAX_HUNGER + 1)) fail(`side ${i}: bad hunger`);
+    const tally = /** @type {Record<string, unknown>} */ (p.tally);
+    if (!isRecord(tally) || Object.keys(tally).sort().join() !== Object.keys(POINTS).sort().join()
+      || !Object.values(tally).every((n) => isCount(n, Infinity)) || Number(tally.won) > 1) fail(`side ${i}: bad tally`);
     if (p.lost !== undefined && !isCount(p.lost, state.tick + 1)) fail(`side ${i}: bad lost`);
   });
   if (!isRecord(state.buildings) || !isRecord(state.units)) return [...problems, 'bad buildings or units'];
@@ -1842,7 +1882,8 @@ export function publicView(state) {
     ...(state.winner !== undefined ? { winner: state.winner } : {}),
     seed: state.seed,
     tick: state.tick,
-    players: state.players,
+    // Tallies change all game long, and are for the end: kept back till then.
+    players: state.over === undefined ? state.players.map(({ tally: _tally, ...shown }) => shown) : state.players,
     buildings: Object.fromEntries(Object.entries(state.buildings).map(([id, b]) => [id, cut(b)])),
     units: Object.fromEntries(units.map((u) => [u.id, u])),
   };

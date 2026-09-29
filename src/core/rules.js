@@ -42,7 +42,7 @@ export const RAIDERS = 9;
 /** Players a game may seat. */
 export const MIN_PLAYERS = 1;
 export const MAX_PLAYERS = 8;
-export const DEFAULT_PLAYERS = 2;
+export const DEFAULT_PLAYERS = 1;
 
 /**
  * Game modes. In cooperation the players are one team against the Dark
@@ -199,6 +199,18 @@ export const HORDE_PERIOD = 60 * TICKS_PER_SECOND;
 export const HORDE_MAX = 24;
 
 /**
+ * Points, for the table at a game's end: what each thing in a side's tally
+ * (see Player in game.js) is worth, rounded down in each line. Enemy units
+ * killed; hit points taken off enemy buildings; enemy buildings brought
+ * down, and enemy castles and lairs; units born; stone dug; food grown by
+ * crews; buildings finished; grades reached by upgrading (a castle's third
+ * grade counts 3); and winning.
+ */
+export const POINTS = Object.freeze({
+  kills: 10, damage: 0.1, felled: 50, castles: 500, born: 5, stone: 1, food: 0.1, built: 20, upgrades: 50, won: 500,
+});
+
+/**
  * Bringing down a building bought with dark metal (a wagon) yields the
  * striker's side this share of its price.
  */
@@ -300,7 +312,7 @@ export const BUILDING_TYPES = {
     skill: 'farming', work: 600, yields: 'food', base: 10, through: 0.5, raise: 6000,
   },
   lair: {
-    name: 'Lair', size: 7, capacity: 0, grades: 1, hp: 18000, build: false, cost: 0,
+    name: 'Lair', size: 7, capacity: 0, grades: 1, hp: 36000, build: false, cost: 0,
     skill: 'melee', life: true, attack: { damage: 40, skill: 60, reach: 4 }, scales: true,
   },
   raider: {
@@ -308,11 +320,11 @@ export const BUILDING_TYPES = {
     skill: 'melee', speed: 3 * TICKS_PER_SECOND, attack: { damage: 10, skill: 20, reach: 2 }, loot: 10,
   },
   ghoul: {
-    name: 'Ghoul', size: 1, capacity: 0, grades: 1, hp: 600, build: false, cost: 0,
+    name: 'Ghoul', size: 1, capacity: 0, grades: 1, hp: 1200, build: false, cost: 0,
     skill: 'melee', speed: TICKS_PER_SECOND, attack: { damage: 12, skill: 10, reach: 1 }, loot: 2, hunts: true, scales: true,
   },
   ogre: {
-    name: 'Ogre', size: 1, capacity: 0, grades: 1, hp: 3000, build: false, cost: 0,
+    name: 'Ogre', size: 1, capacity: 0, grades: 1, hp: 6000, build: false, cost: 0,
     skill: 'melee', speed: 4 * TICKS_PER_SECOND, attack: { damage: 50, skill: 35, reach: 1 }, loot: 6, hunts: true, scales: true,
   },
   band: {

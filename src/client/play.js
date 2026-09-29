@@ -7,14 +7,14 @@
 import { axialToPixel, bounds, key, pixelToAxial } from '../core/hex.js';
 import { BOARD_OPTIONS, TERRAIN, createBoard, tileAt } from '../core/board.js';
 import {
-  capacityOf, castleOf, crewOf, depthOf, foodStore, inBuildRange, isDugOut, isRising, maxHp, occupancy, raiseWork, seatsOf, sideOf, upgradeCost,
+  capacityOf, castleOf, crewOf, depthOf, foodStore, inBuildRange, isDugOut, isRising, maxHp, occupancy, pointsOf, raiseWork, seatsOf, sideOf, upgradeCost,
 } from '../core/game.js';
-import { BUILDING_TYPES, SKILLS, TICKS_PER_SECOND, UNIT_LIMIT } from '../core/rules.js';
-import { serverBase } from './api.js';
+import { BUILDING_TYPES, POINTS, SKILLS, TICKS_PER_SECOND, UNIT_LIMIT } from '../core/rules.js';
+import { getJson, serverBase } from './api.js';
 import { Camera } from './camera.js';
 import { Effects } from './effects.js';
 import { Minimap } from './minimap.js';
-import { BoardRenderer } from './render.js';
+import { BoardRenderer, COUNT_ZOOM } from './render.js';
 import { Sounds, soundsFor } from './sounds.js';
 import { Tokens } from './tokens.js';
 
@@ -32,6 +32,36 @@ function formatTime(tick) {
  */
 function percent(part, whole) {
   return `${String(Math.floor((100 * part) / whole)).padStart(3, '\u2007')}%`;
+}
+
+/** Recenter's zoom at least: close enough to read how many are in each building. */
+const HOME_ZOOM = COUNT_ZOOM + 0.15;
+
+/**
+ * The columns of the table at a game's end: a line of a side's tally (see
+ * POINTS in rules.js), its heading, and what it counts.
+ * @type {Array<[keyof typeof POINTS, string, string]>}
+ */
+const SCORE_LINES = [
+  ['kills', 'Kills', 'enemy units killed'],
+  ['damage', 'Damage', 'hit points taken off enemy buildings'],
+  ['felled', 'Felled', 'enemy buildings brought down'],
+  ['castles', 'Castles', 'enemy castles and lairs brought down'],
+  ['born', 'Born', 'units born'],
+  ['stone', 'Stone', 'stone dug'],
+  ['food', 'Food', 'food grown by crews'],
+  ['built', 'Built', 'buildings finished'],
+  ['upgrades', 'Upgrades', 'grades reached by upgrading'],
+  ['won', 'Win', 'for the winning team'],
+];
+
+/**
+ * What a line of the tally is worth, in words.
+ * @param {keyof typeof POINTS} line
+ */
+function worth(line) {
+  const each = POINTS[line];
+  return each >= 1 ? `${each} points each` : `a point per ${Math.round(1 / each)}`;
 }
 
 /** Where the browser keeps whether "How to play" is open. */
@@ -59,7 +89,8 @@ export async function startGame(net, me) {
     food: document.getElementById('food'),
     selection: document.getElementById('selection'),
     tile: document.getElementById('tile'),
-    viewers: document.getElementById('viewers'),
+    players: document.getElementById('players'),
+    observers: document.getElementById('observers'),
   };
   const seatButton = /** @type {HTMLButtonElement} */ (document.getElementById('seat-button'));
   const upgradeButton = /** @type {HTMLButtonElement} */ (document.getElementById('upgrade'));
@@ -68,6 +99,9 @@ export async function startGame(net, me) {
   const abortButton = /** @type {HTMLButtonElement} */ (document.getElementById('abort-button'));
   const attackButton = /** @type {HTMLButtonElement} */ (document.getElementById('attack-button'));
   const muteButton = /** @type {HTMLButtonElement} */ (document.getElementById('mute-button'));
+  const scoresButton = /** @type {HTMLButtonElement} */ (document.getElementById('scores-button'));
+  const scoresDialog = /** @type {HTMLDialogElement} */ (document.getElementById('scores'));
+  const gameId = new URLSearchParams(location.search).get('game') ?? '';
   const crewDialog = /** @type {HTMLDialogElement} */ (document.getElementById('crew'));
   const crewParts = {
     title: /** @type {HTMLElement} */ (document.getElementById('crew-title')),
@@ -126,6 +160,8 @@ export async function startGame(net, me) {
   let highlights = new Set();
   let showCoords = false;
   let needsDraw = true;
+  /** Whether Recenter has looked at this viewer's own castle yet. */
+  let homed = false;
 
   // --- state ---------------------------------------------------------------
 
@@ -133,6 +169,16 @@ export async function startGame(net, me) {
   function recenter() {
     const rect = canvas.getBoundingClientRect();
     camera.fit(bounds(board.list, board.hexSize), rect.width, rect.height);
+    // A player looks at their own castle, close enough to read the unit
+    // counts even when the whole map would be too small for them.
+    const seat = net.seat();
+    const home = view && seat !== null ? castleOf(view, seat) : null;
+    if (home) {
+      camera.zoom = Math.min(camera.maxZoom, Math.max(camera.zoom, HOME_ZOOM));
+      const at = axialToPixel(home.q, home.r, board.hexSize);
+      camera.centreOn(at.x, at.y, rect.width, rect.height);
+    }
+    homed = Boolean(home);
     needsDraw = true;
   }
 
@@ -154,6 +200,8 @@ export async function startGame(net, me) {
     for (const { name, pan } of soundsFor({ prev: view, next, fresh, seat: net.seat(), where: panOf })) sounds.play(name, pan);
     if (view) letGo(view, next, fresh);
     view = next;
+    // A player's first sight of the game is their own castle.
+    if (!homed && net.seat() !== null) recenter();
     minimap.show(next);
     occ = occupancy(next);
     moving = Object.values(next.units).some((u) => u.path) || Object.values(next.buildings).some((b) => b.path);
@@ -161,6 +209,70 @@ export async function startGame(net, me) {
     refreshHighlights();
     updateHud();
     needsDraw = true;
+    // The table of points, once, when the game is over (or opens over).
+    if (next.over !== undefined && !scoresSeen) {
+      scoresSeen = true;
+      showScores();
+    }
+  }
+
+  /** Whether the table of points has come up since the game was over. */
+  let scoresSeen = false;
+  /** Seat holders' names, by seat, for the table: those who have left too. */
+  /** @type {string[]} */
+  let seatNames = [];
+
+  /** Show the table of points, and fetch every seat holder's name for it. */
+  async function showScores() {
+    if (!view || view.over === undefined) return;
+    fillScores();
+    if (!scoresDialog.open) scoresDialog.showModal();
+    try {
+      /** @type {Array<{ name: string } | null>} */
+      const seats = await getJson(`api/games/${encodeURIComponent(gameId)}/seats`);
+      seatNames = seats.map((s) => s?.name ?? '');
+      fillScores();
+    } catch {
+      // The sides' names will do.
+    }
+  }
+
+  /** Fill the table of points: a row a side, winners first, then by points. */
+  function fillScores() {
+    if (!view || view.over === undefined) return;
+    const { players, winner } = view;
+    const seat = net.seat();
+    const winners = players.filter((p) => p.team === winner && !sideOf(view, p.id).wild);
+    /** @type {HTMLElement} */ (document.getElementById('scores-title')).textContent = winner === undefined
+      ? 'Game over' : seat === null ? 'Game over' : players[seat]?.team === winner ? 'You won' : 'You lost';
+    /** @type {HTMLElement} */ (document.getElementById('scores-outcome')).textContent = `${formatTime(view.over)} · ${
+      winner === undefined ? 'nobody won' : `${winners.map((p) => sideOf(view, p.id).name).join(' and ')} won`}`;
+
+    const cell = (/** @type {'th' | 'td'} */ tag, /** @type {string} */ text, /** @type {string} */ title = '') => {
+      const c = document.createElement(tag);
+      c.textContent = text;
+      if (title) c.title = title;
+      return c;
+    };
+    /** @type {HTMLElement} */ (document.getElementById('scores-head')).replaceChildren(
+      cell('th', 'Side'),
+      ...SCORE_LINES.map(([line, heading, what]) => cell('th', heading, `${heading}: ${what}, ${worth(line)}`)),
+      Object.assign(cell('th', 'Total'), { className: 'total' }),
+    );
+    const rows = players
+      .filter((p) => p.tally && !sideOf(view, p.id).wild)
+      .map((p) => ({ p, side: sideOf(view, p.id), points: pointsOf(/** @type {any} */ (p.tally)), won: p.team === winner }))
+      .sort((a, b) => Number(b.won) - Number(a.won) || b.points.total - a.points.total);
+    /** @type {HTMLElement} */ (document.getElementById('scores-body')).replaceChildren(...rows.map(({ p, side, points, won }) => {
+      const tr = document.createElement('tr');
+      if (won) tr.className = 'won';
+      const name = seatNames[p.id] ? `${seatNames[p.id]} · ${side.name}` : side.name;
+      const who = cell('td', name);
+      who.style.color = side.accent;
+      tr.append(who, ...SCORE_LINES.map(([line]) => cell('td', String(points.lines[line]))),
+        Object.assign(cell('td', String(points.total)), { className: 'total' }));
+      return tr;
+    }));
   }
 
   /**
@@ -276,12 +388,22 @@ export async function startGame(net, me) {
       const rule = t && !t.passable ? ' — impassable' : t && !t.buildable ? ' — no building' : '';
       hud.tile.textContent = t ? `${TERRAIN[t.terrain].label} (${t.q}, ${t.r})${rule}` : '—';
     }
-    if (hud.viewers) {
-      hud.viewers.textContent = net.connected() ? String(net.viewers()) : 'offline';
-      hud.viewers.title = peers.map((p) => p.name).filter(Boolean).join(', ');
+    if (hud.players) {
+      // Seated players who are here, of the seats; it blinks while the game waits.
+      const here = new Set(peers.filter((p) => p.seat !== null).map((p) => p.seat)).size;
+      hud.players.textContent = view ? `${here}/${seatsOf(view)}` : '—';
+      hud.players.classList.toggle('waiting', paused && view?.over === undefined);
+    }
+    if (hud.observers) {
+      const watching = peers.filter((p) => p.seat === null);
+      hud.observers.textContent = net.connected() ? String(watching.length) : 'offline';
+      hud.observers.title = watching.map((p) => p.name).filter(Boolean).join(', ');
     }
 
-    seatButton.hidden = seat === null && !net.canClaimSeat();
+    // Once it is over, a seat keeps its holder's name in the table of points.
+    const over = view?.over !== undefined;
+    seatButton.hidden = over || (seat === null && !net.canClaimSeat());
+    scoresButton.hidden = !over;
     seatButton.textContent = seat === null ? 'Take seat' : 'Release seat';
 
     const can = canCommand();
@@ -643,10 +765,15 @@ export async function startGame(net, me) {
   new ResizeObserver(() => {
     stage.style.setProperty('--controls-height', `${controls.offsetHeight}px`);
   }).observe(controls);
+  // The legend keeps below the status panel, however tall that grows.
+  const statusPanel = /** @type {HTMLElement} */ (document.getElementById('status'));
+  new ResizeObserver(() => {
+    stage.style.setProperty('--status-height', `${statusPanel.offsetHeight}px`);
+  }).observe(statusPanel);
 
   addEventListener('keydown', (e) => {
     // Escape in the crew chooser closes just the chooser.
-    if (e.key !== 'Escape' || crewDialog.open || (!placing && !selected && !aiming)) return;
+    if (e.key !== 'Escape' || crewDialog.open || scoresDialog.open || (!placing && !selected && !aiming)) return;
     aiming = null;
     placing = null;
     selected = null;
@@ -698,6 +825,10 @@ export async function startGame(net, me) {
   returnButton.addEventListener('click', () => {
     if (selected) give({ type: 'crew', building: selected, units: [] }, 'send them home');
   });
+
+  scoresButton.addEventListener('click', () => { showScores(); });
+  /** @type {HTMLElement} */ (document.getElementById('scores-close')).addEventListener('click', () => scoresDialog.close());
+  /** @type {HTMLAnchorElement} */ (document.getElementById('scores-leave')).href = serverBase().pathname;
 
   // Browsers let a page start its audio only once the player clicks or presses a key.
   addEventListener('pointerdown', () => sounds.wake(), { capture: true });
@@ -774,7 +905,12 @@ export async function startGame(net, me) {
     needsDraw = true;
     updateHud();
   });
-  net.onSeat(() => { refreshHighlights(); updateHud(); });
+  net.onSeat(() => {
+    // The first time this viewer has a castle, look at it.
+    if (!homed && net.seat() !== null) recenter();
+    refreshHighlights();
+    updateHud();
+  });
   await net.ready();
   requestAnimationFrame(frame);
   // Keep the viewer count and paused state honest as people come and go.
@@ -790,6 +926,7 @@ export async function startGame(net, me) {
       get placing() { return placing; },
       get aiming() { return aiming; },
       get crewTarget() { return crewTarget; },
+      get scoresOpen() { return scoresDialog.open; },
       get highlights() { return [...highlights]; },
       get peers() { return peers; },
       get minimap() { return minimap; },

@@ -23,8 +23,10 @@ Run `npm start` and open http://127.0.0.1:2567.
 
 - **Log in** with a name and the answer to a small sum. A browser stays
   logged in across visits.
-- **The lobby** lists your games and games with a free seat; **New game**
-  starts one for 1 to 8 players (2 by default), on a map that grows with
+- **The lobby** lists your games under way, games with a free seat, and
+  the last five finished (anyone's; **Scores** opens one at its table of
+  points); **New game**
+  starts one for 1 to 8 players (1 by default, against the Dark Lord), on a map that grows with
   them (29 × 20 cells for two, 59 × 39 for eight), castles in a ring
   around the middle, out of reach of the lair and of each other. A game's address (`?game=…`) is also the link to send
   someone. Players who join take the seats in order (Blue, Crimson, Green,
@@ -32,13 +34,13 @@ Run `npm start` and open http://127.0.0.1:2567.
   **Release seat** frees a seat for a spectator to take. A game is in
   either mode:
   - **Cooperation** (the default): all the players are one team against the
-    Dark Lord, whose lair (18000 hit points) stands in the middle of the map
+    Dark Lord, whose lair (36000 hit points) stands in the middle of the map
     and strikes the nearest enemy within 4 cells by itself, 40 hit points a
     second, and against units as a level-60 fighter. From the second minute it sends out his horde, a wave a minute,
     each bigger than the last (wave n: n/2 ghouls rounded up and n/3 ogres
     rounded down, at most 24 out at once). **Ghouls** are small and fast
-    (600 hit points, a cell a second, 12 a strike, level 10); **ogres** are
-    slow and tougher (3000 hit points, 4 s a cell, 50 a strike, level 35). They need no units and
+    (1200 hit points, a cell a second, 12 a strike, level 10); **ogres** are
+    slow and tougher (6000 hit points, 4 s a cell, 50 a strike, level 35). They need no units and
     cost him nothing. Each goes for the nearest farm, and for a castle once
     no farm is left; it turns on any building that strikes it, and on the
     nearest one when its way is blocked. Bringing one down yields 2 dark
@@ -107,6 +109,15 @@ Run `npm start` and open http://127.0.0.1:2567.
   nobody working it; a farm's crew (up to 6) grows more, faster the better
   they farm. A side stores at most 10 minutes' food for its castle's full
   house (4000 at grade 1); the rest spoils.
+- **Points**: each side keeps a tally of what it did, and when the game is
+  over a table shows it as points, winners first: 10 an enemy unit killed,
+  1 per 10 hit points taken off enemy buildings, 50 an enemy building
+  brought down (500 a castle or the lair), 5 a unit born, 1 a stone dug,
+  1 per 10 food grown by crews, 20 a building finished, 50 × the grade an
+  upgrade reaches, and 500 for winning. Nobody sees any of it before the
+  end. The table's **Leave the match** goes back to the lobby; **Keep
+  watching** closes it, and **Scores** brings it back. Once a game is
+  over, seats can't be given up, so the table keeps their holders' names.
 - **Hunger**: one number per side, 0 to 100%. At each meal, if there isn't
   enough, the food is shared evenly and what doesn't divide waits for the
   next meal. Hunger follows how short the meals fall: each meal moves it a
@@ -174,6 +185,11 @@ Run `npm start` and open http://127.0.0.1:2567.
   at the pace of its slowest walker.
 - **Pits** don't stop units or bands: they cross any pit, yours or the
   enemy's. Wagons can't enter a pit and go around it.
+- **Players** in the status panel shows the seated players who are here,
+  of the game's seats (such as 1/2), and blinks while the game waits for
+  the rest; **Observers** counts those watching without a seat.
+  **Recenter** looks at your own castle, close enough to read how many
+  are in each building (a spectator sees the whole map).
 - Drag to pan, and use the wheel or the − / + buttons to zoom. The minimap
   in the corner shows the whole board and a frame around what you see;
   press or drag on it to look there.
@@ -402,6 +418,7 @@ HTTP API:
 | `GET /api/games` | The 50 most recently active games, for the lobby, with their mode and who holds each seat: `{ pid, name }` or `null`. |
 | `GET /api/games/:id` | One game: its seed, latest snapshot and seats. |
 | `GET /api/games/:id/commands` | Its command log, with each command's tick. |
+| `GET /api/games/:id/seats` | Who holds each seat: `{ pid, name }`, or `null` for a free one. |
 
 The database has three tables: `games` (each game's seed, seats, and a
 snapshot of its state, saved every ten seconds and when its room closes),
