@@ -23,7 +23,15 @@ Run `npm start` and open http://127.0.0.1:2567.
 - **Log in** with a name and the answer to a small sum. A browser stays
   logged in across visits.
 - **The lobby** lists your games and games waiting for a second player;
-  **New game** starts one. A game's address (`?game=…`) is also the link to
+  **New game** starts one, in either mode:
+  - **Cooperation** (the default): both players are one team against the
+    Dark Lord, whose lair (6000 hit points) stands in the middle of the map
+    and strikes the nearest enemy within 4 cells by itself, 20 hit points a
+    second. Allies never strike each other and pass through each other's
+    buildings. The players win when the lair falls, and lose when both
+    their castles have.
+  - **Free for all**: each against the other, as before; the middle of the
+    map is left empty. A game's address (`?game=…`) is also the link to
   send someone. The first two players take Blue and Crimson; later visitors
   watch. **Release seat** frees a seat for a spectator to take.
 - **The game clock** runs only while both players are here. (`npm run dev`
@@ -95,7 +103,8 @@ Run `npm start` and open http://127.0.0.1:2567.
   that brings a building down or kills a unit is a killing blow, worth 600
   experience.
 - **Losing**: a side whose castle falls has lost, and can give no more
-  commands.
+  commands; its units stay and still fight from wherever they are. A team
+  wins once no other team has a castle (or lair) standing.
 - **Wagons** are buildings that move. Select one, then click a cell to drive
   it there, two seconds a cell; its crew rides along inside. Wagons can't
   pass through other buildings, each other included: a blocked wagon waits,

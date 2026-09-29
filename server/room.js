@@ -26,7 +26,7 @@ import { ErrorCode, Room, ServerError, logger } from '@colyseus/core';
 
 import { BOARD_OPTIONS, createBoard, tileAt } from '../src/core/board.js';
 import { advance, applyCommand, checkState, newGame, publicView } from '../src/core/game.js';
-import { SIDES, TICKS_PER_SECOND } from '../src/core/rules.js';
+import { SEATS, TICKS_PER_SECOND } from '../src/core/rules.js';
 import { GameState, ViewerState, syncGame, syncSeats } from './schema.js';
 
 /** What a player token must look like: long, random, URL-safe. */
@@ -214,7 +214,7 @@ export class GameRoom extends Room {
     this.seq = seq;
     this.snapshotAt = game.tick;
     /** @type {Array<string | null>} */
-    this.seats = SIDES.map((_, i) => saved.seats[i] ?? null);
+    this.seats = Array.from({ length: SEATS }, (_, i) => saved.seats[i] ?? null);
 
     const state = new GameState();
     syncGame(state, publicView(game));

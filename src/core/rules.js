@@ -13,11 +13,25 @@
  */
 export const TICKS_PER_SECOND = 10;
 
-/** The sides, indexed by owner number. */
+/**
+ * The sides, indexed by owner number. Players take the first SEATS; the Dark
+ * Lord is the game's own, and plays in cooperation games only.
+ */
 export const SIDES = [
-  { id: 0, name: 'Blue',    color: '#3d7fd8', accent: '#9ec5ff' },
-  { id: 1, name: 'Crimson', color: '#c8473f', accent: '#ffb3ad' },
+  { id: 0, name: 'Blue',      color: '#3d7fd8', accent: '#9ec5ff' },
+  { id: 1, name: 'Crimson',   color: '#c8473f', accent: '#ffb3ad' },
+  { id: 2, name: 'Dark Lord', color: '#6a3fa0', accent: '#cdb0ff', npc: true },
 ];
+
+/** How many players a game seats. */
+export const SEATS = 2;
+
+/**
+ * Game modes. In cooperation the players are one team against the Dark
+ * Lord; in free for all, each against the other.
+ */
+export const MODES = { coop: 'Cooperation', ffa: 'Free for all' };
+export const DEFAULT_MODE = 'coop';
 
 /** Most units one player may have at once, inside buildings or out. */
 export const UNIT_LIMIT = 300;
@@ -169,12 +183,17 @@ export const REPAIR_WORK = 100;
  * @property {number} [reach] Cells it adds to its units' ranged reach.
  * @property {number} [through] The share of strikes on it that reach a unit
  *   inside instead: none for a castle, tower or wagon.
+ * @property {boolean} [life] Its side's life: when it falls, the side has lost.
+ * @property {{ damage: number, skill: number, reach: number }} [attack] A
+ *   building that strikes by itself, once every COMBAT_PERIOD: `damage` off a
+ *   building, or a kill roll as a striker of `skill` against a unit, at the
+ *   nearest enemy within `reach` cells.
  */
 
 /** @type {Record<string, BuildingType>} */
 export const BUILDING_TYPES = {
   castle: {
-    name: 'Castle', size: 7, capacity: 60, grades: 3, hp: 2000, build: false, cost: 0, upgrade: 200, reach: 1,
+    name: 'Castle', size: 7, capacity: 60, grades: 3, hp: 2000, build: false, cost: 0, upgrade: 200, reach: 1, life: true,
     skill: 'breeding', work: 12000, yields: 'unit',
   },
   tower: {
@@ -191,6 +210,10 @@ export const BUILDING_TYPES = {
   farm: {
     name: 'Farm', size: 1, capacity: 6, grades: 1, hp: 200, build: true, cost: 30,
     skill: 'farming', work: 300, yields: 'food', base: 20, through: 0.5,
+  },
+  lair: {
+    name: 'Lair', size: 7, capacity: 0, grades: 1, hp: 6000, build: false, cost: 0,
+    skill: 'melee', life: true, attack: { damage: 20, skill: 30, reach: 4 },
   },
   band: {
     name: 'Band', size: 1, capacity: 30, grades: 1, hp: 0, build: true, cost: 0,

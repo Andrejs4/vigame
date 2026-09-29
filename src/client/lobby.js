@@ -4,7 +4,7 @@
  * an invitation link has.
  */
 
-import { SIDES, TICKS_PER_SECOND } from '../core/rules.js';
+import { MODES, SIDES, TICKS_PER_SECOND } from '../core/rules.js';
 import { getJson, post, reason } from './api.js';
 import { showLogin } from './login.js';
 
@@ -44,7 +44,7 @@ function row(game, action) {
   });
   const when = document.createElement('span');
   when.className = 'when';
-  when.textContent = gameTime(game.tick);
+  when.textContent = `${MODES[/** @type {keyof typeof MODES} */ (game.mode)] ?? ''} · ${gameTime(game.tick)}`;
   who.append(when);
 
   const open = document.createElement('a');
@@ -72,6 +72,7 @@ export function showLobby(token, me, { notice } = {}) {
   const mineEmpty = /** @type {HTMLElement} */ (document.getElementById('lobby-mine-empty'));
   const openEmpty = /** @type {HTMLElement} */ (document.getElementById('lobby-open-empty'));
   const newButton = /** @type {HTMLButtonElement} */ (document.getElementById('lobby-new'));
+  const modeSelect = /** @type {HTMLSelectElement} */ (document.getElementById('lobby-mode'));
   const rename = /** @type {HTMLElement} */ (document.getElementById('lobby-rename'));
 
   /** @param {string} [text] */
@@ -107,7 +108,7 @@ export function showLobby(token, me, { notice } = {}) {
   newButton.onclick = async () => {
     newButton.disabled = true;
     try {
-      const res = await post('api/games', { token });
+      const res = await post('api/games', { token, mode: modeSelect.value });
       if (!res.ok) throw new Error(await reason(res));
       const { id } = await res.json();
       location.search = gameHref(id);

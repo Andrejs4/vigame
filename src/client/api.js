@@ -10,6 +10,7 @@
 /**
  * @typedef {object} GameSummary A game as the lobby lists it.
  * @property {string} id
+ * @property {string} mode A key of MODES.
  * @property {number} tick
  * @property {Array<Player | null>} seats Who holds each seat.
  * @property {number} createdAt

@@ -18,16 +18,21 @@ const OK = { ok: true };
 /** A whole unit, from the fields a test cares about. */
 const unit = (/** @type {Partial<import('../src/core/game.js').Unit> & { id: string }} */ u) => stateWith([], [u]).units[u.id];
 
-test('a new game has one castle per side on the start sites, with named units inside, as plain JSON', () => {
+test('a new game has a castle per player on the start sites, with named units inside, as plain JSON', () => {
   const board = createBoard({ ...BOARD_OPTIONS, seed: 1337 });
   const state = newGame(board);
   assert.deepEqual(checkState(board, state), []);
+  assert.equal(state.mode, 'coop', 'cooperation by default');
   assert.deepEqual(
-    Object.values(state.buildings).map((b) => [b.owner, b.type, b.grade, b.q, b.r, b.work]),
-    board.starts.map((s, owner) => [owner, 'castle', 1, s.q, s.r, 0]),
+    Object.values(state.buildings).map((b) => [b.owner, b.type, b.q, b.r]),
+    board.starts.map((s, owner) => [owner, owner === 2 ? 'lair' : 'castle', s.q, s.r]),
   );
+  assert.deepEqual(state.players.map((p) => p.team), [0, 0, 1], 'the players against the Dark Lord');
   const occ = occupancy(state);
-  assert.deepEqual(Object.values(state.buildings).map((b) => occ.inside.get(b.id)?.length), [START_UNITS, START_UNITS]);
+  assert.deepEqual(Object.values(state.buildings).map((b) => occ.inside.get(b.id)?.length), [START_UNITS, START_UNITS, 0]);
+  const ffa = newGame(board, { mode: 'ffa' });
+  assert.deepEqual(checkState(board, ffa), []);
+  assert.deepEqual([ffa.players.map((p) => p.team), Object.values(ffa.buildings).map((b) => b.type)], [[0, 1], ['castle', 'castle']]);
   const names = Object.values(state.units).map((u) => u.name);
   for (const name of names) assert.match(name, /^[A-Z][a-z]+ [A-Z][a-z]+$/);
   assert.ok(new Set(names).size > START_UNITS, 'names vary');
@@ -396,6 +401,19 @@ test('a strike that brings a building down earns a killing blow; its units are l
   assert.deepEqual([state.units.u20.q, state.units.u20.r, state.units.u20.in], [1, 0, undefined], 'left standing');
 });
 
+test('allies don\'t strike each other; the Dark Lord\'s lair strikes by itself', () => {
+  const board = openBoard(6);
+  const state = stateWith([
+    { id: 'b1', q: 0, r: 0 }, { id: 'b2', owner: 1, q: 2, r: 0 }, { id: 'b3', owner: 2, type: 'lair', q: -3, r: 0 },
+  ], [...unitsIn('b1', 3, 10), ...unitsIn('b2', 3, 20, 1)]);
+  state.mode = 'coop';
+  state.players = [{ ...state.players[0], team: 0 }, { ...state.players[1], team: 0 }, { id: 2, team: 1, stone: 0, food: 0, hunger: 0 }];
+  run(board, state, COMBAT_PERIOD);
+  assert.equal(state.buildings.b2.hp, BUILDING_TYPES.tower.hp, 'allies left alone');
+  assert.equal(state.buildings.b1.hp, BUILDING_TYPES.tower.hp - /** @type {any} */ (BUILDING_TYPES.lair.attack).damage, 'the lair struck the nearest');
+  assert.ok(state.buildings.b3.hp < BUILDING_TYPES.lair.hp, 'and was struck back');
+});
+
 test('a kill is likelier the more the striker outclasses the target, 50% at most', () => {
   assert.equal(killChance(20, 20), 10);
   assert.ok(killChance(100, 1) > 45 && killChance(100, 1) < 50);
@@ -567,9 +585,9 @@ test('wagons never pass through each other: a blocked one waits, then goes aroun
  * @param {number} ticks
  * @param {(state: import('../src/core/game.js').GameState) => void} [midway] Called halfway.
  */
-function randomGame(seed, ticks, midway) {
+function randomGame(seed, ticks, midway, mode = 'ffa') {
   const board = createBoard({ ...BOARD_OPTIONS, seed });
-  let state = newGame(board);
+  let state = newGame(board, { mode });
   const dice = { rng: seed };
   const roll = () => random(/** @type {any} */ (dice));
   const pick = (/** @type {any[]} */ list) => list[Math.floor(roll() * list.length)];
@@ -611,6 +629,7 @@ test('a long game of random commands from both sides never breaks a rule', () =>
 test('the same commands at the same ticks give the same game, saved and reloaded or not', () => {
   const straight = randomGame(11, 1000);
   const reloaded = randomGame(11, 1000, () => {});
+  assert.deepEqual(randomGame(11, 1000, () => {}, 'coop').state, randomGame(11, 1000, undefined, 'coop').state);
   assert.deepEqual(reloaded.state, straight.state);
   assert.notDeepEqual(randomGame(12, 1000).state, straight.state);
 });

@@ -51,7 +51,8 @@ export function openBoard(radius, except = {}, options = {}) {
  * A two-side state with exactly these buildings and units, for tests that
  * set up a position by hand. Buildings default to unharmed towers at 0,0,
  * and units to fresh level 1 units named Test Unit; types that work start
- * with none done. Each side has 1000 stone.
+ * with none done. Two sides, each on its own team (free for all), with
+ * 1000 stone each.
  * @param {Array<Partial<import('../src/core/game.js').Building> & { id: string }>} buildings
  * @param {Array<Partial<import('../src/core/game.js').Unit> & { id: string }>} [units]
  * @param {number} [seed]
@@ -74,11 +75,12 @@ export function stateWith(buildings, units = [], seed = 1) {
   });
   return {
     version: STATE_VERSION,
+    mode: 'ffa',
     seed,
     tick: 0,
     rng: 1,
     nextId: Math.max(0, ...ids) + 1,
-    players: [{ id: 0, stone: 1000, food: 0, hunger: 0 }, { id: 1, stone: 1000, food: 0, hunger: 0 }],
+    players: [{ id: 0, team: 0, stone: 1000, food: 0, hunger: 0 }, { id: 1, team: 1, stone: 1000, food: 0, hunger: 0 }],
     buildings: Object.fromEntries(buildings.map((b) => [b.id, building(b)])),
     units: Object.fromEntries(units.map((u) => [u.id, unit(u)])),
   };

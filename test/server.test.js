@@ -190,10 +190,16 @@ test('new games are stored with a castle per side, and listed; unknown ones are 
   assert.deepEqual(game.seats, [null, null]);
   assert.equal(game.seq, 0);
   assert.equal(game.state.tick, 0);
-  assert.deepEqual(Object.values(game.state.buildings).map((b) => [b.owner, b.type]), [[0, 'castle'], [1, 'castle']]);
+  assert.deepEqual(Object.values(game.state.buildings).map((b) => [b.owner, b.type]), [[0, 'castle'], [1, 'castle'], [2, 'lair']]);
 
   const lobby = await (await fetch(`${base}/api/games`)).json();
   assert.deepEqual(lobby.find((g) => g.id === id)?.seats, [null, null]);
+  assert.equal(lobby.find((g) => g.id === id)?.mode, 'coop');
+  const ffa = await post('/api/games', { token: TOKENS.a, mode: 'ffa' });
+  assert.equal(ffa.status, 201);
+  const ffaGame = await (await fetch(`${base}/api/games/${(await ffa.json()).id}`)).json();
+  assert.equal(ffaGame.state.mode, 'ffa');
+  assert.equal((await post('/api/games', { token: TOKENS.a, mode: 'solo' })).status, 400);
   assert.equal(lobby.find((g) => g.id === id)?.tick, 0);
   assert.deepEqual(await (await fetch(`${base}/api/games/${id}/commands`)).json(), []);
 
@@ -427,7 +433,7 @@ test('a game outlives its room: its snapshot comes back exactly, and its log reb
   const { id, a, b } = await twoPlayers();
   await give(a, { type: 'upgrade', building: 'b1' });
   await give(a, { type: 'build', kind: 'wagon', ...buildSpot(seen(a)) });
-  await until(() => Object.keys(seen(a).buildings).length === 3);
+  await until(() => Object.values(seen(a).buildings).some((x) => x.type === 'wagon'));
   const wagon = /** @type {any} */ (Object.values(seen(a).buildings).find((x) => x.type === 'wagon'));
   await give(a, { type: 'crew', building: wagon.id, units: /** @type {string[]} */ (occupancy(seen(a)).inside.get('b1')).slice(0, 3) });
   await give(b, { type: 'upgrade', building: castleOf(seen(b), 1)?.id });
@@ -541,7 +547,7 @@ test('the page transport plays through the server and follows it', async () => {
   const crimsonSaw = [];
   crimson.onState((view) => crimsonSaw.push(view));
   assert.equal(crimsonSaw.length, 1, 'a late subscriber gets the current game');
-  assert.deepEqual(Object.values(crimsonSaw[0].buildings).map((x) => [x.owner, x.type]), [[0, 'castle'], [1, 'castle']]);
+  assert.deepEqual(Object.values(crimsonSaw[0].buildings).map((x) => [x.owner, x.type]), [[0, 'castle'], [1, 'castle'], [2, 'lair']]);
   await until(() => crimsonSaw.at(-1).tick > crimsonSaw[0].tick);
   const now = crimson.clock();
   assert.ok(now >= crimsonSaw.at(-1).tick && now <= crimsonSaw.at(-1).tick + 1, 'the clock runs between ticks');

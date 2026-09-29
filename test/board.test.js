@@ -42,18 +42,20 @@ test('tiles carry their terrain rules and a tint in [0, 1)', () => {
   );
 });
 
-test('every map has two castle sites, cleared, on opposite sides, and joined by land', () => {
+test('every map has castle sites on opposite sides and a lair site between, cleared and joined by land', () => {
   for (let seed = 1; seed <= 60; seed++) {
     const b = createBoard({ seed });
-    assert.equal(b.starts.length, 2, `seed ${seed}`);
-    const [west, east] = b.starts;
-    assert.ok(west.q + west.r / 2 < east.q + east.r / 2, `seed ${seed}: west is left of east`);
+    assert.equal(b.starts.length, 3, `seed ${seed}`);
+    const [west, east, lair] = b.starts;
+    const x = (/** @type {{ q: number, r: number }} */ c) => c.q + c.r / 2;
+    assert.ok(x(west) < x(lair) && x(lair) < x(east), `seed ${seed}: west, lair, east from left to right`);
     for (const s of b.starts) {
       for (const o of hexagon(2)) {
         assert.ok(tileAt(b, s.q + o.q, s.r + o.r)?.buildable, `seed ${seed}: ${s.q + o.q},${s.r + o.r} is open ground`);
       }
     }
     assert.ok(findPath(b, west, east, () => false), `seed ${seed}: the castles can reach each other`);
+    assert.ok(findPath(b, west, lair, () => false), `seed ${seed}: and the lair`);
   }
 });
 

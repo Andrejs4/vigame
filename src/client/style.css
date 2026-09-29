@@ -82,6 +82,13 @@ button[aria-pressed="true"] { background: rgba(255, 216, 77, 0.18); border-color
   padding: 8px 10px;
 }
 .card input:focus-visible { outline: 2px solid var(--amber); outline-offset: 1px; }
+.card select {
+  display: block; width: 100%; margin: 4px 0 12px; padding: 8px 10px;
+  font: 14px var(--sans); color: var(--ink);
+  background: rgba(233, 237, 231, 0.06);
+  border: 1px solid var(--panel-edge); border-radius: 7px;
+}
+.card select option { background: var(--panel-solid); }
 .card form button, .card > .primary, .card > .button { width: 100%; }
 .card .error { color: var(--amber); min-height: 1.5em; margin: 0 0 10px; font-size: 13px; }
 .card .empty { margin: 0; color: var(--ink-dim); font-size: 13px; }

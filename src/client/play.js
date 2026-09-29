@@ -151,10 +151,14 @@ export async function startGame(net, me) {
     const paused = !net.running();
 
     if (hud.time) {
-      const fallen = view?.players.find((p) => p.lost !== undefined);
-      const outcome = !fallen ? '' : seat === null
-        ? ` · ${SIDES[1 - fallen.id]?.name ?? ''} won`
-        : fallen.id === seat ? ' · you lost' : ' · you won';
+      // Over once one team has sides left standing: it won.
+      const players = view?.players ?? [];
+      const standing = [...new Set(players.filter((p) => p.lost === undefined).map((p) => p.team))];
+      const winners = standing.length === 1 && players.some((p) => p.lost !== undefined) ? standing[0] : null;
+      const names = players.filter((p) => p.team === winners).map((p) => SIDES[p.id]?.name).join(' and ');
+      const outcome = winners === null ? '' : seat === null
+        ? ` · ${names} won`
+        : players[seat]?.team === winners ? ' · you won' : ' · you lost';
       hud.time.textContent = `${formatTime(view?.tick ?? 0)}${paused ? ' · paused' : ''}${outcome}`;
       hud.time.title = paused ? 'The game waits until both players are here' : '';
     }

@@ -37,9 +37,10 @@ export const TERRAIN = /** @type {Record<Terrain, { moveCost: number, passable: 
 
 /**
  * Where the castles go, as fractions of the map's width and height, one per
- * side.
+ * side: the players' at either end, and the Dark Lord's lair in the middle
+ * (left empty in games without him).
  */
-const START_SPOTS = [{ fx: 0.14, fy: 0.5 }, { fx: 0.86, fy: 0.5 }];
+const START_SPOTS = [{ fx: 0.14, fy: 0.5 }, { fx: 0.86, fy: 0.5 }, { fx: 0.5, fy: 0.5 }];
 
 /** Cells around a start that are cleared to grass: the castle and a ring around it. */
 const START_CLEARING = 2;

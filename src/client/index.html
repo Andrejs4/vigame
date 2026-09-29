@@ -42,6 +42,11 @@
     <h1>Vigame</h1>
     <p class="hint">Playing as <strong id="lobby-name"></strong> &middot; <a href="" id="lobby-rename">Change name</a></p>
     <p class="error" id="lobby-notice" role="status" hidden></p>
+    <label for="lobby-mode">Mode</label>
+    <select id="lobby-mode">
+      <option value="coop" selected>Cooperation: together against the Dark Lord</option>
+      <option value="ffa">Free for all: each against the other</option>
+    </select>
     <button id="lobby-new" class="primary">New game</button>
     <h2>Your games</h2>
     <ul class="games" id="lobby-mine"></ul>
