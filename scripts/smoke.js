@@ -391,8 +391,10 @@ async function threeBrowsers(browser, url, { full, label }) {
   }
 
   // Each castle is drawn in its side's colour: the cell below and left of its
-  // centre is the castle's, and clear of its labels.
+  // centre is the castle's, and clear of its labels. The whole board first,
+  // drawn: the canvas catches up on the next frame.
   await a.click('#recenter');
+  await frames(a);
   const crimson = await castleOf(a, 1);
   const tint = async (c) => {
     const p = await hexPoint(a, c.q - 1, c.r + 1);
