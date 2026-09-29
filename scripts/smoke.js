@@ -252,7 +252,7 @@ async function report() {
       return {
         time: text('time'),
         seat: text('seat'),
-        viewers: text('viewers'),
+        observers: text('observers'),
         connected: v?.net?.connected(),
         tick: v?.view?.tick,
         marching: Object.values(v?.view?.units ?? {}).filter((u) => u.in === undefined),
@@ -357,11 +357,26 @@ async function threeBrowsers(browser, url, { full, label }) {
   assert.equal(await text(a, '#lobby-name'), 'Ann');
   await a.waitForSelector('#lobby-mine-empty:not([hidden])');
   if (full) await a.screenshot({ path: join(OUT, 'lobby.png') });
+  assert.equal(await a.inputValue('#lobby-players'), '1', 'one player against the Dark Lord by default');
+  await a.selectOption('#lobby-players', '2');
   await a.click('#lobby-new');
   await inGame(a);
   const link = a.url();
   assert.match(link, /\?game=[\w-]+$/);
   await waitText(a, '#seat', 'Ann · Blue');
+  // Alone of two, and the Players line blinks while the game waits.
+  await waitText(a, '#players', '1/2');
+  assert.equal(await a.locator('#players.waiting').count(), 1, 'Players does not blink while waiting');
+  // Recenter looks at her own castle, close enough to read unit counts.
+  const home = await a.evaluate(() => {
+    const v = /** @type {any} */ (window).__vigame;
+    return Object.values(v.view.buildings).find((b) => b.type === 'castle' && b.owner === 0);
+  });
+  await a.click('#recenter');
+  const centre = await hexPoint(a, home.q, home.r);
+  const box = /** @type {{ x: number, y: number, width: number, height: number }} */ (await a.locator('#board').boundingBox());
+  assert.ok(Math.abs(centre.x - (box.x + box.width / 2)) < 2 && Math.abs(centre.y - (box.y + box.height / 2)) < 2, 'Recenter did not centre on her castle');
+  assert.ok(await a.evaluate(() => /** @type {any} */ (window).__vigame.camera.zoom) > 0.45, 'Recenter is too far out to show unit counts');
   await waitText(a, '#time', '0:00 · paused');
   assert.equal(await a.locator('#build-tower').isDisabled(), true);
 
@@ -394,12 +409,12 @@ async function threeBrowsers(browser, url, { full, label }) {
   }
 
   // Each castle is drawn in its side's colour: the cell below and left of its
-  // centre is the castle's, and clear of its labels. The whole board first,
-  // drawn: the canvas catches up on the next frame.
-  await a.click('#recenter');
-  await frames(a);
+  // centre is the castle's, and clear of its labels. Each in view, drawn:
+  // the canvas catches up on the next frame.
   const crimson = await castleOf(a, 1);
   const tint = async (c) => {
+    await lookAt(a, c);
+    await frames(a);
     const p = await hexPoint(a, c.q - 1, c.r + 1);
     return pixelAt(a, p.x, p.y);
   };
@@ -481,7 +496,7 @@ async function threeBrowsers(browser, url, { full, label }) {
 
   // Building far from your own buildings is refused, and the page says why.
   await a.keyboard.press('Escape');
-  await a.click('#recenter');
+  await lookAt(a, crimson);
   await a.click('#build-tower');
   const far = await openCell(a, [[crimson.q, crimson.r + 2], [crimson.q, crimson.r - 2], [crimson.q + 2, crimson.r - 2]]);
   await clickHex(a, far.q, far.r);
@@ -576,7 +591,9 @@ async function threeBrowsers(browser, url, { full, label }) {
   await logIn(c, 'Cai');
   await inGame(c);
   await waitText(c, '#seat', 'Cai · Spectator');
-  await waitText(a, '#viewers', '3');
+  await waitText(a, '#observers', '1');
+  await waitText(a, '#players', '2/2');
+  assert.equal(await a.locator('#players.waiting').count(), 0, 'Players still blinks with everyone here');
   assert.equal(await c.locator('#build-tower').isDisabled(), true);
 
   // A link to a game that doesn't exist lands in the lobby, which says so.
@@ -595,6 +612,7 @@ async function phone(browser, url) {
   await inLobby(page);
   const fits = () => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth);
   assert.ok(await fits(), 'the lobby scrolls sideways on a phone');
+  await page.selectOption('#lobby-players', '2');
   await page.tap('#lobby-new');
   await inGame(page);
   const other = await newPlayer(browser, page.url(), 'phone-opponent', 'Oli');

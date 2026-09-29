@@ -46,8 +46,13 @@ button[aria-pressed="true"] { background: rgba(255, 216, 77, 0.18); border-color
 }
 .primary:hover:not(:disabled) { background: rgba(255, 216, 77, 0.27); }
 
+/* Fades in and out while the game waits, e.g. for players to take their seats. */
+@keyframes fade-blink { 50% { opacity: 0.25; } }
+.waiting { animation: fade-blink 1.6s ease-in-out infinite; }
+
 @media (prefers-reduced-motion: reduce) {
   button, .button { transition: none; }
+  .waiting { animation: none; color: var(--amber); }
 }
 
 /* --- login and lobby ------------------------------------------------------ */
@@ -130,7 +135,11 @@ button[aria-pressed="true"] { background: rgba(255, 216, 77, 0.18); border-color
 
 #status { top: 14px; left: 14px; min-width: 216px; }
 #controls { top: 14px; right: 14px; display: flex; flex-direction: column; gap: 6px; }
-#legend { bottom: 14px; left: 14px; font-size: 12px; color: var(--ink-dim); max-width: 300px; }
+#legend {
+  bottom: 14px; left: 14px; font-size: 12px; color: var(--ink-dim); max-width: 300px;
+  /* Below the status panel, scrolling when "How to play" doesn't fit. */
+  max-height: calc(100% - var(--status-height, 0px) - 42px); overflow-y: auto;
+}
 #minimap { bottom: 14px; right: 14px; padding: 6px; }
 
 /* The minimap: the canvas holds a few pixels a cell, scaled up unsmoothed. */

@@ -42,7 +42,7 @@ export const RAIDERS = 9;
 /** Players a game may seat. */
 export const MIN_PLAYERS = 1;
 export const MAX_PLAYERS = 8;
-export const DEFAULT_PLAYERS = 2;
+export const DEFAULT_PLAYERS = 1;
 
 /**
  * Game modes. In cooperation the players are one team against the Dark

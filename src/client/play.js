@@ -14,7 +14,7 @@ import { serverBase } from './api.js';
 import { Camera } from './camera.js';
 import { Effects } from './effects.js';
 import { Minimap } from './minimap.js';
-import { BoardRenderer } from './render.js';
+import { BoardRenderer, COUNT_ZOOM } from './render.js';
 import { Sounds, soundsFor } from './sounds.js';
 import { Tokens } from './tokens.js';
 
@@ -33,6 +33,9 @@ function formatTime(tick) {
 function percent(part, whole) {
   return `${String(Math.floor((100 * part) / whole)).padStart(3, '\u2007')}%`;
 }
+
+/** Recenter's zoom at least: close enough to read how many are in each building. */
+const HOME_ZOOM = COUNT_ZOOM + 0.15;
 
 /** Where the browser keeps whether "How to play" is open. */
 const HOW_TO_KEY = 'vigame.howToPlay';
@@ -59,7 +62,8 @@ export async function startGame(net, me) {
     food: document.getElementById('food'),
     selection: document.getElementById('selection'),
     tile: document.getElementById('tile'),
-    viewers: document.getElementById('viewers'),
+    players: document.getElementById('players'),
+    observers: document.getElementById('observers'),
   };
   const seatButton = /** @type {HTMLButtonElement} */ (document.getElementById('seat-button'));
   const upgradeButton = /** @type {HTMLButtonElement} */ (document.getElementById('upgrade'));
@@ -126,6 +130,8 @@ export async function startGame(net, me) {
   let highlights = new Set();
   let showCoords = false;
   let needsDraw = true;
+  /** Whether Recenter has looked at this viewer's own castle yet. */
+  let homed = false;
 
   // --- state ---------------------------------------------------------------
 
@@ -133,6 +139,16 @@ export async function startGame(net, me) {
   function recenter() {
     const rect = canvas.getBoundingClientRect();
     camera.fit(bounds(board.list, board.hexSize), rect.width, rect.height);
+    // A player looks at their own castle, close enough to read the unit
+    // counts even when the whole map would be too small for them.
+    const seat = net.seat();
+    const home = view && seat !== null ? castleOf(view, seat) : null;
+    if (home) {
+      camera.zoom = Math.min(camera.maxZoom, Math.max(camera.zoom, HOME_ZOOM));
+      const at = axialToPixel(home.q, home.r, board.hexSize);
+      camera.centreOn(at.x, at.y, rect.width, rect.height);
+    }
+    homed = Boolean(home);
     needsDraw = true;
   }
 
@@ -154,6 +170,8 @@ export async function startGame(net, me) {
     for (const { name, pan } of soundsFor({ prev: view, next, fresh, seat: net.seat(), where: panOf })) sounds.play(name, pan);
     if (view) letGo(view, next, fresh);
     view = next;
+    // A player's first sight of the game is their own castle.
+    if (!homed && net.seat() !== null) recenter();
     minimap.show(next);
     occ = occupancy(next);
     moving = Object.values(next.units).some((u) => u.path) || Object.values(next.buildings).some((b) => b.path);
@@ -276,9 +294,16 @@ export async function startGame(net, me) {
       const rule = t && !t.passable ? ' — impassable' : t && !t.buildable ? ' — no building' : '';
       hud.tile.textContent = t ? `${TERRAIN[t.terrain].label} (${t.q}, ${t.r})${rule}` : '—';
     }
-    if (hud.viewers) {
-      hud.viewers.textContent = net.connected() ? String(net.viewers()) : 'offline';
-      hud.viewers.title = peers.map((p) => p.name).filter(Boolean).join(', ');
+    if (hud.players) {
+      // Seated players who are here, of the seats; it blinks while the game waits.
+      const here = new Set(peers.filter((p) => p.seat !== null).map((p) => p.seat)).size;
+      hud.players.textContent = view ? `${here}/${seatsOf(view)}` : '—';
+      hud.players.classList.toggle('waiting', paused && view?.over === undefined);
+    }
+    if (hud.observers) {
+      const watching = peers.filter((p) => p.seat === null);
+      hud.observers.textContent = net.connected() ? String(watching.length) : 'offline';
+      hud.observers.title = watching.map((p) => p.name).filter(Boolean).join(', ');
     }
 
     seatButton.hidden = seat === null && !net.canClaimSeat();
@@ -643,6 +668,11 @@ export async function startGame(net, me) {
   new ResizeObserver(() => {
     stage.style.setProperty('--controls-height', `${controls.offsetHeight}px`);
   }).observe(controls);
+  // The legend keeps below the status panel, however tall that grows.
+  const statusPanel = /** @type {HTMLElement} */ (document.getElementById('status'));
+  new ResizeObserver(() => {
+    stage.style.setProperty('--status-height', `${statusPanel.offsetHeight}px`);
+  }).observe(statusPanel);
 
   addEventListener('keydown', (e) => {
     // Escape in the crew chooser closes just the chooser.
@@ -774,7 +804,12 @@ export async function startGame(net, me) {
     needsDraw = true;
     updateHud();
   });
-  net.onSeat(() => { refreshHighlights(); updateHud(); });
+  net.onSeat(() => {
+    // The first time this viewer has a castle, look at it.
+    if (!homed && net.seat() !== null) recenter();
+    refreshHighlights();
+    updateHud();
+  });
   await net.ready();
   requestAnimationFrame(frame);
   // Keep the viewer count and paused state honest as people come and go.

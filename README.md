@@ -24,7 +24,7 @@ Run `npm start` and open http://127.0.0.1:2567.
 - **Log in** with a name and the answer to a small sum. A browser stays
   logged in across visits.
 - **The lobby** lists your games and games with a free seat; **New game**
-  starts one for 1 to 8 players (2 by default), on a map that grows with
+  starts one for 1 to 8 players (1 by default, against the Dark Lord), on a map that grows with
   them (29 × 20 cells for two, 59 × 39 for eight), castles in a ring
   around the middle, out of reach of the lair and of each other. A game's address (`?game=…`) is also the link to send
   someone. Players who join take the seats in order (Blue, Crimson, Green,
@@ -174,6 +174,11 @@ Run `npm start` and open http://127.0.0.1:2567.
   at the pace of its slowest walker.
 - **Pits** don't stop units or bands: they cross any pit, yours or the
   enemy's. Wagons can't enter a pit and go around it.
+- **Players** in the status panel shows the seated players who are here,
+  of the game's seats (such as 1/2), and blinks while the game waits for
+  the rest; **Observers** counts those watching without a seat.
+  **Recenter** looks at your own castle, close enough to read how many
+  are in each building (a spectator sees the whole map).
 - Drag to pan, and use the wheel or the − / + buttons to zoom. The minimap
   in the corner shows the whole board and a frame around what you see;
   press or drag on it to look there.

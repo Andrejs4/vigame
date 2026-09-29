@@ -49,8 +49,8 @@
     </select>
     <label for="lobby-players">Players</label>
     <select id="lobby-players">
-      <option value="1">1</option>
-      <option value="2" selected>2</option>
+      <option value="1" selected>1</option>
+      <option value="2">2</option>
       <option value="3">3</option>
       <option value="4">4</option>
       <option value="5">5</option>
@@ -76,13 +76,14 @@
     <dl>
       <div class="row"><dt>Time</dt><dd id="time">0:00</dd></div>
       <div class="row"><dt>You</dt><dd id="seat">&mdash;</dd></div>
+      <div class="row"><dt>Players</dt><dd id="players" title="Seated players here, of the game's seats; it blinks while the game waits for the rest">&mdash;</dd></div>
       <div class="row"><dt>Units</dt><dd id="units">&mdash;</dd></div>
       <div class="row"><dt>Stone</dt><dd id="stone">&mdash;</dd></div>
       <div class="row"><dt>Dark metal</dt><dd id="metal">&mdash;</dd></div>
       <div class="row"><dt>Food</dt><dd id="food">&mdash;</dd></div>
       <div class="row"><dt>Selected</dt><dd id="selection">none</dd></div>
       <div class="row"><dt>Tile</dt><dd id="tile">&mdash;</dd></div>
-      <div class="row"><dt>Viewers</dt><dd id="viewers">1</dd></div>
+      <div class="row"><dt>Observers</dt><dd id="observers">0</dd></div>
     </dl>
     <p class="notice" id="message" role="status" hidden></p>
   </div>
