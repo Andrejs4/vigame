@@ -210,16 +210,19 @@ export class BoardRenderer {
         const centre = this.between(camera, b.q, b.r, rolling, progress(b, clock));
         if (!onScreen(centre)) continue;
 
+        // A building going up is pale, with a dashed outline.
+        const rising = b.raised !== undefined;
         const cells = rolling ? [{ q: b.q, r: b.r }] : footprint(b.type, b.q, b.r);
         const inShape = new Set(cells.map((c) => key(c.q, c.r)));
         for (const c of cells) {
           const sp = rolling ? centre : cellScreen(c.q, c.r);
           this.hexPath(sp.x, sp.y, zoom, rolling ? 0.8 : 1);
-          ctx.fillStyle = side.color + (rolling ? 'cc' : '66');
+          ctx.fillStyle = side.color + (rolling ? 'cc' : rising ? '2e' : '66');
           ctx.fill();
         }
         ctx.lineWidth = Math.max(1.5, (isSelected ? 3.5 : 2) * zoom);
         ctx.strokeStyle = isSelected ? '#ffd84d' : side.accent;
+        ctx.setLineDash(rising ? [5 * zoom, 4 * zoom] : []);
         ctx.beginPath();
         for (const c of cells) {
           const sp = rolling ? centre : cellScreen(c.q, c.r);
@@ -234,6 +237,7 @@ export class BoardRenderer {
           }
         }
         ctx.stroke();
+        ctx.setLineDash([]);
 
         // Its letter, grade pips, and how many are inside.
         const letter = size * zoom * (type.size === 7 ? 0.8 : 0.55);

@@ -203,6 +203,15 @@ export const REPAIR_WORK = 100;
  *   a wagon but holds no cell, so it blocks nothing, and breaks up once it
  *   has nobody.
  * @property {boolean} build Whether players may build it.
+ * @property {number} [raise] Work to raise it, from its crew once they are
+ *   inside, a WORK_BASE plus their building skill each a tick: one unskilled
+ *   unit alone takes raise / WORK_BASE ticks. Until then it has half its hit
+ *   points, gives no cover, adds no reach, and neither works nor moves. An
+ *   upgrade takes as much work again times its grade before, and comes with
+ *   the next grade's room and hit points once done. (A castle is never
+ *   raised, only upgraded.)
+ * @property {number} [idleWork] Work it does by itself each tick, crewed or
+ *   not: a castle raises a unit now and then even with nobody at home.
  * @property {number} cost Stone to build it.
  * @property {number} [metal] Dark metal to build it.
  * @property {boolean} [nearCastle] Built only within BUILD_RANGE of the castle.
@@ -232,22 +241,23 @@ export const REPAIR_WORK = 100;
 export const BUILDING_TYPES = {
   castle: {
     name: 'Castle', size: 7, capacity: 60, grades: 3, hp: 2000, build: false, cost: 0, upgrade: 200, reach: 1, life: true,
-    skill: 'breeding', work: 12000, yields: 'unit',
+    skill: 'breeding', work: 12000, yields: 'unit', idleWork: 10, raise: 36000,
   },
   tower: {
     name: 'Tower', size: 1, capacity: 20, grades: 3, hp: 500, build: true, cost: 60, upgrade: 60, reach: 2, skill: 'ranged',
+    raise: 12000,
   },
   wagon: {
     name: 'Wagon', size: 1, capacity: 10, grades: 1, hp: 300, build: true, cost: 0, metal: 15, nearCastle: true,
-    skill: 'melee', speed: 2 * TICKS_PER_SECOND,
+    skill: 'melee', speed: 2 * TICKS_PER_SECOND, raise: 9000,
   },
   pit: {
     name: 'Pit', size: 1, capacity: 8, grades: 1, hp: 800, build: true, cost: 0,
-    skill: 'build', work: 2400, yields: 'stone', perDepth: 20, depth: 5, through: 0.25,
+    skill: 'build', work: 2400, yields: 'stone', perDepth: 20, depth: 5, through: 0.25, raise: 3000,
   },
   farm: {
     name: 'Farm', size: 1, capacity: 6, grades: 1, hp: 200, build: true, cost: 30,
-    skill: 'farming', work: 300, yields: 'food', base: 20, through: 0.5,
+    skill: 'farming', work: 300, yields: 'food', base: 20, through: 0.5, raise: 6000,
   },
   lair: {
     name: 'Lair', size: 7, capacity: 0, grades: 1, hp: 6000, build: false, cost: 0,

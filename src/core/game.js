@@ -29,8 +29,10 @@
  * a farm's grows food, straight into their side's stock. Stone pays for
  * towers, farms and upgrades. Every minute the side eats, and goes hungry
  * if it runs short. Work trains the skill it uses, and the unit's level with
- * it. A building with no hit points left collapses. A unit with nowhere to
- * go goes home. A band is a group of units that moves like a wagon, gives
+ * it. A new building goes up only once its crew gets there, and does
+ * nothing else until it stands; an upgrade, too, is work for the crew. A
+ * building with no hit points left collapses. A unit with nowhere to go goes
+ * home. A band is a group of units that moves like a wagon, gives
  * no cover, and breaks up once it has nobody.
  */
 
@@ -58,6 +60,10 @@ import {
  * @property {number} q Anchor cell: the building's cell, or a castle's centre.
  * @property {number} r
  * @property {number} [hp] Hit points left. Bands have none.
+ * @property {number} [raised] Work put into raising it so far, only while it
+ *   is going up: until its type's `raise`.
+ * @property {number} [upgrading] Work put into its next grade so far, only
+ *   while it is being upgraded: until `raiseWork`.
  * @property {number} [work] Work done toward what it yields next, for types that work.
  * @property {number} [mend] Repair work done toward the next hit point.
  * @property {string} [target] The enemy building its units go for.
@@ -134,7 +140,7 @@ import {
  */
 
 /** Bump when GameState changes shape, and teach `checkState` the new one. */
-export const STATE_VERSION = 7;
+export const STATE_VERSION = 8;
 
 const SKILL_NAMES = /** @type {Skill[]} */ (Object.keys(SKILLS));
 
@@ -324,11 +330,30 @@ export function capacityOf(b) {
 }
 
 /**
- * A building's hit points when unharmed.
+ * A building's hit points when unharmed: half while it is going up.
  * @param {Building} b
  */
 export function maxHp(b) {
-  return BUILDING_TYPES[b.type].hp * b.grade;
+  const full = BUILDING_TYPES[b.type].hp * b.grade;
+  return isRising(b) ? Math.ceil(full / 2) : full;
+}
+
+/**
+ * Whether a building is still going up.
+ * @param {Building} b
+ */
+export function isRising(b) {
+  return b.raised !== undefined;
+}
+
+/**
+ * Work a building's crew puts in toward its next grade: raising it while it
+ * is going up, else upgrading it, which takes more at each grade.
+ * @param {Building} b
+ */
+export function raiseWork(b) {
+  const raise = BUILDING_TYPES[b.type].raise ?? 0;
+  return isRising(b) ? raise : raise * b.grade;
 }
 
 /**
@@ -752,7 +777,8 @@ function aim(state, player, cmd) {
 
 /**
  * Build on open ground near one of your standing buildings, with a crew if
- * the command names one.
+ * the command names one. Most buildings then go up as their crew raises
+ * them (see `raise`); a band is ready at once.
  * @param {Board} board
  * @param {GameState} state
  * @param {Occupancy} occ
@@ -781,7 +807,8 @@ function build(board, state, occ, player, cmd) {
 
   /** @type {Building} */
   const b = { id: `b${state.nextId}`, owner: player, type: kind, grade: 1, q: at.q, r: at.r };
-  if (type.hp) b.hp = type.hp;
+  if (type.raise) b.raised = 0;
+  if (type.hp) b.hp = maxHp(b);
   if (type.work !== undefined) b.work = 0;
   if (type.depth !== undefined) b.dug = 0;
   // Crew the new building before it exists, so a crew that can't get there
@@ -833,7 +860,8 @@ export function upgradeCost(b) {
 }
 
 /**
- * Raise a building's grade by one, for stone: it holds more, and takes
+ * Upgrade a building, for stone: its crew then works on it (see `raise`),
+ * and once they are done its grade is one higher: it holds more, and takes
  * more hits.
  * @param {GameState} state
  * @param {number} player
@@ -844,13 +872,14 @@ function upgrade(state, player, cmd) {
   const b = ownBuilding(state, player, cmd.building);
   if (!b) return refuse('not your building');
   const type = BUILDING_TYPES[b.type];
+  if (isRising(b)) return refuse('still going up');
+  if (b.upgrading !== undefined) return refuse('already upgrading');
   if (b.grade >= type.grades) return refuse('fully upgraded');
   const stock = state.players[player];
   const cost = upgradeCost(b);
   if (stock.stone < cost) return refuse('not enough stone');
   stock.stone -= cost;
-  b.grade += 1;
-  if (b.hp !== undefined) b.hp += type.hp;
+  b.upgrading = 0;
   return { ok: true };
 }
 
@@ -868,6 +897,7 @@ function moveBuilding(board, state, occ, player, cmd) {
   const b = ownBuilding(state, player, cmd.building);
   if (!b) return refuse('not your building');
   if (!BUILDING_TYPES[b.type].speed) return refuse('cannot move');
+  if (isRising(b)) return refuse('still going up');
   const goal = commandCell(cmd);
   if (!goal || !tileAt(board, goal.q, goal.r)?.passable) return refuse('cannot go there');
 
@@ -1040,7 +1070,9 @@ function fight(board, state, occ) {
     const hit = t.building;
     // Some strikes on a building get through to a unit inside.
     const sheltered = hit ? /** @type {string[]} */ (occ.inside.get(hit.id) ?? []).filter((x) => state.units[x]) : [];
-    const through = hit && sheltered.length && random(state) < (BUILDING_TYPES[hit.type].through ?? 0);
+    // A building going up covers nobody.
+    const cover = !hit ? 0 : isRising(hit) ? 1 : BUILDING_TYPES[hit.type].through ?? 0;
+    const through = hit && sheltered.length && random(state) < cover;
     if (hit && !through) {
       hit.hp = Math.max(0, /** @type {number} */ (hit.hp) - damage);
       if (hit.hp > 0) return false;
@@ -1072,10 +1104,10 @@ function fight(board, state, occ) {
   for (const b of Object.values(state.buildings)) {
     if (b.target !== undefined && state.buildings[b.target]?.owner === undefined) delete b.target;
     const type = BUILDING_TYPES[b.type];
-    if (type.speed && b.target !== undefined) chase(board, state, occ, b);
+    if (type.speed && b.target !== undefined && !isRising(b)) chase(board, state, occ, b);
     const inside = /** @type {string[]} */ (occ.inside.get(b.id));
     if (!inside.length && !type.attack) continue;
-    const unitReach = RANGED_RANGE + (type.reach ?? 0);
+    const unitReach = RANGED_RANGE + (isRising(b) ? 0 : type.reach ?? 0);
     const near = inReach(footprint(b.type, b.q, b.r), b.owner, Math.max(unitReach, type.attack?.reach ?? 0), b.target);
     if (type.attack) {
       const target = near.find((x) => x.d <= /** @type {{ reach: number }} */ (type.attack).reach && standing(x));
@@ -1124,7 +1156,7 @@ function chase(board, state, occ, b) {
 function harvest(state) {
   for (const b of Object.values(state.buildings)) {
     if (b.type === 'castle') addFood(state, b.owner, Math.floor(capacityOf(b) / 2) * FOOD_PER_UNIT);
-    else addFood(state, b.owner, BUILDING_TYPES[b.type].base ?? 0);
+    else if (!isRising(b)) addFood(state, b.owner, BUILDING_TYPES[b.type].base ?? 0);
   }
 }
 
@@ -1190,6 +1222,46 @@ function mend(state, occ) {
 }
 
 /**
+ * Buildings going up, or being upgraded, are worked on by the units inside,
+ * which trains their building skill: the crew has to get there first, and
+ * does no other work meanwhile. Once raised, a building takes its full hit
+ * points and starts its work; once upgraded, it goes up a grade, with the
+ * room and hit points that come with it. Like any work, it waits while the
+ * building needs mending.
+ * @param {GameState} state
+ * @param {Occupancy} occ
+ */
+function raise(state, occ) {
+  for (const b of Object.values(state.buildings)) {
+    const rising = isRising(b);
+    if (!rising && b.upgrading === undefined) continue;
+    const inside = /** @type {string[]} */ (occ.inside.get(b.id));
+    if (!inside.length || /** @type {number} */ (b.hp) < maxHp(b)) continue;
+    let done = /** @type {number} */ (rising ? b.raised : b.upgrading);
+    for (const id of inside) {
+      const u = state.units[id];
+      if (!u) continue;
+      done += WORK_BASE + u.skills.build;
+      practise(u, 'build');
+    }
+    if (done < raiseWork(b)) {
+      if (rising) b.raised = done;
+      else b.upgrading = done;
+      continue;
+    }
+    if (rising) {
+      const half = maxHp(b);
+      delete b.raised;
+      b.hp = /** @type {number} */ (b.hp) + maxHp(b) - half;
+    } else {
+      delete b.upgrading;
+      b.grade += 1;
+      b.hp = /** @type {number} */ (b.hp) + BUILDING_TYPES[b.type].hp;
+    }
+  }
+}
+
+/**
  * Ticks for a band to enter a cell: its slowest member's.
  * @param {Board} board
  * @param {GameState} state
@@ -1207,24 +1279,28 @@ function bandTicks(board, state, occ, b, cell) {
  * Buildings where units work get a tick of it from each unit inside: more
  * units, and more skilled ones, get there sooner. The work trains them. A
  * castle's units raise a new unit while it has room and its side is under
- * the unit limit; a pit's crew digs a stone, and goes home once the pit is
- * dug out; a farm's crew grows a food.
+ * the unit limit, and it does a little of that work by itself, even with
+ * nobody at home or while damaged; a pit's crew digs a stone, and goes home
+ * once the pit is dug out; a farm's crew grows a food. Nothing is worked
+ * while a building goes up or is upgraded.
  * @param {Board} board
  * @param {GameState} state
  * @param {Occupancy} occ
  */
 function work(board, state, occ) {
   mend(state, occ);
+  raise(state, occ);
   for (const b of Object.values(state.buildings)) {
     const type = BUILDING_TYPES[b.type];
-    if (type.work === undefined) continue;
+    if (type.work === undefined || isRising(b) || b.upgrading !== undefined || isDugOut(b)) continue;
     const inside = /** @type {string[]} */ (occ.inside.get(b.id));
-    if (!inside.length || isDugOut(b)) continue;
-    if (b.hp !== undefined && b.hp < maxHp(b)) continue; // mending comes first
     if (type.yields === 'unit' && (inside.length >= capacityOf(b) || occ.unitCount[b.owner] >= UNIT_LIMIT)) continue;
+    // While a building is damaged, its units mend it instead.
+    const workers = b.hp !== undefined && b.hp < maxHp(b) ? [] : inside;
+    if (!workers.length && !type.idleWork) continue;
 
-    let done = /** @type {number} */ (b.work);
-    for (const id of inside) {
+    let done = /** @type {number} */ (b.work) + (type.idleWork ?? 0);
+    for (const id of workers) {
       const u = state.units[id];
       done += WORK_BASE + u.skills[type.skill];
       practise(u, type.skill);
@@ -1473,7 +1549,11 @@ export function checkState(board, raw) {
     if (type.work === undefined ? b.work !== undefined : !isCount(b.work, type.work)) fail(`building ${id}: bad work`);
     const deepest = /** @type {number} */ (type.depth) * /** @type {number} */ (type.perDepth);
     if (type.depth === undefined ? b.dug !== undefined : !isCount(b.dug, deepest + 1)) fail(`building ${id}: bad dug`);
-    if (type.hp ? !(Number.isSafeInteger(b.hp) && b.hp >= 1 && b.hp <= type.hp * b.grade) : b.hp !== undefined) {
+    if (b.raised !== undefined && !(type.raise && isCount(b.raised, type.raise))) fail(`building ${id}: bad raised`);
+    if (b.upgrading !== undefined && !(type.raise && b.raised === undefined && b.grade < type.grades && isCount(b.upgrading, raiseWork(b)))) {
+      fail(`building ${id}: bad upgrading`);
+    }
+    if (type.hp ? !(Number.isSafeInteger(b.hp) && b.hp >= 1 && b.hp <= maxHp(b)) : b.hp !== undefined) {
       fail(`building ${id}: bad hp`);
     }
     if (b.mend !== undefined && !(type.hp && isCount(b.mend, REPAIR_WORK))) fail(`building ${id}: bad mend`);

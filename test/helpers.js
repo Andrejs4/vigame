@@ -49,8 +49,8 @@ export function openBoard(radius, except = {}, options = {}) {
 
 /**
  * A two-side state with exactly these buildings and units, for tests that
- * set up a position by hand. Buildings default to unharmed towers at 0,0,
- * and units to fresh level 1 units named Test Unit; types that work start
+ * set up a position by hand. Buildings default to unharmed towers at 0,0
+ * (at half their hit points if given `raised`, as going up), and units to fresh level 1 units named Test Unit; types that work start
  * with none done. Two sides, each on its own team (free for all), with
  * 1000 stone and dark metal each; no raiders.
  * @param {Array<Partial<import('../src/core/game.js').Building> & { id: string }>} buildings
@@ -64,7 +64,7 @@ export function stateWith(buildings, units = [], seed = 1) {
     const type = BUILDING_TYPES[b.type ?? 'tower'];
     return {
       owner: 0, type: 'tower', grade: 1, q: 0, r: 0,
-      ...(type?.hp ? { hp: type.hp * (b.grade ?? 1) } : {}),
+      ...(type?.hp ? { hp: Math.ceil((type.hp * (b.grade ?? 1)) / (b.raised === undefined ? 1 : 2)) } : {}),
       ...(type?.work !== undefined ? { work: 0 } : {}),
       ...(type?.depth !== undefined ? { dug: 0 } : {}),
       ...b,

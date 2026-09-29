@@ -44,8 +44,9 @@ Run `npm start` and open http://127.0.0.1:2567.
 - **Your castle** covers seven cells and is its side's life: when it falls,
   your side has lost. It is every unit's home, and starts with 12. The units at
   home raise new ones: the more of them, and the better they breed, the
-  sooner. It takes in all its units, however many, but stops breeding
-  while it holds more than its room.
+  sooner. With nobody at home it still raises one every two minutes by
+  itself, even while damaged. It takes in all its units, however many, but
+  stops breeding while it holds more than its room.
 - **Units** each have a medieval name, a level from 1 to 100, and six
   skills: breeding, ranged attack, close combat, building (which covers
   repairing and digging), farming and running. Work trains the skill it
@@ -72,11 +73,18 @@ Run `npm start` and open http://127.0.0.1:2567.
   **Band** or **Wagon** (15 dark metal), then a highlighted cell: open,
   buildable ground within three cells of one of your standing buildings (a
   wagon: of your castle). Scrub can be crossed but not built on; water is
-  neither. One building per cell.
-- **Pits**: placing one asks for its crew first, up to 8, with the best
-  diggers at home ticked. They walk there and dig stone, faster the more of
-  them and the better they build; every 20 stone the pit is a grade deeper.
-  At depth 5 it is dug out and the crew goes home.
+  neither. One building per cell. Placing one asks for its crew first, with
+  the best at home for its work ticked, up to half of those at home.
+- **Going up**: a new tower, wagon, pit or farm is only a site until its crew
+  raises it. They start once they get there, faster the more of them and the
+  better they build, and it trains their building skill as they go (one
+  unskilled unit alone: a pit 15 s, a farm 30 s, a wagon 45 s, a tower 60 s).
+  A site has half its hit points, gives its units no cover and a tower no
+  extra reach, and doesn't work, move or take upgrades. It's drawn pale,
+  with a dashed outline.
+- **Pits**: the crew, up to 8, digs stone, faster the more of them and the
+  better they build; every 20 stone the pit is a grade deeper. At depth 5 it
+  is dug out and the crew goes home.
 - **Food**: a unit eats 10 a minute. Every minute the castle yields enough
   for half the units it can hold, and each farm a little (20) even with
   nobody working it; a farm's crew (up to 6) grows more, faster the better
@@ -88,8 +96,11 @@ Run `npm start` and open http://127.0.0.1:2567.
   it by the excess. At 100%, every unit may starve at each meal: about 5%
   at level 1, 0.6% at level 50, never at 100.
 - **Upgrade** the selected building, for stone: the castle 200 × its grade,
-  a tower 60 × its grade. Each grade holds as many units again and takes as
-  many hits again.
+  a tower 60 × its grade. Then its crew works on it, as on a new building,
+  instead of their usual work, which trains their building skill: each grade
+  takes as long again as the one before (a tower as long as raising it, a
+  castle three times that). Once done, it holds as many units again and
+  takes as many hits again.
 - **Hit points**: every building has them, a castle 2000 and a pit 800. At
   none left it collapses at once, and whoever was inside is left standing
   there. While a building is damaged, the units inside mend it instead of
@@ -244,12 +255,15 @@ http://127.0.0.1:2567;` with the same headers.
   ],
   buildings: {
     b1: { id: 'b1', owner: 0, type: 'castle', grade: 1, q: 2, r: 5, hp: 2000,
-          work: 5200 },                                      // toward the next unit
+          work: 5200,                                        // toward the next unit
+          upgrading: 9000 },                                 // toward grade 2, a quarter done
     b30: { id: 'b30', owner: 0, type: 'pit', grade: 1, q: 5, r: 3, hp: 800,
            work: 1200, dug: 47 },                            // 47 stone so far: depth 2
     b31: { id: 'b31', owner: 0, type: 'wagon', grade: 1, q: 6, r: 4, hp: 280,
            path: [[7, 4], [8, 4]], since: 410, until: 430,  // rolling to 7,4
            target: 'b27', mend: 40 },                       // after b27; being mended
+    b32: { id: 'b32', owner: 0, type: 'tower', grade: 1, q: 3, r: 2, hp: 250,
+           raised: 4000 },                                   // going up: a third done
   },
   units: {
     u3: { id: 'u3', owner: 0, name: 'Hawise Reeve', level: 4, xp: 120,

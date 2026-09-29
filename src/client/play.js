@@ -7,7 +7,7 @@
 import { bounds, key, pixelToAxial } from '../core/hex.js';
 import { BOARD_OPTIONS, TERRAIN, createBoard, tileAt } from '../core/board.js';
 import {
-  capacityOf, castleOf, crewOf, depthOf, foodStore, inBuildRange, isDugOut, maxHp, occupancy, seatsOf, sideOf, upgradeCost,
+  capacityOf, castleOf, crewOf, depthOf, foodStore, inBuildRange, isDugOut, isRising, maxHp, occupancy, raiseWork, seatsOf, sideOf, upgradeCost,
 } from '../core/game.js';
 import { BUILDING_TYPES, SKILLS, TICKS_PER_SECOND, UNIT_LIMIT } from '../core/rules.js';
 import { serverBase } from './api.js';
@@ -221,7 +221,7 @@ export async function startGame(net, me) {
     }
     const b = selected ? view?.buildings[selected] : null;
     const mine = Boolean(can && b && isMine(selected));
-    const upgradable = Boolean(mine && b && b.grade < BUILDING_TYPES[b.type].grades);
+    const upgradable = Boolean(mine && b && !isRising(b) && b.upgrading === undefined && b.grade < BUILDING_TYPES[b.type].grades);
     upgradeButton.disabled = !upgradable;
     upgradeButton.textContent = upgradable && b && upgradeCost(b) ? `Upgrade · ${upgradeCost(b)}` : 'Upgrade';
     const crewed = Boolean(mine && b && b.type !== 'castle' && !isDugOut(b));
@@ -244,8 +244,14 @@ export async function startGame(net, me) {
     } else {
       parts.push(`crew ${view ? crewOf(view, b.id).length : 0}/${capacityOf(b)}`);
     }
-    if (type.depth !== undefined) parts.push(isDugOut(b) ? 'dug out' : `depth ${depthOf(b)}/${type.depth}, ${b.dug} stone`);
-    if (type.yields === 'food') parts.push(`next food ${done}`);
+    const toward = (/** @type {number} */ sofar) => `${Math.floor((100 * sofar) / raiseWork(b))}%`;
+    if (b.upgrading !== undefined) parts.push(`upgrading ${toward(b.upgrading)}`);
+    if (isRising(b)) {
+      parts.push(`going up ${toward(b.raised ?? 0)}`);
+    } else {
+      if (type.depth !== undefined) parts.push(isDugOut(b) ? 'dug out' : `depth ${depthOf(b)}/${type.depth}, ${b.dug} stone`);
+      if (type.yields === 'food') parts.push(`next food ${done}`);
+    }
     if (b.hp !== undefined) parts.push(`HP ${b.hp}/${maxHp(b)}`);
     const target = b.target ? view?.buildings[b.target] : null;
     if (target) parts.push(`attacking the ${BUILDING_TYPES[target.type].name.toLowerCase()}`);
@@ -269,7 +275,8 @@ export async function startGame(net, me) {
 
   /**
    * Let the player choose a crew: a list of their units, with the current
-   * crew ticked, or for a new building the ones at home best at its work.
+   * crew ticked, or for a new building the ones at home best at its work, up
+   * to half of those at home, so the castle keeps some to breed.
    * @param {object} options
    * @param {string} options.title
    * @param {string} options.hint
@@ -287,9 +294,10 @@ export async function startGame(net, me) {
     const units = Object.values(view.units).filter((u) => u.owner === seat);
     /** @param {typeof units[number]} a @param {typeof units[number]} b */
     const better = (a, b) => b.skills[skill] - a.skills[skill] || b.level - a.level || a.name.localeCompare(b.name);
+    const atHome = units.filter((u) => u.in === home);
     const chosen = new Set(target
       ? crewOf(view, target)
-      : units.filter((u) => u.in === home).sort(better).slice(0, limit).map((u) => u.id));
+      : atHome.sort(better).slice(0, Math.min(limit, Math.floor(atHome.length / 2))).map((u) => u.id));
     const rank = (/** @type {typeof units[number]} */ u) => (chosen.has(u.id) ? 0 : u.in === home ? 1 : 2);
     units.sort((a, b) => rank(a) - rank(b) || better(a, b));
 
@@ -380,12 +388,13 @@ export async function startGame(net, me) {
       /** @type {string[]} */
       let units = [];
       // Only for a cell it can go on: anywhere else, the server says why not.
-      if ((type.work !== undefined || type.band) && highlights.has(key(at.q, at.r))) {
+      if (highlights.has(key(at.q, at.r))) {
         const chosen = await chooseCrew({
           title: `New ${type.name.toLowerCase()}`,
           hint: type.band
-            ? `Choose who goes, up to ${type.capacity}. The best fighters at home are ticked.`
-            : `Choose its crew, up to ${type.capacity}. The best at home for the work are ticked.`,
+            ? `Choose who goes, up to ${type.capacity}. The best fighters at home are ticked, up to half of those at home.`
+            : `Choose its crew, up to ${type.capacity}: they build it once they get there, then work it. `
+              + 'The best at home for the work are ticked, up to half of those at home.',
           action: 'Build',
           kind,
           limit: type.capacity,
