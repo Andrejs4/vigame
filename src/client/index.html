@@ -42,6 +42,22 @@
     <h1>Vigame</h1>
     <p class="hint">Playing as <strong id="lobby-name"></strong> &middot; <a href="" id="lobby-rename">Change name</a></p>
     <p class="error" id="lobby-notice" role="status" hidden></p>
+    <label for="lobby-mode">Mode</label>
+    <select id="lobby-mode">
+      <option value="coop" selected>Cooperation: together against the Dark Lord</option>
+      <option value="ffa">Free for all: each against the other</option>
+    </select>
+    <label for="lobby-players">Players</label>
+    <select id="lobby-players">
+      <option value="1">1</option>
+      <option value="2" selected>2</option>
+      <option value="3">3</option>
+      <option value="4">4</option>
+      <option value="5">5</option>
+      <option value="6">6</option>
+      <option value="7">7</option>
+      <option value="8">8</option>
+    </select>
     <button id="lobby-new" class="primary">New game</button>
     <h2>Your games</h2>
     <ul class="games" id="lobby-mine"></ul>
@@ -62,8 +78,8 @@
       <div class="row"><dt>You</dt><dd id="seat">&mdash;</dd></div>
       <div class="row"><dt>Units</dt><dd id="units">&mdash;</dd></div>
       <div class="row"><dt>Stone</dt><dd id="stone">&mdash;</dd></div>
+      <div class="row"><dt>Dark metal</dt><dd id="metal">&mdash;</dd></div>
       <div class="row"><dt>Food</dt><dd id="food">&mdash;</dd></div>
-      <div class="row"><dt>Hunger</dt><dd id="hunger">&mdash;</dd></div>
       <div class="row"><dt>Selected</dt><dd id="selection">none</dd></div>
       <div class="row"><dt>Tile</dt><dd id="tile">&mdash;</dd></div>
       <div class="row"><dt>Viewers</dt><dd id="viewers">1</dd></div>
@@ -82,6 +98,7 @@
     <button id="upgrade" disabled>Upgrade</button>
     <button id="crew-button" disabled>Crew…</button>
     <button id="return-button" disabled>Return</button>
+    <button id="abort-button" disabled title="Give up a building still going up: its crew goes home, and its cost is lost">Abort</button>
     <button id="attack-button" disabled aria-pressed="false">Attack…</button>
     <div class="group-label">View</div>
     <button id="recenter">Recenter</button>
@@ -94,6 +111,13 @@
     <a class="button" id="to-lobby" href="">Lobby</a>
   </div>
 
+  <div class="hud" id="minimap">
+    <div class="minimap-box">
+      <canvas id="minimap-canvas" aria-label="Map of the whole board: press or drag on it to look there"></canvas>
+      <div class="minimap-frame" id="minimap-frame"></div>
+    </div>
+  </div>
+
   <div class="hud" id="legend">
     <div><span class="swatch" style="background:hsl(104,32%,40%)"></span>Grass &mdash; build, 2 s a cell on foot</div>
     <div><span class="swatch" style="background:hsl(88,38%,48%)"></span>Meadow &mdash; build, 2 s a cell on foot</div>
@@ -101,8 +125,9 @@
     <div><span class="swatch" style="background:hsl(203,44%,40%)"></span>Water &mdash; neither</div>
     <div class="legend-note">
       The units at home in your castle raise new ones: the more of them, and
-      the better they breed, the sooner. Build near your standing buildings.
-      Select a building and press Crew to choose who works there; Return
+      the better they breed, the sooner. Build near your standing buildings:
+      the crew you pick raises it once they get there, and meanwhile it has
+      half its hit points and shelters nobody. Select a building and press Crew to choose who works there; Return
       sends them home. A pit's crew digs stone, which pays for towers, farms
       and upgrades; farms grow food. Every minute your units eat; short
       meals make them hungry, and at full hunger they may starve. Select a
@@ -110,7 +135,8 @@
       wagon can't pass other buildings; a band passes anything of yours,
       gives no cover, and breaks up when it has nobody. Units in buildings
       and bands strike enemies in reach; press Attack, then an enemy
-      building, to choose their target. Drag to pan, wheel to zoom.
+      building, to choose their target. Drag to pan, wheel to zoom; press
+      the minimap to look anywhere.
     </div>
   </div>
 </div>

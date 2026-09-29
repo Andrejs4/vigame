@@ -21,7 +21,8 @@ import { axialToPixel, hexagon, key, line, neighbors, rectangle } from './hex.js
  * The page and the game server must build the same board from a seed, so
  * both take the options from here.
  */
-export const BOARD_OPTIONS = Object.freeze({ shape: 'rectangle', width: 18, height: 12, hexSize: 34 });
+/** The map settings every game uses; its size follows from the number of players. */
+export const BOARD_OPTIONS = Object.freeze({ shape: 'rectangle', hexSize: 34 });
 
 /**
  * What each terrain allows. Units and wagons cross passable cells, at
@@ -36,10 +37,35 @@ export const TERRAIN = /** @type {Record<Terrain, { moveCost: number, passable: 
 });
 
 /**
- * Where the castles go, as fractions of the map's width and height, one per
- * side.
+ * Where the castles go, by number of players, as fractions of the map's
+ * width and height: in a ring, the first at the left. The Dark Lord's lair
+ * goes in the middle (LAIR_SPOT), cleared in every game and left empty in
+ * games without him. A table rather than sines and cosines, so browsers and
+ * the server make exactly the same map.
  */
-const START_SPOTS = [{ fx: 0.14, fy: 0.5 }, { fx: 0.86, fy: 0.5 }];
+const START_SPOTS = [
+  [{ fx: 0.14, fy: 0.5 }],
+  [{ fx: 0.14, fy: 0.5 }, { fx: 0.86, fy: 0.5 }],
+  [{ fx: 0.14, fy: 0.5 }, { fx: 0.68, fy: 0.188 }, { fx: 0.68, fy: 0.812 }],
+  [{ fx: 0.14, fy: 0.5 }, { fx: 0.5, fy: 0.14 }, { fx: 0.86, fy: 0.5 }, { fx: 0.5, fy: 0.86 }],
+  [{ fx: 0.14, fy: 0.5 }, { fx: 0.389, fy: 0.158 }, { fx: 0.791, fy: 0.288 }, { fx: 0.791, fy: 0.712 }, { fx: 0.389, fy: 0.842 }],
+  [{ fx: 0.14, fy: 0.5 }, { fx: 0.32, fy: 0.188 }, { fx: 0.68, fy: 0.188 }, { fx: 0.86, fy: 0.5 }, { fx: 0.68, fy: 0.812 }, { fx: 0.32, fy: 0.812 }],
+  [{ fx: 0.14, fy: 0.5 }, { fx: 0.276, fy: 0.219 }, { fx: 0.58, fy: 0.149 }, { fx: 0.824, fy: 0.344 }, { fx: 0.824, fy: 0.656 }, { fx: 0.58, fy: 0.851 }, { fx: 0.276, fy: 0.781 }],
+  [{ fx: 0.14, fy: 0.5 }, { fx: 0.245, fy: 0.245 }, { fx: 0.5, fy: 0.14 }, { fx: 0.755, fy: 0.245 }, { fx: 0.86, fy: 0.5 }, { fx: 0.755, fy: 0.755 }, { fx: 0.5, fy: 0.86 }, { fx: 0.245, fy: 0.755 }],
+];
+const LAIR_SPOT = { fx: 0.5, fy: 0.5 };
+
+/**
+ * The map's size for a number of players: 24 by 16 for one or two, growing
+ * with the square root of the players beyond, so each has about as much
+ * ground (48 by 32 for eight). Big enough that castles start out of the
+ * lair's reach and of each other's (a test in board.test.js keeps it so).
+ * @param {number} players
+ */
+export function boardSize(players) {
+  const scale = Math.sqrt(Math.max(2, players) / 2);
+  return { width: Math.round(24 * scale), height: Math.round(16 * scale) };
+}
 
 /** Cells around a start that are cleared to grass: the castle and a ring around it. */
 const START_CLEARING = 2;
@@ -149,18 +175,20 @@ function connected(terrain, from, to) {
  *
  * @param {object} [options]
  * @param {'rectangle' | 'hexagon'} [options.shape='rectangle']
- * @param {number} [options.width=18] Columns, when shape is 'rectangle'.
- * @param {number} [options.height=12] Rows, when shape is 'rectangle'.
+ * @param {number} [options.players=2] How many players' castles it has sites for (1 to 8).
+ * @param {number} [options.width] Columns, when shape is 'rectangle'; by default from `boardSize`.
+ * @param {number} [options.height] Rows, likewise.
  * @param {number} [options.radius=7] Radius, when shape is 'hexagon'.
  * @param {number} [options.seed=1337]
  * @param {number} [options.hexSize=34] Circumradius in world pixels.
  * @returns {Board}
  */
 export function createBoard(options = {}) {
+  const players = Math.max(1, Math.min(START_SPOTS.length, Math.floor(options.players ?? 2)));
   const {
     shape = 'rectangle',
-    width = 18,
-    height = 12,
+    width = boardSize(players).width,
+    height = boardSize(players).height,
     radius = 7,
     seed = 1337,
     hexSize = 34,
@@ -182,7 +210,7 @@ export function createBoard(options = {}) {
   // stand there and its units can get out.
   const onBoard = new Set(terrain.keys());
   const starts = /** @type {Axial[]} */ (
-    START_SPOTS.map((spot) => startNear(coords, onBoard, hexSize, spot)).filter(Boolean)
+    [...START_SPOTS[players - 1], LAIR_SPOT].map((spot) => startNear(coords, onBoard, hexSize, spot)).filter(Boolean)
   );
   for (const s of starts) {
     for (const o of hexagon(START_CLEARING)) {

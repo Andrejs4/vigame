@@ -46,6 +46,14 @@ persistence.
   to hide something from players, or to keep a counter that changes every
   tick out of it (units' experience is hidden for that): a changed field
   resends its whole unit or building to every player.
+- Sides: `state.players` has one record per owner number: the players,
+  then in cooperation the Dark Lord, then always the raiders. A record's
+  `side` picks its name and colours in `SIDES` (use `sideOf`, never
+  `SIDES[owner]`), its `team` who fights whom (use `allied`). Seats are the
+  sides whose palette isn't `npc` (`seatsOf`).
+- The map depends on the seed and the number of players. Castle sites come
+  from a table in board.js, not from sines and cosines, so the browser and
+  the server build exactly the same map; keep it that way.
 - Changing the state's shape: bump `STATE_VERSION`. Saved snapshots of the old
   shape then fail `checkState`, and the room rebuilds those games from their
   command logs, which only works if old commands still replay.
@@ -60,7 +68,11 @@ persistence.
   or clock. `src/client/` is the browser's alone.
 - The page runs no game rules. It draws what the server sends, using the
   core's read-only helpers (`occupancy`, `footprint`, `nearStanding`, the
-  board from its seed), and sends commands.
+  board from its seed and player count), and sends commands.
+- The board redraws only when something changed or moves (`needsDraw`,
+  `moving` in play.js). The minimap is stricter: at most twice a second, only
+  after a server update, and only if a pixel differs; its view frame is an
+  element, so panning never repaints it. Keep it that way as it grows.
 - Views switch with a page load: `?game=<id>` is a game, anything else the
   lobby, and the login page comes first while the browser isn't signed in.
 
@@ -78,7 +90,8 @@ persistence.
 - Keep the order in `GameRoom.play`: apply on a copy, log the command with its
   tick, then adopt the copy. The tests check that a failed write changes
   nothing.
-- The clock runs only while every seat is held by a player who is here.
+- The clock runs only while every seat is held by a player who is here, and
+  never again once the game is over (`over` in the state).
 - Commands are flat objects of short strings, numbers and short lists of
   short strings (such as a crew's unit ids); the room rejects
   anything else before the core sees it (`flatCommand`).

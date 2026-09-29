@@ -22,7 +22,7 @@
 import Database from 'better-sqlite3';
 
 /** Bump when the tables change, and add the upgrade step to `migrate`. */
-const SCHEMA_VERSION = 7;
+const SCHEMA_VERSION = 10;
 
 /**
  * @typedef {{ id: string, seed: number, state: unknown, seq: number, seats: Array<string | null>,
@@ -59,7 +59,8 @@ export function openStorage(file = ':memory:') {
   const selectCommands = db.prepare(`
     SELECT seq, tick, player, command, at FROM commands WHERE game_id = ? AND seq > ? ORDER BY seq`);
   const selectRecent = db.prepare(`
-    SELECT id, seats, created_at, updated_at, json_extract(state, '$.tick') AS tick
+    SELECT id, seats, created_at, updated_at, json_extract(state, '$.tick') AS tick, json_extract(state, '$.mode') AS mode,
+      json_extract(state, '$.over') AS over, json_extract(state, '$.winner') AS winner
     FROM games ORDER BY updated_at DESC, id LIMIT ?`);
   const upsertPlayer = db.prepare(`
     INSERT INTO players (pid, name, created_at, updated_at) VALUES (@pid, @name, @now, @now)
@@ -145,6 +146,9 @@ export function openStorage(file = ':memory:') {
     listGames({ limit = 50 } = {}) {
       return selectRecent.all(limit).map((/** @type {any} */ row) => ({
         id: row.id,
+        mode: row.mode,
+        over: row.over ?? null,
+        winner: row.winner ?? null,
         tick: row.tick,
         seats: parseSeats(row.seats),
         createdAt: row.created_at,
@@ -275,6 +279,31 @@ function migrate(db) {
       DELETE FROM commands;
       DELETE FROM games;
       PRAGMA user_version = 7;
+    `))();
+  }
+  if (version < 8) {
+    // Game modes and teams: earlier snapshots don't fit.
+    db.transaction(() => db.exec(`
+      DELETE FROM commands;
+      DELETE FROM games;
+      PRAGMA user_version = 8;
+    `))();
+  }
+  if (version < 9) {
+    // Buildings go up and are upgraded over time, and castles breed by
+    // themselves: earlier games don't replay the same.
+    db.transaction(() => db.exec(`
+      DELETE FROM commands;
+      DELETE FROM games;
+      PRAGMA user_version = 9;
+    `))();
+  }
+  if (version < 10) {
+    // Bigger maps: an earlier game's seed makes a different map now.
+    db.transaction(() => db.exec(`
+      DELETE FROM commands;
+      DELETE FROM games;
+      PRAGMA user_version = 10;
     `))();
   }
 }

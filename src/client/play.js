@@ -7,11 +7,12 @@
 import { bounds, key, pixelToAxial } from '../core/hex.js';
 import { BOARD_OPTIONS, TERRAIN, createBoard, tileAt } from '../core/board.js';
 import {
-  capacityOf, castleOf, crewOf, depthOf, foodStore, isDugOut, maxHp, nearStanding, occupancy, upgradeCost,
+  capacityOf, castleOf, crewOf, depthOf, foodStore, inBuildRange, isDugOut, isRising, maxHp, occupancy, raiseWork, seatsOf, sideOf, upgradeCost,
 } from '../core/game.js';
-import { BUILDING_TYPES, SIDES, SKILLS, TICKS_PER_SECOND, UNIT_LIMIT } from '../core/rules.js';
+import { BUILDING_TYPES, SKILLS, TICKS_PER_SECOND, UNIT_LIMIT } from '../core/rules.js';
 import { serverBase } from './api.js';
 import { Camera } from './camera.js';
+import { Minimap } from './minimap.js';
 import { BoardRenderer } from './render.js';
 
 /** @param {number} tick */
@@ -30,13 +31,16 @@ function formatTime(tick) {
 export async function startGame(net, me) {
   const stage = /** @type {HTMLElement} */ (document.getElementById('stage'));
   const canvas = /** @type {HTMLCanvasElement} */ (document.getElementById('board'));
+  const mapCanvas = /** @type {HTMLCanvasElement} */ (document.getElementById('minimap-canvas'));
+  const mapFrame = /** @type {HTMLElement} */ (document.getElementById('minimap-frame'));
+  const controls = /** @type {HTMLElement} */ (document.getElementById('controls'));
   const hud = {
     time: document.getElementById('time'),
     seat: document.getElementById('seat'),
     units: document.getElementById('units'),
     stone: document.getElementById('stone'),
+    metal: document.getElementById('metal'),
     food: document.getElementById('food'),
-    hunger: document.getElementById('hunger'),
     selection: document.getElementById('selection'),
     tile: document.getElementById('tile'),
     viewers: document.getElementById('viewers'),
@@ -45,6 +49,7 @@ export async function startGame(net, me) {
   const upgradeButton = /** @type {HTMLButtonElement} */ (document.getElementById('upgrade'));
   const crewButton = /** @type {HTMLButtonElement} */ (document.getElementById('crew-button'));
   const returnButton = /** @type {HTMLButtonElement} */ (document.getElementById('return-button'));
+  const abortButton = /** @type {HTMLButtonElement} */ (document.getElementById('abort-button'));
   const attackButton = /** @type {HTMLButtonElement} */ (document.getElementById('attack-button'));
   const crewDialog = /** @type {HTMLDialogElement} */ (document.getElementById('crew'));
   const crewParts = {
@@ -61,8 +66,13 @@ export async function startGame(net, me) {
   stage.hidden = false;
 
   let board = createBoard({ ...BOARD_OPTIONS, seed: 0 });
+  let boardPlayers = 0;
   const camera = new Camera();
   let renderer = new BoardRenderer(canvas, board);
+  let minimap = new Minimap(mapCanvas, mapFrame, board);
+  /** The main view's size, in CSS pixels. */
+  let viewW = 0;
+  let viewH = 0;
 
   /** The game as the server last reported it. */
   /** @type {import('./net.js').GameView | null} */
@@ -104,13 +114,17 @@ export async function startGame(net, me) {
    * @param {import('./net.js').GameView} next
    */
   function onState(next) {
-    if (next.seed !== board.seed) {
-      board = createBoard({ ...BOARD_OPTIONS, seed: next.seed });
+    const players = seatsOf(next);
+    if (next.seed !== board.seed || players !== boardPlayers) {
+      boardPlayers = players;
+      board = createBoard({ ...BOARD_OPTIONS, seed: next.seed, players });
       renderer = new BoardRenderer(canvas, board);
       renderer.showCoords = showCoords;
+      minimap = new Minimap(mapCanvas, mapFrame, board);
       recenter();
     }
     view = next;
+    minimap.show(next);
     occ = occupancy(next);
     moving = Object.values(next.units).some((u) => u.path) || Object.values(next.buildings).some((b) => b.path);
     if (selected && !next.buildings[selected]) selected = null;
@@ -140,7 +154,7 @@ export async function startGame(net, me) {
       for (const t of board.list) {
         const k = key(t.q, t.r);
         const ground = band ? t.passable : t.buildable;
-        if (ground && !occ.buildingAt.has(k) && nearStanding(/** @type {any} */ (view), seat, t)) highlights.add(k);
+        if (ground && !occ.buildingAt.has(k) && inBuildRange(/** @type {any} */ (view), seat, placing, t)) highlights.add(k);
       }
     }
     needsDraw = true;
@@ -151,29 +165,38 @@ export async function startGame(net, me) {
     const paused = !net.running();
 
     if (hud.time) {
-      const fallen = view?.players.find((p) => p.lost !== undefined);
-      const outcome = !fallen ? '' : seat === null
-        ? ` · ${SIDES[1 - fallen.id]?.name ?? ''} won`
-        : fallen.id === seat ? ' · you lost' : ' · you won';
-      hud.time.textContent = `${formatTime(view?.tick ?? 0)}${paused ? ' · paused' : ''}${outcome}`;
-      hud.time.title = paused ? 'The game waits until both players are here' : '';
+      const players = view?.players ?? [];
+      const over = view?.over !== undefined;
+      const winners = view?.winner;
+      const names = players.filter((p) => p.team === winners).map((p) => sideOf({ players }, p.id).name).join(' and ');
+      const outcome = !over ? '' : winners === undefined ? ' · over, nobody won' : seat === null
+        ? ` · over: ${names} won`
+        : players[seat]?.team === winners ? ' · over: you won' : ' · over: you lost';
+      hud.time.textContent = `${formatTime(view?.tick ?? 0)}${paused && !over ? ' · paused' : ''}${outcome}`;
+      hud.time.title = paused && !over ? 'The game waits until every player is here' : '';
     }
     if (hud.seat) {
-      hud.seat.textContent = `${me.name} · ${seat === null ? 'Spectator' : SIDES[seat].name}`;
-      hud.seat.style.color = seat === null ? '' : SIDES[seat].accent;
+      const mine = seat !== null && view ? sideOf(view, seat) : null;
+      hud.seat.textContent = `${me.name} · ${mine ? mine.name : 'Spectator'}`;
+      hud.seat.style.color = mine ? mine.accent : '';
     }
     if (hud.units) {
       hud.units.textContent = seat !== null && occ ? `${occ.unitCount[seat] ?? 0} / ${UNIT_LIMIT}` : '—';
     }
     const stock = seat !== null ? view?.players[seat] : null;
     if (hud.stone) hud.stone.textContent = stock ? String(stock.stone) : '—';
-    if (hud.food) hud.food.textContent = stock && view && seat !== null ? `${stock.food} / ${foodStore(view, seat)}` : '—';
-    if (hud.hunger) hud.hunger.textContent = stock ? `${stock.hunger}%` : '—';
+    if (hud.metal) hud.metal.textContent = stock ? String(stock.metal) : '—';
+    if (hud.food) {
+      hud.food.textContent = stock && view && seat !== null
+        ? `${stock.food} / ${foodStore(view, seat)} · hunger ${stock.hunger}%`
+        : '—';
+      hud.food.style.color = stock?.hunger ? 'var(--amber)' : '';
+    }
     if (hud.selection) {
       const b = selected ? view?.buildings[selected] : null;
       if (b) {
         hud.selection.textContent = describe(b);
-        hud.selection.style.color = SIDES[b.owner]?.accent ?? '';
+        hud.selection.style.color = view ? sideOf(view, b.owner).accent : '';
       } else {
         hud.selection.textContent = 'none';
         hud.selection.style.color = '';
@@ -199,12 +222,13 @@ export async function startGame(net, me) {
     }
     const b = selected ? view?.buildings[selected] : null;
     const mine = Boolean(can && b && isMine(selected));
-    const upgradable = Boolean(mine && b && b.grade < BUILDING_TYPES[b.type].grades);
+    const upgradable = Boolean(mine && b && !isRising(b) && b.upgrading === undefined && b.grade < BUILDING_TYPES[b.type].grades);
     upgradeButton.disabled = !upgradable;
     upgradeButton.textContent = upgradable && b && upgradeCost(b) ? `Upgrade · ${upgradeCost(b)}` : 'Upgrade';
     const crewed = Boolean(mine && b && b.type !== 'castle' && !isDugOut(b));
     crewButton.disabled = !crewed;
     returnButton.disabled = !(crewed && view && b && crewOf(view, b.id).length > 0);
+    abortButton.disabled = !(mine && b && isRising(b));
     attackButton.disabled = !mine;
     attackButton.setAttribute('aria-pressed', String(aiming !== null && aiming === selected));
   }
@@ -222,9 +246,15 @@ export async function startGame(net, me) {
     } else {
       parts.push(`crew ${view ? crewOf(view, b.id).length : 0}/${capacityOf(b)}`);
     }
-    if (type.depth !== undefined) parts.push(isDugOut(b) ? 'dug out' : `depth ${depthOf(b)}/${type.depth}, ${b.dug} stone`);
-    if (type.yields === 'food') parts.push(`next food ${done}`);
-    if (b.hp !== undefined) parts.push(`HP ${b.hp}/${maxHp(b)}`);
+    const toward = (/** @type {number} */ sofar) => `${Math.floor((100 * sofar) / raiseWork(b))}%`;
+    if (b.upgrading !== undefined) parts.push(`upgrading ${toward(b.upgrading)}`);
+    if (isRising(b)) {
+      parts.push(`going up ${toward(b.raised ?? 0)}`);
+    } else {
+      if (type.depth !== undefined) parts.push(isDugOut(b) ? 'dug out' : `depth ${depthOf(b)}/${type.depth}, ${b.dug} stone`);
+      if (type.yields === 'food') parts.push(`next food ${done}`);
+    }
+    if (b.hp !== undefined && view) parts.push(`HP ${b.hp}/${maxHp(view, b)}`);
     const target = b.target ? view?.buildings[b.target] : null;
     if (target) parts.push(`attacking the ${BUILDING_TYPES[target.type].name.toLowerCase()}`);
     return parts.join(' · ');
@@ -247,7 +277,8 @@ export async function startGame(net, me) {
 
   /**
    * Let the player choose a crew: a list of their units, with the current
-   * crew ticked, or for a new building the ones at home best at its work.
+   * crew ticked, or for a new building the ones at home best at its work, up
+   * to half of those at home, so the castle keeps some to breed.
    * @param {object} options
    * @param {string} options.title
    * @param {string} options.hint
@@ -265,9 +296,10 @@ export async function startGame(net, me) {
     const units = Object.values(view.units).filter((u) => u.owner === seat);
     /** @param {typeof units[number]} a @param {typeof units[number]} b */
     const better = (a, b) => b.skills[skill] - a.skills[skill] || b.level - a.level || a.name.localeCompare(b.name);
+    const atHome = units.filter((u) => u.in === home);
     const chosen = new Set(target
       ? crewOf(view, target)
-      : units.filter((u) => u.in === home).sort(better).slice(0, limit).map((u) => u.id));
+      : atHome.sort(better).slice(0, Math.min(limit, Math.floor(atHome.length / 2))).map((u) => u.id));
     const rank = (/** @type {typeof units[number]} */ u) => (chosen.has(u.id) ? 0 : u.in === home ? 1 : 2);
     units.sort((a, b) => rank(a) - rank(b) || better(a, b));
 
@@ -358,12 +390,13 @@ export async function startGame(net, me) {
       /** @type {string[]} */
       let units = [];
       // Only for a cell it can go on: anywhere else, the server says why not.
-      if ((type.work !== undefined || type.band) && highlights.has(key(at.q, at.r))) {
+      if (highlights.has(key(at.q, at.r))) {
         const chosen = await chooseCrew({
           title: `New ${type.name.toLowerCase()}`,
           hint: type.band
-            ? `Choose who goes, up to ${type.capacity}. The best fighters at home are ticked.`
-            : `Choose its crew, up to ${type.capacity}. The best at home for the work are ticked.`,
+            ? `Choose who goes, up to ${type.capacity}. The best fighters at home are ticked, up to half of those at home.`
+            : `Choose its crew, up to ${type.capacity}: they build it once they get there, then work it. `
+              + 'The best at home for the work are ticked, up to half of those at home.',
           action: 'Build',
           kind,
           limit: type.capacity,
@@ -378,7 +411,10 @@ export async function startGame(net, me) {
       return;
     }
 
-    const here = occ.buildingAt.get(key(at.q, at.r)) ?? null;
+    // Bands hold no cell, so they are found by where they stand.
+    const here = occ.buildingAt.get(key(at.q, at.r))
+      ?? Object.values(view.buildings).find((b) => BUILDING_TYPES[b.type].band && b.q === at.q && b.r === at.r)?.id
+      ?? null;
     if (aiming) {
       // After Attack: an enemy building becomes the target; anywhere else clears it.
       const from = aiming;
@@ -409,6 +445,8 @@ export async function startGame(net, me) {
     const rect = canvas.getBoundingClientRect();
     canvas.width = Math.round(rect.width * dpr);
     canvas.height = Math.round(rect.height * dpr);
+    viewW = rect.width;
+    viewH = rect.height;
     needsDraw = true;
   }
 
@@ -501,6 +539,36 @@ export async function startGame(net, me) {
     needsDraw = true;
   }, { passive: false });
 
+  // Pressing or dragging on the minimap looks there, at the same zoom.
+  /** @type {number | null} */
+  let mapPointer = null;
+  /** @param {PointerEvent} e */
+  const lookAt = (e) => {
+    const w = minimap.worldAt(e.clientX, e.clientY);
+    camera.centreOn(w.x, w.y, viewW, viewH);
+    needsDraw = true;
+  };
+  mapCanvas.addEventListener('pointerdown', (e) => {
+    if (mapPointer !== null) return;
+    mapPointer = e.pointerId;
+    mapCanvas.setPointerCapture(e.pointerId);
+    lookAt(e);
+  });
+  mapCanvas.addEventListener('pointermove', (e) => {
+    if (e.pointerId === mapPointer) lookAt(e);
+  });
+  for (const type of ['pointerup', 'pointercancel']) {
+    mapCanvas.addEventListener(type, (e) => {
+      if (/** @type {PointerEvent} */ (e).pointerId === mapPointer) mapPointer = null;
+    });
+  }
+
+  // On a phone the minimap sits just above the controls, whose height
+  // depends on how their buttons wrap.
+  new ResizeObserver(() => {
+    stage.style.setProperty('--controls-height', `${controls.offsetHeight}px`);
+  }).observe(controls);
+
   addEventListener('keydown', (e) => {
     // Escape in the crew chooser closes just the chooser.
     if (e.key !== 'Escape' || crewDialog.open || (!placing && !selected && !aiming)) return;
@@ -512,9 +580,9 @@ export async function startGame(net, me) {
   });
 
   for (const button of buildButtons) {
-    const { name, cost } = BUILDING_TYPES[button.dataset.kind ?? ''];
-    button.textContent = cost ? `${name} · ${cost}` : name;
-    button.title = cost ? `${cost} stone` : 'Free';
+    const { name, cost, metal } = BUILDING_TYPES[button.dataset.kind ?? ''];
+    button.textContent = cost ? `${name} · ${cost}` : metal ? `${name} · ${metal}◆` : name;
+    button.title = cost ? `${cost} stone` : metal ? `${metal} dark metal, near your castle` : 'Free';
     button.addEventListener('click', () => {
       const kind = button.dataset.kind ?? null;
       placing = placing === kind ? null : kind;
@@ -546,6 +614,10 @@ export async function startGame(net, me) {
     aiming = aiming ? null : selected;
     if (aiming) flash('Click an enemy building to attack; anywhere else clears the target.');
     updateHud();
+  });
+
+  abortButton.addEventListener('click', () => {
+    if (selected) give({ type: 'abort', building: selected }, 'give it up');
   });
 
   returnButton.addEventListener('click', () => {
@@ -582,13 +654,16 @@ export async function startGame(net, me) {
 
   // --- run -----------------------------------------------------------------
 
-  function frame() {
+  /** @param {number} time */
+  function frame(time) {
     // Queue the next frame first, so one frame that throws cannot stop the
     // board from ever redrawing again.
     requestAnimationFrame(frame);
+    minimap.paint(time);
     if (!needsDraw && !moving) return;
     needsDraw = false;
     renderer.draw({ camera, view, clock: net.clock(), selected, highlights, hover, peers });
+    minimap.frameView(camera, viewW, viewH);
   }
 
   resize();
@@ -615,6 +690,7 @@ export async function startGame(net, me) {
       get aiming() { return aiming; },
       get highlights() { return [...highlights]; },
       get peers() { return peers; },
+      get minimap() { return minimap; },
       net,
       camera,
       forceDraw: () => { needsDraw = true; },

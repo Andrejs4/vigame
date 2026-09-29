@@ -10,11 +10,13 @@ The core is `src/core/game.js`, with its numbers in `src/core/rules.js` and the 
 `src/core/board.js`. It is the whole game as one plain JSON object, plus the
 functions that change it:
 
-- `newGame(board)`: the opening position, a castle per side with its first units.
+- `newGame(board, { mode })`: the opening position: a castle per player
+  with its first units, and in cooperation the Dark Lord's lair.
 - `applyCommand(board, state, side, command)`: what a player does (build,
   choose a building's crew, upgrade, move a wagon). It checks everything
   first and either changes the state or refuses with a reason.
-- `advance(board, state)`: one tick of time (work, wagons, walking).
+- `advance(board, state)`: one tick of time (fighting, food, work, wagons,
+  walking).
 - `occupancy(state)`, `crewOf(state, id)`: what is where, and who works
   where, worked out from the state.
 - `checkState(board, state)`: every broken invariant, if any.
@@ -95,12 +97,13 @@ commands.
 | `client/play.js` | The game view: input, HUD, controls. |
 | `client/net.js` | The connection to a game: commands out, the core's view in. |
 | `client/camera.js`, `render.js` | Pan and zoom, and canvas drawing. The renderer sits behind a small interface so PixiJS can replace it. |
+| `client/minimap.js` | The whole board at a few pixels a cell; pressing it moves the camera. |
 
 - **No prediction.** A command takes effect on the server's next tick, a
   tenth of a second at most, which is normal for a strategy game.
 - **Shared helpers, not copied logic.** The page gets a view with the shape
   of the core's state, and uses the core's own read-only helpers on it: the
-  board from its seed, `occupancy`, a building's `footprint`, where one may
+  board from its seed and player count, `occupancy`, a building's `footprint`, where one may
   build. It imports them from `src/core/`, the same files the server runs,
   so nothing can drift apart.
 - **No local play.** An earlier version could run the core in the page for
@@ -119,7 +122,8 @@ commands.
   state in memory, runs `advance` on a fixed timestep
   (`setFixedTimestep`), and passes players' commands to `applyCommand`. It
   has no game rules of its own.
-- **The clock** runs only while every seat is held by a player who is here,
+- **The clock** runs only while every seat is held by a player who is here
+  (and stops for good once the game is over),
   so a game waits for an absent player instead of playing on without them.
 - **Connection**: WebSocket. Clients send only what they want to do
   (`command`, `claimSeat`, `releaseSeat`, `select`), as Colyseus requests
@@ -197,7 +201,7 @@ way before they take effect.
 - **Joining**: the page joins with `joinOrCreate('game', { gameId, token })`.
   Colyseus sends everyone asking for one game to the same room; the room
   also refuses to open a game that already has a room in this process.
-- **The first two players** take the seats. A seat belongs to the player,
+- **The first players to join** take the seats, as many as the game has. A seat belongs to the player,
   not the connection: it survives reloads, leaving, and the room closing,
   until the player releases it.
 - **A dropped connection** keeps its place, and the clock keeps running, for

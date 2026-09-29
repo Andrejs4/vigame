@@ -82,6 +82,13 @@ button[aria-pressed="true"] { background: rgba(255, 216, 77, 0.18); border-color
   padding: 8px 10px;
 }
 .card input:focus-visible { outline: 2px solid var(--amber); outline-offset: 1px; }
+.card select {
+  display: block; width: 100%; margin: 4px 0 12px; padding: 8px 10px;
+  font: 14px var(--sans); color: var(--ink);
+  background: rgba(233, 237, 231, 0.06);
+  border: 1px solid var(--panel-edge); border-radius: 7px;
+}
+.card select option { background: var(--panel-solid); }
 .card form button, .card > .primary, .card > .button { width: 100%; }
 .card .error { color: var(--amber); min-height: 1.5em; margin: 0 0 10px; font-size: 13px; }
 .card .empty { margin: 0; color: var(--ink-dim); font-size: 13px; }
@@ -124,6 +131,21 @@ button[aria-pressed="true"] { background: rgba(255, 216, 77, 0.18); border-color
 #status { top: 14px; left: 14px; min-width: 216px; }
 #controls { top: 14px; right: 14px; display: flex; flex-direction: column; gap: 6px; }
 #legend { bottom: 14px; left: 14px; font-size: 12px; color: var(--ink-dim); max-width: 300px; }
+#minimap { bottom: 14px; right: 14px; padding: 6px; }
+
+/* The minimap: the canvas holds a few pixels a cell, scaled up unsmoothed. */
+.minimap-box { position: relative; overflow: hidden; border-radius: 4px; line-height: 0; }
+#minimap-canvas {
+  display: block; width: 180px;
+  image-rendering: pixelated;
+  touch-action: none;
+  cursor: pointer;
+}
+.minimap-frame {
+  position: absolute; box-sizing: border-box;
+  border: 1.5px solid rgba(255, 255, 255, 0.9);
+  pointer-events: none;
+}
 
 .masthead {
   font-size: 11px;
@@ -204,5 +226,10 @@ dl { margin: 0; }
   }
   #controls button, #controls .button { flex: 1; text-align: center; padding: 12px 6px; }
   #controls .group-label, #toggle-coords, #recenter { display: none; }
+  #minimap {
+    right: 10px; padding: 4px;
+    bottom: calc(var(--controls-height, 180px) + 20px + env(safe-area-inset-bottom, 0px));
+  }
+  #minimap-canvas { width: 130px; }
   .zoom-row { flex: 1; }
 }

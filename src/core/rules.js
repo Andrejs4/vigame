@@ -13,11 +13,43 @@
  */
 export const TICKS_PER_SECOND = 10;
 
-/** The sides, indexed by owner number. */
+/**
+ * The sides' names and colours. A player's side has the palette of their
+ * seat; the Dark Lord, the game's own side in cooperation games, has the
+ * last one. A game's `players` records say which each owner number uses.
+ */
 export const SIDES = [
-  { id: 0, name: 'Blue',    color: '#3d7fd8', accent: '#9ec5ff' },
-  { id: 1, name: 'Crimson', color: '#c8473f', accent: '#ffb3ad' },
+  { id: 0, name: 'Blue',      color: '#3d7fd8', accent: '#9ec5ff' },
+  { id: 1, name: 'Crimson',   color: '#c8473f', accent: '#ffb3ad' },
+  { id: 2, name: 'Green',     color: '#3f9e56', accent: '#a6e3b5' },
+  { id: 3, name: 'Gold',      color: '#c99a1e', accent: '#f5d98a' },
+  { id: 4, name: 'Teal',      color: '#249a97', accent: '#9de0dd' },
+  { id: 5, name: 'Orange',    color: '#d9722a', accent: '#f8c49a' },
+  { id: 6, name: 'Rose',      color: '#c9508f', accent: '#f5b3d6' },
+  { id: 7, name: 'Silver',    color: '#8e9aa6', accent: '#dfe5eb' },
+  { id: 8, name: 'Dark Lord', color: '#6a3fa0', accent: '#cdb0ff', npc: true },
+  { id: 9, name: 'Raiders',   color: '#4a4038', accent: '#d8b08c', npc: true, wild: true },
 ];
+
+/** The Dark Lord's palette. */
+export const DARK_LORD = 8;
+/**
+ * The raiders' palette: wandering hostile wagons, in every game, against
+ * everyone. They neither win nor lose.
+ */
+export const RAIDERS = 9;
+
+/** Players a game may seat. */
+export const MIN_PLAYERS = 1;
+export const MAX_PLAYERS = 8;
+export const DEFAULT_PLAYERS = 2;
+
+/**
+ * Game modes. In cooperation the players are one team against the Dark
+ * Lord; in free for all, each against the others (two players at least).
+ */
+export const MODES = { coop: 'Cooperation', ffa: 'Free for all' };
+export const DEFAULT_MODE = 'coop';
 
 /** Most units one player may have at once, inside buildings or out. */
 export const UNIT_LIMIT = 300;
@@ -133,6 +165,41 @@ export const KILL_MAX = 50;
 export const KILL_STEP = 1.06;
 
 /**
+ * Raiders. Every RAID_PERIOD, with a RAID_CHANCE chance, a raider appears on
+ * open ground at least RAID_CLEAR cells from any castle or lair, while there
+ * are fewer than RAID_MAX plus one per player. It wanders at random and
+ * strikes whatever comes near; bringing one down yields its `loot` of dark
+ * metal to the side that struck the blow.
+ */
+export const RAID_PERIOD = 90 * TICKS_PER_SECOND;
+export const RAID_CHANCE = 0.6;
+export const RAID_MAX = 2;
+export const RAID_CLEAR = 6;
+/** How far a raider wanders at a time, in cells. */
+export const RAID_ROAM = 4;
+
+/**
+ * The Dark Lord's horde. From HORDE_START, every HORDE_PERIOD his lair sends
+ * out a wave, each bigger than the last: wave n is ceil(n / 2) ghouls and
+ * floor(n / 3) ogres, as long as he has fewer than HORDE_MAX out. With more
+ * than two players, waves and HORDE_MAX grow by the square root of
+ * players / 2: twice as big at eight. They cost
+ * him nothing, and hunt by themselves (`hunts` on a building type).
+ */
+export const HORDE_START = 2 * 60 * TICKS_PER_SECOND;
+export const HORDE_PERIOD = 60 * TICKS_PER_SECOND;
+export const HORDE_MAX = 24;
+
+/**
+ * Bringing down a building bought with dark metal (a wagon) yields the
+ * striker's side this share of its price.
+ */
+export const SALVAGE = 0.5;
+
+/** Dark metal each side starts with. */
+export const START_METAL = 0;
+
+/**
  * Repair: while a building is damaged, the units inside mend it instead of
  * their usual work, a hit point for every REPAIR_WORK of work, which trains
  * their building skill.
@@ -154,7 +221,20 @@ export const REPAIR_WORK = 100;
  *   a wagon but holds no cell, so it blocks nothing, and breaks up once it
  *   has nobody.
  * @property {boolean} build Whether players may build it.
+ * @property {number} [raise] Work to raise it, from its crew once they are
+ *   inside, a WORK_BASE plus their building skill each a tick: one unskilled
+ *   unit alone takes raise / WORK_BASE ticks. Until then it has half its hit
+ *   points, gives no cover, adds no reach, and neither works nor moves. An
+ *   upgrade takes as much work again times its grade before, and comes with
+ *   the next grade's room and hit points once done. (A castle is never
+ *   raised, only upgraded.)
+ * @property {number} [idleWork] Work it does by itself each tick, crewed or
+ *   not: a castle raises a unit now and then even with nobody at home.
  * @property {number} cost Stone to build it.
+ * @property {number} [metal] Dark metal to build it.
+ * @property {boolean} [nearCastle] Built only within BUILD_RANGE of the castle.
+ * @property {number} [loot] Dark metal for the side that brings it down;
+ *   without it, a share of its price in dark metal (SALVAGE).
  * @property {number} [upgrade] Stone to upgrade it, times its grade before.
  * @property {Skill} skill The skill its units use there.
  * @property {number} [work] Work, from the units inside, for each thing it
@@ -169,28 +249,57 @@ export const REPAIR_WORK = 100;
  * @property {number} [reach] Cells it adds to its units' ranged reach.
  * @property {number} [through] The share of strikes on it that reach a unit
  *   inside instead: none for a castle, tower or wagon.
+ * @property {boolean} [life] Its side's life: when it falls, the side has lost.
+ * @property {boolean} [scales] The Dark Lord's: its hit points grow with the
+ *   number of players, by players / 2 (never less than for two), so four
+ *   times at eight (`lordScale` in game.js).
+ * @property {boolean} [hunts] One of the Dark Lord's horde, which moves and
+ *   fights by itself: it goes for the nearest enemy farm, or castle once no
+ *   farm is left; it turns on any building that strikes it, and on the
+ *   nearest enemy building when its way is blocked.
+ * @property {{ damage: number, skill: number, reach: number }} [attack] A
+ *   building that strikes by itself, once every COMBAT_PERIOD: `damage` off a
+ *   building, or a kill roll as a striker of `skill` against a unit, at the
+ *   nearest enemy within `reach` cells.
  */
 
 /** @type {Record<string, BuildingType>} */
 export const BUILDING_TYPES = {
   castle: {
-    name: 'Castle', size: 7, capacity: 60, grades: 3, hp: 2000, build: false, cost: 0, upgrade: 200, reach: 1,
-    skill: 'breeding', work: 12000, yields: 'unit',
+    name: 'Castle', size: 7, capacity: 60, grades: 3, hp: 2000, build: false, cost: 0, upgrade: 200, reach: 1, life: true,
+    skill: 'breeding', work: 12000, yields: 'unit', idleWork: 10, raise: 36000,
   },
   tower: {
     name: 'Tower', size: 1, capacity: 20, grades: 3, hp: 500, build: true, cost: 60, upgrade: 60, reach: 2, skill: 'ranged',
+    raise: 12000,
   },
   wagon: {
-    name: 'Wagon', size: 1, capacity: 10, grades: 1, hp: 300, build: true, cost: 0,
-    skill: 'melee', speed: 2 * TICKS_PER_SECOND,
+    name: 'Wagon', size: 1, capacity: 15, grades: 1, hp: 300, build: true, cost: 0, metal: 15, nearCastle: true,
+    skill: 'melee', speed: 2 * TICKS_PER_SECOND, raise: 9000,
   },
   pit: {
     name: 'Pit', size: 1, capacity: 8, grades: 1, hp: 800, build: true, cost: 0,
-    skill: 'build', work: 2400, yields: 'stone', perDepth: 20, depth: 5, through: 0.25,
+    skill: 'build', work: 2400, yields: 'stone', perDepth: 20, depth: 5, through: 0.25, raise: 3000,
   },
   farm: {
     name: 'Farm', size: 1, capacity: 6, grades: 1, hp: 200, build: true, cost: 30,
-    skill: 'farming', work: 300, yields: 'food', base: 20, through: 0.5,
+    skill: 'farming', work: 300, yields: 'food', base: 20, through: 0.5, raise: 6000,
+  },
+  lair: {
+    name: 'Lair', size: 7, capacity: 0, grades: 1, hp: 6000, build: false, cost: 0,
+    skill: 'melee', life: true, attack: { damage: 20, skill: 30, reach: 4 }, scales: true,
+  },
+  raider: {
+    name: 'Raider', size: 1, capacity: 0, grades: 1, hp: 300, build: false, cost: 0,
+    skill: 'melee', speed: 3 * TICKS_PER_SECOND, attack: { damage: 10, skill: 20, reach: 2 }, loot: 10,
+  },
+  ghoul: {
+    name: 'Ghoul', size: 1, capacity: 0, grades: 1, hp: 120, build: false, cost: 0,
+    skill: 'melee', speed: TICKS_PER_SECOND, attack: { damage: 6, skill: 10, reach: 1 }, loot: 2, hunts: true, scales: true,
+  },
+  ogre: {
+    name: 'Ogre', size: 1, capacity: 0, grades: 1, hp: 600, build: false, cost: 0,
+    skill: 'melee', speed: 4 * TICKS_PER_SECOND, attack: { damage: 25, skill: 30, reach: 1 }, loot: 6, hunts: true, scales: true,
   },
   band: {
     name: 'Band', size: 1, capacity: 30, grades: 1, hp: 0, build: true, cost: 0,

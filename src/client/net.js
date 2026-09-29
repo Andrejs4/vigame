@@ -25,7 +25,7 @@
  *   leave()
  */
 
-import { SIDES, TICKS_PER_SECOND } from '../core/rules.js';
+import { TICKS_PER_SECOND } from '../core/rules.js';
 
 /** @typedef {{ q: number, r: number }} Axial */
 /** @typedef {ReturnType<typeof import('../core/game.js').publicView>} GameView */
@@ -110,8 +110,9 @@ export async function createServerNet({ client, gameId, token, now = () => perfo
   let resolveReady = () => {};
   const readyPromise = new Promise((res) => { resolveReady = () => res(undefined); });
 
+  let seatCount = 0;
   /** @param {unknown} v */
-  const isSide = (v) => Number.isInteger(v) && Number(v) >= 0 && Number(v) < SIDES.length;
+  const isSide = (v) => Number.isInteger(v) && Number(v) >= 0 && Number(v) < seatCount;
 
   /**
    * One synced string map as plain values, reusing what hasn't changed.
@@ -178,11 +179,12 @@ export async function createServerNet({ client, gameId, token, now = () => perfo
     }
 
     const seats = Array.isArray(raw.seats) ? raw.seats : [];
+    seatCount = seats.length;
     /** @type {Array<[string, any]>} */
     const viewers = raw.viewers && typeof raw.viewers === 'object' ? Object.entries(raw.viewers) : [];
     const me = viewers.find(([session]) => session === room.sessionId)?.[1];
     const seat = me && isSide(me.seat) ? me.seat : null;
-    const free = SIDES.some((_, i) => !seats[i]);
+    const free = seats.some((s) => !s);
     if (seat !== mySeat || free !== seatFree) {
       mySeat = seat;
       seatFree = free;

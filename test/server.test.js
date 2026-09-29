@@ -190,10 +190,22 @@ test('new games are stored with a castle per side, and listed; unknown ones are 
   assert.deepEqual(game.seats, [null, null]);
   assert.equal(game.seq, 0);
   assert.equal(game.state.tick, 0);
-  assert.deepEqual(Object.values(game.state.buildings).map((b) => [b.owner, b.type]), [[0, 'castle'], [1, 'castle']]);
+  assert.deepEqual(Object.values(game.state.buildings).map((b) => [b.owner, b.type]), [[0, 'castle'], [1, 'castle'], [2, 'lair']]);
 
   const lobby = await (await fetch(`${base}/api/games`)).json();
   assert.deepEqual(lobby.find((g) => g.id === id)?.seats, [null, null]);
+  assert.equal(lobby.find((g) => g.id === id)?.mode, 'coop');
+  const ffa = await post('/api/games', { token: TOKENS.a, mode: 'ffa' });
+  assert.equal(ffa.status, 201);
+  const ffaGame = await (await fetch(`${base}/api/games/${(await ffa.json()).id}`)).json();
+  assert.equal(ffaGame.state.mode, 'ffa');
+  assert.equal((await post('/api/games', { token: TOKENS.a, mode: 'solo' })).status, 400);
+  const eight = await post('/api/games', { token: TOKENS.a, players: 8 });
+  assert.equal(eight.status, 201);
+  assert.equal((await (await fetch(`${base}/api/games/${(await eight.json()).id}`)).json()).seats.length, 8);
+  for (const bad of [{ players: 0 }, { players: 9 }, { players: 1, mode: 'ffa' }]) {
+    assert.equal((await post('/api/games', { token: TOKENS.a, ...bad })).status, 400, JSON.stringify(bad));
+  }
   assert.equal(lobby.find((g) => g.id === id)?.tick, 0);
   assert.deepEqual(await (await fetch(`${base}/api/games/${id}/commands`)).json(), []);
 
@@ -367,10 +379,10 @@ test('the server refuses commands from spectators, while paused, and that the ru
 test('an accepted command is logged, with its tick, before any player sees it', async () => {
   const { id, a, b } = await twoPlayers();
 
-  /** How many commands were logged when Crimson first saw the upgrade. */
+  /** How many commands were logged when Crimson first saw the upgrade begin. */
   let loggedWhenSeen = null;
   b.onStateChange(() => {
-    if (loggedWhenSeen === null && seen(b).buildings.b1?.grade === 2) {
+    if (loggedWhenSeen === null && seen(b).buildings.b1?.upgrading !== undefined) {
       loggedWhenSeen = server.storage.listCommands(id).length;
     }
   });
@@ -426,9 +438,9 @@ test('a crew marches through the server, one cell of its route at a time', async
 test('a game outlives its room: its snapshot comes back exactly, and its log rebuilds it', async () => {
   const { id, a, b } = await twoPlayers();
   await give(a, { type: 'upgrade', building: 'b1' });
-  await give(a, { type: 'build', kind: 'wagon', ...buildSpot(seen(a)) });
-  await until(() => Object.keys(seen(a).buildings).length === 3);
-  const wagon = /** @type {any} */ (Object.values(seen(a).buildings).find((x) => x.type === 'wagon'));
+  await give(a, { type: 'build', kind: 'pit', ...buildSpot(seen(a)) });
+  await until(() => Object.values(seen(a).buildings).some((x) => x.type === 'pit'));
+  const wagon = /** @type {any} */ (Object.values(seen(a).buildings).find((x) => x.type === 'pit'));
   await give(a, { type: 'crew', building: wagon.id, units: /** @type {string[]} */ (occupancy(seen(a)).inside.get('b1')).slice(0, 3) });
   await give(b, { type: 'upgrade', building: castleOf(seen(b), 1)?.id });
   await sleep(100);
@@ -541,13 +553,13 @@ test('the page transport plays through the server and follows it', async () => {
   const crimsonSaw = [];
   crimson.onState((view) => crimsonSaw.push(view));
   assert.equal(crimsonSaw.length, 1, 'a late subscriber gets the current game');
-  assert.deepEqual(Object.values(crimsonSaw[0].buildings).map((x) => [x.owner, x.type]), [[0, 'castle'], [1, 'castle']]);
+  assert.deepEqual(Object.values(crimsonSaw[0].buildings).map((x) => [x.owner, x.type]), [[0, 'castle'], [1, 'castle'], [2, 'lair']]);
   await until(() => crimsonSaw.at(-1).tick > crimsonSaw[0].tick);
   const now = crimson.clock();
   assert.ok(now >= crimsonSaw.at(-1).tick && now <= crimsonSaw.at(-1).tick + 1, 'the clock runs between ticks');
 
   assert.deepEqual(await blue.send({ type: 'upgrade', building: 'b1' }), { ok: true });
-  await until(() => crimsonSaw.at(-1).buildings.b1.grade === 2);
+  await until(() => crimsonSaw.at(-1).buildings.b1.upgrading !== undefined);
   assert.deepEqual(await crimson.send({ type: 'upgrade', building: 'b1' }), { ok: false, reason: 'not your building' });
 
   // Picks reach the other side as peers, with names.

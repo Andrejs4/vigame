@@ -55,3 +55,13 @@ test('fit ignores an empty box', () => {
   cam.fit({ minX: 0, minY: 0, width: 0, height: 0 }, 800, 600);
   assert.deepEqual([cam.x, cam.y, cam.zoom], [0, 0, 1]);
 });
+
+test('centreOn puts a point mid-view and keeps the zoom', () => {
+  const cam = new Camera();
+  cam.zoom = 1.5;
+  cam.centreOn(400, -90, 800, 600);
+  const mid = cam.toWorld(400, 300);
+  near(mid.x, 400);
+  near(mid.y, -90);
+  near(cam.zoom, 1.5);
+});

@@ -17,7 +17,8 @@ import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
 
 import { startGameServer } from '../server/app.js';
-import { distance } from '../src/core/hex.js';
+import { axialToPixel, distance } from '../src/core/hex.js';
+import { BUILDING_TYPES } from '../src/core/rules.js';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const OUT = join(ROOT, 'smoke-output');
@@ -137,35 +138,80 @@ async function openCell(page, cells) {
 }
 
 /**
- * Build with the Build buttons: pick the kind, then a highlighted cell.
+ * Centre the view on a cell, at the same zoom.
+ * @param {any} page
+ * @param {{ q: number, r: number }} cell
+ */
+async function lookAt(page, cell) {
+  const size = await page.evaluate(() => /** @type {any} */ (window).__vigame.board.hexSize);
+  await page.evaluate(({ x, y }) => {
+    const v = /** @type {any} */ (window).__vigame;
+    const rect = document.getElementById('board').getBoundingClientRect();
+    v.camera.centreOn(x, y, rect.width, rect.height);
+    v.forceDraw();
+  }, axialToPixel(cell.q, cell.r, size));
+}
+
+/**
+ * Highlighted cells, as [q, r], nearest `home` first, with the view centred
+ * there so they are clear of the HUD (a castle on the map's edge is under
+ * it otherwise). Only cells out of the Dark Lord's lair's reach, if any: a
+ * new building has half its hit points until it stands, and mending comes
+ * before raising it, so under the lair's fire a small crew never finishes.
+ * @param {any} page
+ * @param {{ q: number, r: number }} home
+ */
+async function spotsNear(page, home) {
+  await page.waitForFunction(() => /** @type {any} */ (window).__vigame.highlights.length > 0);
+  await lookAt(page, home);
+  const keys = await page.evaluate(() => /** @type {any} */ (window).__vigame.highlights);
+  const cells = keys.map((k) => k.split(',').map(Number))
+    .sort(([q1, r1], [q2, r2]) => distance({ q: q1, r: r1 }, home) - distance({ q: q2, r: r2 }, home));
+  const lair = (await buildings(page)).find((b) => b.type === 'lair');
+  // Its reach counts from the edge of its seven cells.
+  const reach = /** @type {{ reach: number }} */ (BUILDING_TYPES.lair.attack).reach + 1;
+  const safe = lair ? cells.filter(([q, r]) => distance({ q, r }, lair) > reach) : cells;
+  return safe.length ? safe : cells;
+}
+
+/**
+ * Build with the Build buttons: pick the kind, then a highlighted cell near
+ * `home`, then confirm its crew: the ones ticked, or the first `crew`.
  * @returns {Promise<any>} The new building.
  */
-async function buildWith(page, kind, { touch = false } = {}) {
+async function buildWith(page, kind, home, { touch = false, crew = undefined } = {}) {
   const before = (await buildings(page)).length;
   await press(page, `#build-${kind}`, { touch });
-  await page.waitForFunction(() => /** @type {any} */ (window).__vigame.highlights.length > 0);
-  const keys = await page.evaluate(() => /** @type {any} */ (window).__vigame.highlights);
-  const spot = await openCell(page, keys.map((k) => k.split(',').map(Number)));
+  const spot = await openCell(page, await spotsNear(page, home));
   await clickHex(page, spot.q, spot.r, { touch });
+  await confirmCrew(page, { only: crew });
   await page.waitForFunction((n) => Object.keys(/** @type {any} */ (window).__vigame.view.buildings).length === n, before + 1);
   assert.equal(await page.evaluate(() => /** @type {any} */ (window).__vigame.placing), null, 'out of build mode');
   return (await buildings(page)).find((b) => b.q === spot.q && b.r === spot.r);
 }
 
-/** Select a building by clicking it, unless it already is. */
+/** Select a building by clicking it, in the middle of the view, unless it already is. */
 async function selectBuilding(page, b, { touch = false } = {}) {
   if (await page.evaluate(() => /** @type {any} */ (window).__vigame.selected) === b.id) return;
+  await lookAt(page, b);
   await clickHex(page, b.q, b.r, { touch });
   await page.waitForFunction((id) => /** @type {any} */ (window).__vigame.selected === id, b.id);
 }
 
 /**
- * Confirm the crew dialog, after ticking `add` more units than it came with.
+ * Confirm the crew dialog, after ticking `add` more units than it came with,
+ * or only the first `only`.
  * @returns {Promise<string>} The dialog's count, such as "3 of 20", when it opened.
  */
-async function confirmCrew(page, { add = 0, shot = '' } = {}) {
+async function confirmCrew(page, { add = 0, only = undefined, shot = '' } = {}) {
   await page.waitForSelector('#crew[open]');
   const count = await text(page, '#crew-count');
+  if (only !== undefined) {
+    // The locator matches only ticked boxes, so untick the first until none are.
+    const ticked = page.locator('#crew-list input:checked');
+    while (await ticked.count()) await ticked.first().uncheck();
+    add = only;
+  }
   for (let i = 0; i < add; i++) await page.locator('#crew-list input:not(:checked):not(:disabled)').first().check();
   if (shot) await page.screenshot({ path: join(OUT, shot) });
   await page.click('#crew-ok');
@@ -209,6 +255,9 @@ async function report() {
         connected: v?.net?.connected(),
         tick: v?.view?.tick,
         marching: Object.values(v?.view?.units ?? {}).filter((u) => u.in === undefined),
+        // Buildings going up or being upgraded, and how they're doing.
+        works: Object.values(v?.view?.buildings ?? {}).filter((b) => b.raised !== undefined || b.upgrading !== undefined)
+          .map(({ id, type, q, r, hp, raised, upgrading }) => ({ id, type, q, r, hp, raised, upgrading })),
       };
     }).catch((e) => String(e));
     lines.push(`${label} ${page.url()}\n    ${JSON.stringify(seen)}`);
@@ -247,7 +296,7 @@ const inLobby = (page) => page.waitForFunction(() => {
 /**
  * Open a game from the lobby: the row naming these players.
  * @param {string} list 'mine' or 'open'
- * @param {string} who The row's text, such as "Ann vs —".
+ * @param {string} who The row's text, such as "Ann & —".
  */
 async function openFromLobby(page, list, who, { touch = false } = {}) {
   const row = page.locator(`#lobby-${list} li`, { hasText: who });
@@ -318,15 +367,15 @@ async function threeBrowsers(browser, url, { full, label }) {
   // Bēla logs in and finds the game in the lobby, waiting for her.
   const b = await newPlayer(browser, url, `${label}-b`, 'Bēla');
   await inLobby(b);
-  await openFromLobby(b, 'open', 'Ann vs —');
+  await openFromLobby(b, 'open', 'Ann & —');
   await waitText(b, '#seat', 'Bēla · Crimson');
   await waitMatch(a, '#time', /^0:0[1-9]$/);
 
-  // Ann builds a tower and gives it a crew; Bēla sees them march, and Ann's pick.
+  // Ann builds a tower with a crew of six, who go to raise it; Bēla sees
+  // them march, and Ann's pick. The rest stay home, for the pit below.
   const blue = await castleOf(a, 0);
-  const tower = await buildWith(a, 'tower');
+  const tower = await buildWith(a, 'tower', blue, { crew: 6 });
   await b.waitForFunction((id) => /** @type {any} */ (window).__vigame.view.buildings[id], tower.id);
-  await crewWith(a, tower, 2);
   await b.waitForFunction((id) => Object.values(/** @type {any} */ (window).__vigame.view.units)
     .some((u) => u.to === id && u.path?.length === 1), tower.id);
   await b.waitForFunction(({ q, r }) => /** @type {any} */ (window).__vigame.peers
@@ -342,7 +391,10 @@ async function threeBrowsers(browser, url, { full, label }) {
   }
 
   // Each castle is drawn in its side's colour: the cell below and left of its
-  // centre is the castle's, and clear of its labels.
+  // centre is the castle's, and clear of its labels. The whole board first,
+  // drawn: the canvas catches up on the next frame.
+  await a.click('#recenter');
+  await frames(a);
   const crimson = await castleOf(a, 1);
   const tint = async (c) => {
     const p = await hexPoint(a, c.q - 1, c.r + 1);
@@ -361,18 +413,36 @@ async function threeBrowsers(browser, url, { full, label }) {
   await a.mouse.up();
   const camAfter = await a.evaluate(() => ({ .../** @type {any} */ (window).__vigame.camera }));
   assert.ok(Math.abs(camAfter.x - camBefore.x) > 10, 'drag did not pan');
+
+  // Pressing the minimap's top left corner looks there. It repaints at most
+  // twice a second.
+  const map = /** @type {{ x: number, y: number }} */ (await a.locator('#minimap-canvas').boundingBox());
+  await a.mouse.click(map.x + 4, map.y + 4);
+  const camMap = await a.evaluate(() => ({ .../** @type {any} */ (window).__vigame.camera }));
+  assert.ok(camMap.x < camAfter.x - 10 && camMap.y < camAfter.y - 10, 'the minimap did not move the view');
+  const { paints, seconds } = await a.evaluate(() => ({
+    paints: /** @type {any} */ (window).__vigame.minimap.paints,
+    seconds: performance.now() / 1000,
+  }));
+  assert.ok(paints >= 1 && paints <= seconds * 2 + 1, `the minimap repainted ${paints} times in ${seconds.toFixed(1)} s`);
   await a.click('#recenter');
 
-  // Ann upgrades her tower; Bēla sees it.
+  // Once her tower stands, Ann looks at its crew and upgrades it; Bēla sees it.
   await a.keyboard.press('Escape');
   await selectBuilding(a, tower);
-  await waitMatch(a, '#selection', /^Tower \(grade 1\)/);
+  await waitMatch(a, '#selection', /^Tower \(grade 1\) · crew \d+\/\d+ · going up \d+%/);
+  await a.waitForFunction((id) => /** @type {any} */ (window).__vigame.view.buildings[id].raised === undefined, tower.id, { timeout: 60000 });
+  await crewWith(a, tower, 0);
+  await waitMatch(a, '#selection', /^Tower \(grade 1\) · crew \d+\/\d+ · HP/);
+  // The upgrade is work for the crew too.
   await a.click('#upgrade');
-  await waitMatch(a, '#selection', /^Tower \(grade 2\)/);
+  await waitMatch(a, '#selection', /^Tower \(grade 1\) · crew \d+\/\d+ · upgrading \d+%/);
+  await waitMatch(a, '#selection', /^Tower \(grade 2\)/, 60000);
   await b.waitForFunction((id) => /** @type {any} */ (window).__vigame.view.buildings[id].grade === 2, tower.id);
 
   // Building far from your own buildings is refused, and the page says why.
   await a.keyboard.press('Escape');
+  await a.click('#recenter');
   await a.click('#build-tower');
   const far = await openCell(a, [[crimson.q, crimson.r + 2], [crimson.q, crimson.r - 2], [crimson.q + 2, crimson.r - 2]]);
   await clickHex(a, far.q, far.r);
@@ -384,13 +454,10 @@ async function threeBrowsers(browser, url, { full, label }) {
   // home ticked; they walk there and dig. Return sends them home.
   const count = (await buildings(a)).length;
   await a.click('#build-pit');
-  await a.waitForFunction(() => /** @type {any} */ (window).__vigame.highlights.length > 0);
-  const pitCells = await a.evaluate(() => /** @type {any} */ (window).__vigame.highlights);
-  // Nearest the castle first: the crew walks two seconds a cell, four on scrub.
-  const pitSpot = await openCell(a, pitCells.map((k) => k.split(',').map(Number))
-    .sort(([q1, r1], [q2, r2]) => distance({ q: q1, r: r1 }, blue) - distance({ q: q2, r: r2 }, blue)));
+  // Near the castle: the crew walks two seconds a cell, four on scrub.
+  const pitSpot = await openCell(a, await spotsNear(a, blue));
   await clickHex(a, pitSpot.q, pitSpot.r);
-  assert.match(await confirmCrew(a, { shot: 'crew.png' }), /^(\d+) of \1$/, 'a full crew is ticked');
+  assert.match(await confirmCrew(a, { shot: 'crew.png' }), /^[1-8] of 8$/, 'up to half of those at home are ticked');
   await a.waitForFunction((n) => Object.keys(/** @type {any} */ (window).__vigame.view.buildings).length === n, count + 1);
   const pit = (await buildings(a)).find((x) => x.type === 'pit');
   await a.waitForFunction((id) => /** @type {any} */ (window).__vigame.view.buildings[id].work > 0, pit.id, { timeout: 30000 });
@@ -401,9 +468,18 @@ async function threeBrowsers(browser, url, { full, label }) {
     .some((u) => u.to === id || u.in === id), pit.id);
   await a.keyboard.press('Escape');
 
-  // Bēla builds a wagon, crews it, and drives it; its crew rides along.
-  const wagon = await buildWith(b, 'wagon');
-  await crewWith(b, wagon, 3);
+  // Bēla forms a band next to her castle (who goes is chosen as it forms),
+  // then leads it; its members go along inside.
+  const before = (await buildings(b)).length;
+  await b.click('#build-band');
+  await b.waitForFunction(() => /** @type {any} */ (window).__vigame.highlights.length > 0);
+  const bandCells = await b.evaluate(() => /** @type {any} */ (window).__vigame.highlights);
+  const bandSpot = await openCell(b, bandCells.map((k) => k.split(',').map(Number))
+    .sort(([q1, r1], [q2, r2]) => distance({ q: q1, r: r1 }, crimson) - distance({ q: q2, r: r2 }, crimson)));
+  await clickHex(b, bandSpot.q, bandSpot.r);
+  await confirmCrew(b);
+  await b.waitForFunction((n) => Object.keys(/** @type {any} */ (window).__vigame.view.buildings).length === n, before + 1);
+  const wagon = (await buildings(b)).find((x) => x.type === 'band');
   await b.waitForFunction((id) => !Object.values(/** @type {any} */ (window).__vigame.view.units)
     .some((u) => u.to === id), wagon.id, { timeout: 30000 });
   const riders = await insideOf(b, wagon.id);
@@ -436,7 +512,7 @@ async function threeBrowsers(browser, url, { full, label }) {
   await waitText(b, '#seat', 'Bēla · Crimson');
   await b.click('#to-lobby');
   await inLobby(b);
-  await openFromLobby(b, 'mine', 'Ann vs Bēla');
+  await openFromLobby(b, 'mine', 'Ann & Bēla');
   await waitText(b, '#seat', 'Bēla · Crimson');
 
   // Cai follows the invitation link, logs in, and watches.
@@ -477,6 +553,7 @@ async function phone(browser, url) {
       innerHeight,
       status: box('status'),
       controls: box('controls'),
+      minimap: box('minimap'),
       legendShown: getComputedStyle(document.getElementById('legend')).display !== 'none',
     };
   });
@@ -484,13 +561,15 @@ async function phone(browser, url) {
   assert.ok(layout.controls.bottom <= layout.innerHeight && layout.controls.left >= 0
     && layout.controls.right <= layout.innerWidth, 'controls are off-screen');
   assert.ok(layout.controls.top > layout.status.bottom, 'controls overlap the status panel');
+  assert.ok(layout.minimap.top > layout.status.bottom && layout.minimap.bottom < layout.controls.top
+    && layout.minimap.right <= layout.innerWidth, 'the minimap overlaps the panels or the screen edge');
   assert.equal(layout.legendShown, false);
 
   const castle = await castleOf(page, 0);
   await selectBuilding(page, castle, { touch: true });
   // With no hover on a touch screen, the last tapped hex is the tile readout.
   assert.notEqual(await text(page, '#tile'), '—', 'tile readout cleared after a tap');
-  await buildWith(page, 'tower', { touch: true });
+  await buildWith(page, 'tower', castle, { touch: true });
   await frames(page);
   await page.screenshot({ path: join(OUT, 'phone.png') });
   for (const p of [page, other]) await p.context().close();

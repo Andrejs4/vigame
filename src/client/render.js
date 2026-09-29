@@ -9,8 +9,8 @@
  */
 
 import { DIRECTIONS, axialToPixel, corners, key } from '../core/hex.js';
-import { footprint, occupancy } from '../core/game.js';
-import { BUILDING_TYPES, SIDES } from '../core/rules.js';
+import { footprint, occupancy, sideOf } from '../core/game.js';
+import { BUILDING_TYPES } from '../core/rules.js';
 
 /** Base colours per terrain, before per-tile tint. */
 const TERRAIN_COLORS = {
@@ -19,6 +19,16 @@ const TERRAIN_COLORS = {
   scrub:  { h: 74,  s: 24, l: 34 },
   water:  { h: 203, s: 44, l: 40 },
 };
+
+/**
+ * A cell's ground colour: its terrain's, shifted a little by the tile's tint.
+ * @param {import('../core/board.js').Tile} tile
+ */
+export function groundColor(tile) {
+  const base = TERRAIN_COLORS[tile.terrain];
+  const lift = (tile.tint - 0.5) * 7;
+  return hsl(base.h + (tile.tint - 0.5) * 8, base.s, base.l + lift);
+}
 
 /**
  * Which neighbour lies across each edge of a pointy-top hex, for the edge
@@ -160,10 +170,8 @@ export class BoardRenderer {
 
     // Pass 1: terrain fill.
     for (const { tile, cx, cy } of visible) {
-      const base = TERRAIN_COLORS[tile.terrain];
-      const lift = (tile.tint - 0.5) * 7;
       this.hexPath(cx, cy, zoom);
-      ctx.fillStyle = hsl(base.h + (tile.tint - 0.5) * 8, base.s, base.l + lift);
+      ctx.fillStyle = groundColor(tile);
       ctx.fill();
     }
 
@@ -195,23 +203,26 @@ export class BoardRenderer {
     if (view && occ) {
       for (const b of Object.values(view.buildings)) {
         const type = BUILDING_TYPES[b.type];
-        const side = SIDES[b.owner];
+        const side = sideOf(view, b.owner);
         if (!type || !side) continue;
         const isSelected = b.id === selected;
         const rolling = type.speed && b.path?.length ? b.path[0] : undefined;
         const centre = this.between(camera, b.q, b.r, rolling, progress(b, clock));
         if (!onScreen(centre)) continue;
 
+        // A building going up is pale, with a dashed outline.
+        const rising = b.raised !== undefined;
         const cells = rolling ? [{ q: b.q, r: b.r }] : footprint(b.type, b.q, b.r);
         const inShape = new Set(cells.map((c) => key(c.q, c.r)));
         for (const c of cells) {
           const sp = rolling ? centre : cellScreen(c.q, c.r);
           this.hexPath(sp.x, sp.y, zoom, rolling ? 0.8 : 1);
-          ctx.fillStyle = side.color + (rolling ? 'cc' : '66');
+          ctx.fillStyle = side.color + (rolling ? 'cc' : rising ? '2e' : '66');
           ctx.fill();
         }
         ctx.lineWidth = Math.max(1.5, (isSelected ? 3.5 : 2) * zoom);
         ctx.strokeStyle = isSelected ? '#ffd84d' : side.accent;
+        ctx.setLineDash(rising ? [5 * zoom, 4 * zoom] : []);
         ctx.beginPath();
         for (const c of cells) {
           const sp = rolling ? centre : cellScreen(c.q, c.r);
@@ -226,6 +237,7 @@ export class BoardRenderer {
           }
         }
         ctx.stroke();
+        ctx.setLineDash([]);
 
         // Its letter, grade pips, and how many are inside.
         const letter = size * zoom * (type.size === 7 ? 0.8 : 0.55);
@@ -259,7 +271,7 @@ export class BoardRenderer {
       const radius = Math.max(2, size * 0.1 * zoom);
       for (const u of Object.values(view.units)) {
         if (u.in !== undefined || u.q === undefined || u.r === undefined) continue;
-        const side = SIDES[u.owner];
+        const side = sideOf(view, u.owner);
         if (!side) continue;
         const p = this.between(camera, u.q, u.r, u.path?.[0], progress(u, clock));
         const j = jitter(u.id);
