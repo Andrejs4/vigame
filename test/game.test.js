@@ -4,10 +4,10 @@ import assert from 'node:assert/strict';
 import { BOARD_OPTIONS, createBoard } from '../src/core/board.js';
 import {
   advance, applyCommand, capacityOf, checkState, crewOf, footprint, levelXp, newGame, occupancy, publicView, random,
-  isRising, killChance, seatsOf, starveChance,
+  depthOf, isRising, killChance, maxHp, seatsOf, starveChance,
 } from '../src/core/game.js';
 import {
-  BUILDING_TYPES, COMBAT_PERIOD, DARK_LORD, HORDE_PERIOD, HORDE_START, RAIDERS, RAID_PERIOD, SALVAGE, FOOD_PER_UNIT, FOOD_PERIOD, KILL_XP, LEVEL_RATE, RANGED_DAMAGE, LEVEL_XP, MAX_LEVEL, SKILL_XP, START_UNITS, UNIT_LIMIT, WAGON_PATIENCE,
+  BUILDING_TYPES, COMBAT_PERIOD, DARK_LORD, HORDE_PERIOD, HORDE_START, RAIDERS, RAID_PERIOD, SALVAGE, FOOD_PER_UNIT, FOOD_PERIOD, KILL_XP, LEVEL_RATE, RANGED_DAMAGE, LEVEL_XP, MAX_HUNGER, MAX_LEVEL, SKILL_RATE, SKILL_XP, START_UNITS, UNIT_LIMIT, WAGON_PATIENCE,
   WALK_TICKS, WORK_BASE,
 } from '../src/core/rules.js';
 import { distance } from '../src/core/hex.js';
@@ -65,7 +65,7 @@ test('a castle\'s units raise new ones, sooner the more there are and the better
   const firstBirth = (units) => {
     const state = stateWith([{ id: 'b1', type: 'castle' }], units);
     const before = Object.keys(state.units).length;
-    return runUntil(board, state, () => Object.keys(state.units).length > before);
+    return runUntil(board, state, () => Object.keys(state.units).length > before, 2 * work);
   };
   const ten = unitsIn('b1', 10, 10);
   assert.equal(firstBirth(ten), Math.ceil(work / (10 * WORK_BASE + idleWork)));
@@ -93,19 +93,18 @@ test('a full castle raises no one, and its units learn nothing meanwhile', () =>
 
 test('no side makes units past the unit limit', () => {
   const board = openBoard(5);
-  const towerRoom = BUILDING_TYPES.tower.capacity * 3;
-  const inCastle = UNIT_LIMIT - 3 * towerRoom;
-  assert.ok(inCastle > 0 && inCastle < BUILDING_TYPES.castle.capacity * 3, 'the castle still has room');
-  const state = stateWith([
-    { id: 'b1', type: 'castle', grade: 3 },
-    { id: 'b2', grade: 3, q: 3, r: 0 },
-    { id: 'b3', grade: 3, q: -3, r: 0 },
-    { id: 'b4', grade: 3, q: 0, r: 3 },
-  ], [
+  // Full towers round the castle, and the rest of the limit at home.
+  const towers = [
+    { id: 'b2', grade: 3, q: 3, r: 0 }, { id: 'b3', grade: 3, q: -3, r: 0 }, { id: 'b4', grade: 3, q: 0, r: 3 },
+    { id: 'b5', grade: 3, q: 0, r: -3 }, { id: 'b6', grade: 1, q: 3, r: -3 },
+  ];
+  const castle = { id: 'b1', type: 'castle', grade: 3 };
+  const room = (/** @type {{ type?: string, grade: number }} */ b) => capacityOf(/** @type {any} */ ({ type: 'tower', ...b }));
+  const inCastle = UNIT_LIMIT - towers.reduce((sum, t) => sum + room(t), 0);
+  assert.ok(inCastle > 0 && inCastle < room(castle), 'the castle still has room');
+  const state = stateWith([castle, ...towers], [
     ...unitsIn('b1', inCastle, 1000),
-    ...unitsIn('b2', towerRoom, 2000),
-    ...unitsIn('b3', towerRoom, 3000),
-    ...unitsIn('b4', towerRoom, 4000),
+    ...towers.flatMap((t, i) => unitsIn(t.id, room(t), 2000 + 1000 * i)),
   ]);
   assert.deepEqual(checkState(board, state), []);
   run(board, state, 100);
@@ -243,6 +242,17 @@ test('a pit goes up at half its hit points once its crew gets there, then they d
   assert.equal(state.players[0].stone, stone + 1, 'straight into the stock');
 });
 
+test('a pit a grade deeper gains hit points', () => {
+  const board = openBoard(4);
+  const { work, perDepth, hp, hpPerDepth = 0 } = BUILDING_TYPES.pit;
+  const state = stateWith([{ id: 'b1', type: 'pit', q: 1, r: 0, dug: /** @type {number} */ (perDepth) - 1, work: /** @type {number} */ (work) - 1 }], unitsIn('b1', 1, 10));
+  assert.equal(maxHp(state, state.buildings.b1), hp);
+  run(board, state, 1);
+  assert.equal(depthOf(state.buildings.b1), 1);
+  assert.equal(state.buildings.b1.hp, hp + hpPerDepth);
+  assert.equal(maxHp(state, state.buildings.b1), hp + hpPerDepth);
+});
+
 test('a dug-out pit sends its crew home, and takes no other', () => {
   const board = openBoard(5);
   const { work, depth, perDepth } = BUILDING_TYPES.pit;
@@ -344,14 +354,32 @@ test('a side eats every minute; short shares make it hungry, full ones less so',
   const crowd = stateWith([{ id: 'b1', type: 'castle' }], unitsIn('b1', 100, 1000));
   crowd.players[0].food = 7;
   run(board, crowd, FOOD_PERIOD);
-  // 7 + 300 from the castle, shared by 100: 3 each, 7 left over.
-  assert.deepEqual([crowd.players[0].food, crowd.players[0].hunger], [7, 2]);
+  // 7 + 200 from the castle (for half its 40), shared by 100: 2 each, 7 left
+  // over; hunger goes a quarter of the way to the 80% they went short.
+  assert.deepEqual([crowd.players[0].food, crowd.players[0].hunger], [7, 20]);
 
   // In a tower, so nobody is born meanwhile.
   const fed = stateWith([{ id: 'b1', type: 'castle' }, { id: 'b2', q: 3, r: 0 }], unitsIn('b2', 10, 1000));
   fed.players[0].hunger = 20;
   run(board, fed, FOOD_PERIOD);
-  assert.deepEqual([fed.players[0].food, fed.players[0].hunger], [300 - 10 * FOOD_PER_UNIT, 15]);
+  assert.deepEqual([fed.players[0].food, fed.players[0].hunger], [200 - 10 * FOOD_PER_UNIT, 15]);
+});
+
+test('hunger follows how short meals fall: none on full ones, half on half rations', () => {
+  const board = openBoard(4);
+  // No castle, so the food is only what each meal is given.
+  const state = stateWith([{ id: 'b2', q: 3, r: 0 }], unitsIn('b2', 10, 1000));
+  const meals = (/** @type {number} */ share, /** @type {number} */ n) => {
+    for (let i = 0; i < n; i++) {
+      state.players[0].food = share * 10;
+      run(board, state, FOOD_PERIOD);
+    }
+    return state.players[0].hunger;
+  };
+  assert.equal(meals(5, 1), 13, 'a quarter of the way to 50, rounded up');
+  assert.equal(meals(5, 30), 50, 'half rations settle at half hunger');
+  assert.equal(meals(FOOD_PER_UNIT, 30), 0, 'full meals bring it back to none');
+  assert.equal(meals(0, 30), MAX_HUNGER, 'nothing at all brings it to the top');
 });
 
 test('at full hunger units may starve, the more likely the lower their level', () => {
@@ -419,7 +447,7 @@ test('units in a building strike enemy buildings in reach; a tower reaches furth
   run(board, state, COMBAT_PERIOD);
   assert.equal(state.buildings.b2.hp, BUILDING_TYPES.tower.hp - 2 * RANGED_DAMAGE);
   assert.equal(state.buildings.b3.hp, BUILDING_TYPES.tower.hp);
-  assert.ok(state.units.u10.practice.ranged > 0);
+  assert.equal(state.units.u10.practice.ranged, SKILL_RATE.ranged, 'a strike trains its skill faster than a tick of work');
 });
 
 test('a building going up adds no reach, covers nobody, and can be neither upgraded nor moved', () => {
@@ -662,10 +690,24 @@ test('the side whose castle falls has lost; when one team is left, the game is o
 test('units mend their damaged building before their usual work', () => {
   const board = openBoard(4);
   const state = stateWith([{ id: 'b1', type: 'pit', q: 1, r: 0, hp: 100 }], unitsIn('b1', 5, 10));
-  run(board, state, 10);
-  assert.equal(state.buildings.b1.hp, 100 + 10, '5 units mend 1 hit point a tick');
+  run(board, state, 50);
+  assert.equal(state.buildings.b1.hp, 100 + 10, '5 units mend a hit point every 5 ticks');
   assert.equal(state.buildings.b1.work, 0, 'no digging meanwhile');
   assert.ok(state.units.u10.practice.build > 0);
+});
+
+test('units with an enemy in reach fight it rather than mend their building', () => {
+  const board = openBoard(4);
+  // An enemy farm 2 cells away, in their ranged reach: they strike it and mend nothing.
+  const near = stateWith([{ id: 'b1', type: 'pit', q: 0, r: 0, hp: 100 }, { id: 'b2', owner: 1, type: 'farm', q: 2, r: 0 }], unitsIn('b1', 5, 10));
+  run(board, near, 50);
+  assert.equal(near.buildings.b1.hp, 100, 'no mending while fighting');
+  assert.ok(/** @type {number} */ (near.buildings.b2.hp) < 200, 'they fought');
+  // 4 cells away, out of their reach: they mend.
+  const far = stateWith([{ id: 'b1', type: 'pit', q: 0, r: 0, hp: 100 }, { id: 'b2', owner: 1, type: 'farm', q: 4, r: 0 }], unitsIn('b1', 5, 10));
+  run(board, far, 50);
+  assert.equal(far.buildings.b1.hp, 110);
+  assert.equal(far.buildings.b2.hp, 200);
 });
 
 test('a band goes at its slowest member\'s pace', () => {

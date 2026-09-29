@@ -22,7 +22,7 @@
 import Database from 'better-sqlite3';
 
 /** Bump when the tables change, and add the upgrade step to `migrate`. */
-const SCHEMA_VERSION = 11;
+const SCHEMA_VERSION = 16;
 
 /**
  * @typedef {{ id: string, seed: number, state: unknown, seq: number, seats: Array<string | null>,
@@ -313,6 +313,50 @@ function migrate(db) {
       DELETE FROM commands;
       DELETE FROM games;
       PRAGMA user_version = 11;
+    `))();
+  }
+  if (version < 12) {
+    // A stronger Dark Lord, and slower repair that stops while fighting:
+    // earlier games don't replay the same.
+    db.transaction(() => db.exec(`
+      DELETE FROM commands;
+      DELETE FROM games;
+      PRAGMA user_version = 12;
+    `))();
+  }
+  if (version < 13) {
+    // Smaller castles, slower breeding, farming and digging, and pits that
+    // grow sturdier with depth: earlier games don't replay the same.
+    db.transaction(() => db.exec(`
+      DELETE FROM commands;
+      DELETE FROM games;
+      PRAGMA user_version = 13;
+    `))();
+  }
+  if (version < 14) {
+    // Castles hold 40 and 10 more a grade, and pits have fewer hit points:
+    // earlier games don't replay the same.
+    db.transaction(() => db.exec(`
+      DELETE FROM commands;
+      DELETE FROM games;
+      PRAGMA user_version = 14;
+    `))();
+  }
+  if (version < 15) {
+    // Hunger follows the meals' shortfall, and fighting skills train
+    // faster: earlier games don't replay the same.
+    db.transaction(() => db.exec(`
+      DELETE FROM commands;
+      DELETE FROM games;
+      PRAGMA user_version = 15;
+    `))();
+  }
+  if (version < 16) {
+    // Maps half as big again: an earlier game's seed makes a different map now.
+    db.transaction(() => db.exec(`
+      DELETE FROM commands;
+      DELETE FROM games;
+      PRAGMA user_version = 16;
     `))();
   }
 }

@@ -62,9 +62,11 @@ export function stateWith(buildings, units = [], seed = 1) {
   const ids = [...buildings, ...units].map((e) => Number(e.id.slice(1)));
   const building = (/** @type {Partial<import('../src/core/game.js').Building>} */ b) => {
     const type = BUILDING_TYPES[b.type ?? 'tower'];
+    // A pit dug deeper has more hit points for each grade of depth.
+    const deep = type?.perDepth ? (type.hpPerDepth ?? 0) * Math.floor((b.dug ?? 0) / type.perDepth) : 0;
     return {
       owner: 0, type: 'tower', grade: 1, q: 0, r: 0,
-      ...(type?.hp ? { hp: Math.ceil((type.hp * (b.grade ?? 1)) / (b.raised === undefined ? 1 : 2)) } : {}),
+      ...(type?.hp ? { hp: Math.ceil((type.hp * (b.grade ?? 1) + deep) / (b.raised === undefined ? 1 : 2)) } : {}),
       ...(type?.work !== undefined ? { work: 0 } : {}),
       ...(type?.depth !== undefined ? { dug: 0 } : {}),
       ...b,

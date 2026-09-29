@@ -25,20 +25,20 @@ Run `npm start` and open http://127.0.0.1:2567.
   logged in across visits.
 - **The lobby** lists your games and games with a free seat; **New game**
   starts one for 1 to 8 players (2 by default), on a map that grows with
-  them (24 × 16 cells for two, 48 × 32 for eight), castles in a ring
+  them (29 × 20 cells for two, 59 × 39 for eight), castles in a ring
   around the middle, out of reach of the lair and of each other. A game's address (`?game=…`) is also the link to send
   someone. Players who join take the seats in order (Blue, Crimson, Green,
   Gold, Teal, Orange, Rose, Silver); once they are full, visitors watch.
   **Release seat** frees a seat for a spectator to take. A game is in
   either mode:
   - **Cooperation** (the default): all the players are one team against the
-    Dark Lord, whose lair (6000 hit points) stands in the middle of the map
-    and strikes the nearest enemy within 4 cells by itself, 20 hit points a
+    Dark Lord, whose lair (18000 hit points) stands in the middle of the map
+    and strikes the nearest enemy within 4 cells by itself, 40 hit points a
     second, and against units as a level-60 fighter. From the second minute it sends out his horde, a wave a minute,
     each bigger than the last (wave n: n/2 ghouls rounded up and n/3 ogres
     rounded down, at most 24 out at once). **Ghouls** are small and fast
-    (120 hit points, a cell a second, 6 a strike, level 10); **ogres** are
-    slow and tougher (600 hit points, 4 s a cell, 25 a strike, level 35). They need no units and
+    (600 hit points, a cell a second, 12 a strike, level 10); **ogres** are
+    slow and tougher (3000 hit points, 4 s a cell, 50 a strike, level 35). They need no units and
     cost him nothing. Each goes for the nearest farm, and for a castle once
     no farm is left; it turns on any building that strikes it, and on the
     nearest one when its way is blocked. Bringing one down yields 2 dark
@@ -56,13 +56,16 @@ Run `npm start` and open http://127.0.0.1:2567.
 - **Your castle** covers seven cells and is its side's life: when it falls,
   your side has lost. It is every unit's home, and starts with 12. The units at
   home raise new ones: the more of them, and the better they breed, the
-  sooner. With nobody at home it still raises one every two minutes by
-  itself, even while damaged or upgraded. It takes in all its units, however many, but
-  stops breeding while it holds more than its room.
+  sooner. With nobody at home it still raises one every four minutes by
+  itself, even while damaged or upgraded. It has room for 40 units, and 10
+  more with each upgrade (40, 50, 60); it takes in all its units, however
+  many, but stops breeding while it holds more than its room.
 - **Units** each have a medieval name, a level from 1 to 100, and six
   skills: breeding, ranged attack, close combat, building (which covers
   repairing and digging), farming and running. Work trains the skill it
-  uses, and the unit's level with it: every skill at the same pace, the
+  uses, and the unit's level with it: every skill at the same pace (a
+  strike trains ranged or close combat five times as much as a tick of
+  other work, since units strike only once a second), the
   level faster the fiercer the work (breeding least, then running, farming,
   building, ranged and close combat, and a killing blow most). A skill
   can't pass the unit's level; it climbs faster than the level, then waits
@@ -96,30 +99,38 @@ Run `npm start` and open http://127.0.0.1:2567.
   with a dashed outline. **Abort** gives it up: its crew, inside or on the
   way, goes home, and what it cost is lost.
 - **Pits**: the crew, up to 8, digs stone, faster the more of them and the
-  better they build; every 20 stone the pit is a grade deeper. At depth 5 it
-  is dug out and the crew goes home.
+  better they build (an unskilled unit alone digs a stone in 48 s); every
+  20 stone the pit is a grade deeper, and 100 hit points sturdier. At depth
+  5 it is dug out and the crew goes home.
 - **Food**: a unit eats 10 a minute. Every minute the castle yields enough
-  for half the units it can hold, and each farm a little (20) even with
+  for half the units it can hold, and each farm a little (10) even with
   nobody working it; a farm's crew (up to 6) grows more, faster the better
   they farm. A side stores at most 10 minutes' food for its castle's full
-  house (6000 at grade 1); the rest spoils.
+  house (4000 at grade 1); the rest spoils.
 - **Hunger**: one number per side, 0 to 100%. At each meal, if there isn't
   enough, the food is shared evenly and what doesn't divide waits for the
-  next meal. A share under 5 raises hunger by the shortfall; over 5 lowers
-  it by the excess. At 100%, every unit may starve at each meal: about 5%
-  at level 1, 0.6% at level 50, never at 100.
+  next meal. Hunger follows how short the meals fall: each meal moves it a
+  quarter of the way toward the shortfall, so full meals bring it down to
+  0%, half rations to 50%, and nothing at all up to 100% (in about a
+  quarter of an hour). At 100%, every unit may starve at each meal: about
+  5% at level 1, 0.6% at level 50, never at 100.
 - **Upgrade** the selected building, for stone: the castle 200 × its grade,
   a tower 60 × its grade. Then its crew works on it, as on a new building,
   instead of their usual work, which trains their building skill: each grade
   takes as long again as the one before (a tower as long as raising it, a
-  castle three times that). Once done, it holds as many units again and
-  takes as many hits again. An upgrade can't be called off. Meanwhile the
-  crew still fights, and mends the building first when it's damaged, but a
+  castle three times that). Once done, it holds as many units again (a
+  castle 10 more) and takes as many hits again. An upgrade can't be called off. Meanwhile the
+  crew still fights, and mends the building first when it's damaged (and
+  out of the fight), but a
   castle's units don't breed (the castle's own slow breeding goes on).
-- **Hit points**: every building has them, a castle 2000 and a pit 800. At
+- **Hit points**: every building has them, a castle 2000 and a pit 200 (100
+  more for each grade of depth). At
   none left it collapses at once, and whoever was inside is left standing
   there. While a building is damaged, the units inside mend it instead of
-  their usual work, faster the better they build.
+  their usual work, faster the better they build: 0.4 hit points a second
+  each, unskilled. But while they have an enemy in reach they fight it
+  instead, so a building mends only out of the fight, or under fire from
+  beyond its crew's reach.
 - **Fighting**: once a second, every unit inside a building or a band
   strikes the nearest enemy in reach: close combat at 1 cell if it can,
   else ranged at 3 cells, 4 from a castle, 5 from a tower. A strike takes 6
@@ -167,7 +178,8 @@ Run `npm start` and open http://127.0.0.1:2567.
   in the corner shows the whole board and a frame around what you see;
   press or drag on it to look there.
   **Coordinates** shows axial `q,r` labels. Escape cancels building and
-  clears the selection.
+  clears the selection. **How to play**, in the legend, folds away; this
+  browser remembers whether it is open.
 - Every viewer's picked hex shows as a ring: solid for yours, dashed for
   others.
 - Buildings and units are round tokens in their side's colour, with a
@@ -435,9 +447,9 @@ comes next.
   and the game waits for them.
 - The lobby lists only the 50 most recently active games.
 - Games of 5 to 8 players are untested at scale: up to 2400 units on a
-  48 × 32 map make route-finding and fighting costlier, and nobody has
+  59 × 39 map make route-finding and fighting costlier, and nobody has
   measured how much.
-- On a phone, the 24 × 16 board is wider than the screen even at minimum
+- On a phone, the 29 × 20 board is wider than the screen even at minimum
   zoom. Pinch-to-zoom and keyboard play are not wired up.
 
 ## License

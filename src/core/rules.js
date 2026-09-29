@@ -105,6 +105,12 @@ export const MAX_LEVEL = 100;
 export const LEVEL_XP = 1200;
 export const LEVEL_GROWTH = 1.1;
 export const SKILL_XP = 150;
+/**
+ * Points a skill gets for each tick of work, or strike, with it: 1 unless
+ * listed. Units strike only once a COMBAT_PERIOD, so fighting skills get more.
+ * @type {Partial<Record<Skill, number>>}
+ */
+export const SKILL_RATE = { ranged: 5, melee: 5 };
 /** @type {Record<Skill, number>} */
 export const LEVEL_RATE = { breeding: 1, running: 2, farming: 3, build: 4, ranged: 5, melee: 6 };
 /** Not used until there is combat. */
@@ -124,15 +130,17 @@ export const START_STONE = 200;
  * next meal. A side stores at most FOOD_STORE periods' food for its castle's
  * full house; the rest spoils.
  *
- * A side's hunger, from 0 to MAX_HUNGER, rises by however far the share
- * fell short of HUNGER_LINE, and falls by however far it went over. At
- * MAX_HUNGER each unit may starve at each meal: a level 1 unit with a
- * STARVE_CHANCE chance, less the higher its level, down to none at 100.
+ * A side's hunger, from 0 to MAX_HUNGER, follows how short its meals fall:
+ * at each meal it moves HUNGER_PULL of the way (rounded away from where it
+ * is) toward the share's shortfall, none for a full meal, half for half
+ * rations, MAX_HUNGER for nothing at all. At MAX_HUNGER each unit may
+ * starve at each meal: a level 1 unit with a STARVE_CHANCE chance, less the
+ * higher its level, down to none at 100.
  */
 export const FOOD_PERIOD = 60 * TICKS_PER_SECOND;
 export const FOOD_PER_UNIT = 10;
 export const FOOD_STORE = 10;
-export const HUNGER_LINE = 5;
+export const HUNGER_PULL = 0.25;
 export const MAX_HUNGER = 100;
 export const STARVE_CHANCE = 0.05;
 
@@ -202,18 +210,21 @@ export const START_METAL = 0;
 /**
  * Repair: while a building is damaged, the units inside mend it instead of
  * their usual work, a hit point for every REPAIR_WORK of work, which trains
- * their building skill.
+ * their building skill; but not while they have an enemy in reach, whom
+ * they fight instead. An unskilled unit mends 0.4 hit points a second.
  */
-export const REPAIR_WORK = 100;
+export const REPAIR_WORK = 500;
 
 /**
  * @typedef {object} BuildingType
  * @property {string} name
  * @property {1 | 7} size Cells covered: 1, or 7 (a cell and its six neighbours).
- * @property {number} capacity Units it holds at grade 1; each grade adds as much again.
+ * @property {number} capacity Units it holds at grade 1; each grade adds as much again,
+ *   or `perGrade` if it has that.
  *   A castle takes in all its side's units, and stops breeding while it
  *   holds this many or more.
  * @property {number} grades Highest grade.
+ * @property {number} [perGrade] Units each grade after the first adds to its room.
  * @property {number} hp Hit points at grade 1; each grade adds as many again.
  *   At none left, the building collapses at once, and whoever was inside is
  *   left standing on its cell. A band has none: it protects nobody.
@@ -242,6 +253,8 @@ export const REPAIR_WORK = 100;
  * @property {'unit' | 'stone' | 'food'} [yields]
  * @property {number} [base] Food a farm yields every FOOD_PERIOD, worked or not.
  * @property {number} [perDepth] Stone a pit yields for each grade of depth.
+ * @property {number} [hpPerDepth] Hit points each grade of depth adds to a
+ *   pit, gained as it gets there.
  * @property {number} [depth] A pit's last grade of depth. Once there it is
  *   dug out, and its crew goes home.
  * @property {number} [speed] Ticks per cell on open ground. Only moving buildings have one;
@@ -267,8 +280,8 @@ export const REPAIR_WORK = 100;
 /** @type {Record<string, BuildingType>} */
 export const BUILDING_TYPES = {
   castle: {
-    name: 'Castle', size: 7, capacity: 60, grades: 3, hp: 2000, build: false, cost: 0, upgrade: 200, reach: 1, life: true,
-    skill: 'breeding', work: 12000, yields: 'unit', idleWork: 10, raise: 36000,
+    name: 'Castle', size: 7, capacity: 40, perGrade: 10, grades: 3, hp: 2000, build: false, cost: 0, upgrade: 200, reach: 1, life: true,
+    skill: 'breeding', work: 24000, yields: 'unit', idleWork: 10, raise: 36000,
   },
   tower: {
     name: 'Tower', size: 1, capacity: 20, grades: 3, hp: 500, build: true, cost: 60, upgrade: 60, reach: 2, skill: 'ranged',
@@ -279,28 +292,28 @@ export const BUILDING_TYPES = {
     skill: 'melee', speed: 2 * TICKS_PER_SECOND, raise: 9000,
   },
   pit: {
-    name: 'Pit', size: 1, capacity: 8, grades: 1, hp: 800, build: true, cost: 0,
-    skill: 'build', work: 2400, yields: 'stone', perDepth: 20, depth: 5, through: 0.25, raise: 3000,
+    name: 'Pit', size: 1, capacity: 8, grades: 1, hp: 200, build: true, cost: 0,
+    skill: 'build', work: 9600, yields: 'stone', perDepth: 20, hpPerDepth: 100, depth: 5, through: 0.25, raise: 3000,
   },
   farm: {
     name: 'Farm', size: 1, capacity: 6, grades: 1, hp: 200, build: true, cost: 30,
-    skill: 'farming', work: 300, yields: 'food', base: 20, through: 0.5, raise: 6000,
+    skill: 'farming', work: 600, yields: 'food', base: 10, through: 0.5, raise: 6000,
   },
   lair: {
-    name: 'Lair', size: 7, capacity: 0, grades: 1, hp: 6000, build: false, cost: 0,
-    skill: 'melee', life: true, attack: { damage: 20, skill: 60, reach: 4 }, scales: true,
+    name: 'Lair', size: 7, capacity: 0, grades: 1, hp: 18000, build: false, cost: 0,
+    skill: 'melee', life: true, attack: { damage: 40, skill: 60, reach: 4 }, scales: true,
   },
   raider: {
     name: 'Raider', size: 1, capacity: 0, grades: 1, hp: 300, build: false, cost: 0,
     skill: 'melee', speed: 3 * TICKS_PER_SECOND, attack: { damage: 10, skill: 20, reach: 2 }, loot: 10,
   },
   ghoul: {
-    name: 'Ghoul', size: 1, capacity: 0, grades: 1, hp: 120, build: false, cost: 0,
-    skill: 'melee', speed: TICKS_PER_SECOND, attack: { damage: 6, skill: 10, reach: 1 }, loot: 2, hunts: true, scales: true,
+    name: 'Ghoul', size: 1, capacity: 0, grades: 1, hp: 600, build: false, cost: 0,
+    skill: 'melee', speed: TICKS_PER_SECOND, attack: { damage: 12, skill: 10, reach: 1 }, loot: 2, hunts: true, scales: true,
   },
   ogre: {
-    name: 'Ogre', size: 1, capacity: 0, grades: 1, hp: 600, build: false, cost: 0,
-    skill: 'melee', speed: 4 * TICKS_PER_SECOND, attack: { damage: 25, skill: 35, reach: 1 }, loot: 6, hunts: true, scales: true,
+    name: 'Ogre', size: 1, capacity: 0, grades: 1, hp: 3000, build: false, cost: 0,
+    skill: 'melee', speed: 4 * TICKS_PER_SECOND, attack: { damage: 50, skill: 35, reach: 1 }, loot: 6, hunts: true, scales: true,
   },
   band: {
     name: 'Band', size: 1, capacity: 30, grades: 1, hp: 0, build: true, cost: 0,

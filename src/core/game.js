@@ -41,8 +41,8 @@ import { tileAt } from './board.js';
 import { unitName } from './names.js';
 import {
   BUILDING_TYPES, BUILD_RANGE, DARK_LORD, HORDE_MAX, HORDE_PERIOD, HORDE_START, RAIDERS, SALVAGE, RAID_CHANCE, RAID_CLEAR, RAID_MAX, RAID_PERIOD, RAID_ROAM, START_METAL, DEFAULT_MODE, MAX_PLAYERS, MODES, COMBAT_PERIOD, DEPART_GAP, FOOD_PER_UNIT, KILL_EVEN, KILL_MAX, KILL_STEP, KILL_XP, MELEE_DAMAGE, MELEE_RANGE,
-  RANGED_DAMAGE, RANGED_RANGE, REPAIR_WORK, FOOD_PERIOD, FOOD_STORE, HUNGER_LINE, LEVEL_GROWTH,
-  LEVEL_RATE, LEVEL_XP, MAX_HUNGER, MAX_LEVEL, SIDES, SKILLS, SKILL_XP, START_STONE, START_UNITS, STARVE_CHANCE,
+  RANGED_DAMAGE, RANGED_RANGE, REPAIR_WORK, FOOD_PERIOD, FOOD_STORE, HUNGER_PULL, LEVEL_GROWTH,
+  LEVEL_RATE, LEVEL_XP, MAX_HUNGER, MAX_LEVEL, SIDES, SKILLS, SKILL_RATE, SKILL_XP, START_STONE, START_UNITS, STARVE_CHANCE,
   UNIT_LIMIT, WAGON_PATIENCE, WALK_TICKS, WORK_BASE,
 } from './rules.js';
 
@@ -269,15 +269,15 @@ function newUnit(state, owner, building) {
 }
 
 /**
- * A tick of work with a skill: experience for the unit, as much as the work
- * is worth, and a point for the skill, which rises while it is below the
- * unit's level.
+ * A tick of work (or a strike) with a skill: experience for the unit, as
+ * much as the work is worth, and points for the skill (SKILL_RATE), which
+ * rises while it is below the unit's level.
  * @param {Unit} u
  * @param {Skill} skill
  */
 function practise(u, skill, bonus = 0) {
   gainXp(u, LEVEL_RATE[skill] + bonus);
-  const practice = Math.min(SKILL_XP, u.practice[skill] + 1);
+  const practice = Math.min(SKILL_XP, u.practice[skill] + (SKILL_RATE[skill] ?? 1));
   if (practice >= SKILL_XP && u.skills[skill] < u.level) {
     u.skills[skill] += 1;
     u.practice[skill] = 0;
@@ -329,7 +329,8 @@ function heldCells(b) {
  * @param {Building} b
  */
 export function capacityOf(b) {
-  return BUILDING_TYPES[b.type].capacity * b.grade;
+  const { capacity, perGrade = capacity } = BUILDING_TYPES[b.type];
+  return capacity + perGrade * (b.grade - 1);
 }
 
 /**
@@ -343,14 +344,16 @@ export function lordScale(state) {
 }
 
 /**
- * A building's hit points when unharmed: half while it is going up, and
- * more for the Dark Lord's with more players (`lordScale`).
+ * A building's hit points when unharmed: its type's for each grade, and a
+ * pit's `hpPerDepth` for each grade of depth it is dug; half while it is
+ * going up; and more for the Dark Lord's with more players (`lordScale`).
  * @param {Pick<GameState, 'players'>} state
  * @param {Building} b
  */
 export function maxHp(state, b) {
   const type = BUILDING_TYPES[b.type];
-  const full = Math.round(type.hp * b.grade * (type.scales ? lordScale(state) : 1));
+  const deep = (type.hpPerDepth ?? 0) * depthOf(b);
+  const full = Math.round((type.hp * b.grade + deep) * (type.scales ? lordScale(state) : 1));
   return isRising(b) ? Math.ceil(full / 2) : full;
 }
 
@@ -1165,7 +1168,7 @@ function fight(board, state, occ) {
     if (type.speed && b.target !== undefined && !isRising(b)) chase(board, state, occ, b);
     const inside = /** @type {string[]} */ (occ.inside.get(b.id));
     if (!inside.length && !type.attack) continue;
-    const unitReach = RANGED_RANGE + (isRising(b) ? 0 : type.reach ?? 0);
+    const unitReach = crewReach(b);
     const near = inReach(footprint(b.type, b.q, b.r), b.owner, Math.max(unitReach, type.attack?.reach ?? 0), b.target);
     if (type.attack) {
       const target = near.find((x) => x.d <= /** @type {{ reach: number }} */ (type.attack).reach && standing(x));
@@ -1311,8 +1314,8 @@ function addFood(state, owner, food) {
 
 /**
  * A side's meal: each unit eats FOOD_PER_UNIT, or an even share of what
- * there is, and what doesn't share evenly waits for the next meal. A share
- * under HUNGER_LINE makes the side hungrier, one over it less so. At
+ * there is, and what doesn't share evenly waits for the next meal. The
+ * side's hunger moves toward how short the share fell (see HUNGER_PULL). At
  * MAX_HUNGER, units may starve, the weak more likely than the seasoned.
  * @param {GameState} state
  * @param {Player} p
@@ -1322,7 +1325,9 @@ function eat(state, p) {
   if (!units.length) return;
   const share = Math.min(FOOD_PER_UNIT, Math.floor(p.food / units.length));
   p.food -= share * units.length;
-  p.hunger = Math.max(0, Math.min(MAX_HUNGER, p.hunger + HUNGER_LINE - share));
+  // Toward the shortfall, at least a point a meal, so it gets there.
+  const gap = (MAX_HUNGER * (FOOD_PER_UNIT - share)) / FOOD_PER_UNIT - p.hunger;
+  p.hunger += gap > 0 ? Math.ceil(gap * HUNGER_PULL) : Math.floor(gap * HUNGER_PULL);
   if (p.hunger < MAX_HUNGER) return;
   for (const u of units) if (random(state) < starveChance(u.level)) delete state.units[u.id];
 }
@@ -1337,8 +1342,43 @@ export function isDugOut(b) {
 }
 
 /**
+ * How far the units inside a building strike from it: ranged reach, plus
+ * the building's own once it stands.
+ * @param {Building} b
+ */
+function crewReach(b) {
+  return RANGED_RANGE + (isRising(b) ? 0 : BUILDING_TYPES[b.type].reach ?? 0);
+}
+
+/**
+ * Whether the units inside a building have an enemy in their reach, which
+ * they fight (see `fight`) rather than mend the building.
+ * @param {GameState} state
+ * @param {Building} b
+ */
+function crewFighting(state, b) {
+  const cells = footprint(b.type, b.q, b.r);
+  const reach = crewReach(b);
+  const near = (/** @type {Axial} */ c) => cells.some((x) => distance(x, c) <= reach);
+  for (const t of Object.values(state.buildings)) {
+    if (t.hp === undefined || t.hp <= 0 || allied(state, t.owner, b.owner)) continue;
+    if (footprint(t.type, t.q, t.r).some(near)) return true;
+  }
+  for (const u of Object.values(state.units)) {
+    if (allied(state, u.owner, b.owner)) continue;
+    // Out in the open, or in a band: units sheltered in a building are
+    // struck through it.
+    const band = u.in === undefined ? null : state.buildings[u.in];
+    if (band && !BUILDING_TYPES[band.type].band) continue;
+    if (near(/** @type {Axial} */ (band ?? u))) return true;
+  }
+  return false;
+}
+
+/**
  * Damaged buildings are mended by the units inside, a hit point per
- * REPAIR_WORK of their work, which trains their building skill.
+ * REPAIR_WORK of their work, which trains their building skill; but not
+ * while those units are fighting.
  * @param {GameState} state
  * @param {Occupancy} occ
  */
@@ -1346,6 +1386,7 @@ function mend(state, occ) {
   for (const b of Object.values(state.buildings)) {
     const inside = /** @type {string[]} */ (occ.inside.get(b.id));
     if (b.hp === undefined || b.hp <= 0 || b.hp >= maxHp(state, b) || !inside.length) continue;
+    if (crewFighting(state, b)) continue;
     let done = b.mend ?? 0;
     for (const id of inside) {
       const u = state.units[id];
@@ -1464,8 +1505,11 @@ function work(board, state, occ) {
     } else if (type.yields === 'food') {
       addFood(state, b.owner, 1);
     } else {
+      const depth = depthOf(b);
       stock.stone += 1;
       b.dug = /** @type {number} */ (b.dug) + 1;
+      // A grade deeper is sturdier, as an upgrade is.
+      if (depthOf(b) > depth && b.hp !== undefined) b.hp += type.hpPerDepth ?? 0;
       if (isDugOut(b)) {
         b.work = 0;
         sendHome(board, state, occ, b);
