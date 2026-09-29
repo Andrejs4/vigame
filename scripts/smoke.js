@@ -184,7 +184,9 @@ async function confirmCrew(page, { add = 0, only = undefined, shot = '' } = {}) 
   await page.waitForSelector('#crew[open]');
   const count = await text(page, '#crew-count');
   if (only !== undefined) {
-    for (const box of await page.locator('#crew-list input:checked').all()) await box.uncheck();
+    // The locator matches only ticked boxes, so untick the first until none are.
+    const ticked = page.locator('#crew-list input:checked');
+    while (await ticked.count()) await ticked.first().uncheck();
     add = only;
   }
   for (let i = 0; i < add; i++) await page.locator('#crew-list input:not(:checked):not(:disabled)').first().check();
