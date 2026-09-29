@@ -17,7 +17,8 @@ import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
 
 import { startGameServer } from '../server/app.js';
-import { distance } from '../src/core/hex.js';
+import { axialToPixel, distance } from '../src/core/hex.js';
+import { BUILDING_TYPES } from '../src/core/rules.js';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const OUT = join(ROOT, 'smoke-output');
@@ -137,19 +138,40 @@ async function openCell(page, cells) {
 }
 
 /**
- * Highlighted cells, as [q, r], near `home` and away from the Dark Lord's
- * lair first: a new building is half its hit points until it stands, and
- * mending it comes before raising it, so under the lair's fire it never
- * would.
+ * Centre the view on a cell, at the same zoom.
+ * @param {any} page
+ * @param {{ q: number, r: number }} cell
+ */
+async function lookAt(page, cell) {
+  const size = await page.evaluate(() => /** @type {any} */ (window).__vigame.board.hexSize);
+  await page.evaluate(({ x, y }) => {
+    const v = /** @type {any} */ (window).__vigame;
+    const rect = document.getElementById('board').getBoundingClientRect();
+    v.camera.centreOn(x, y, rect.width, rect.height);
+    v.forceDraw();
+  }, axialToPixel(cell.q, cell.r, size));
+}
+
+/**
+ * Highlighted cells, as [q, r], nearest `home` first, with the view centred
+ * there so they are clear of the HUD (a castle on the map's edge is under
+ * it otherwise). Only cells out of the Dark Lord's lair's reach, if any: a
+ * new building has half its hit points until it stands, and mending comes
+ * before raising it, so under the lair's fire a small crew never finishes.
  * @param {any} page
  * @param {{ q: number, r: number }} home
  */
 async function spotsNear(page, home) {
   await page.waitForFunction(() => /** @type {any} */ (window).__vigame.highlights.length > 0);
+  await lookAt(page, home);
   const keys = await page.evaluate(() => /** @type {any} */ (window).__vigame.highlights);
+  const cells = keys.map((k) => k.split(',').map(Number))
+    .sort(([q1, r1], [q2, r2]) => distance({ q: q1, r: r1 }, home) - distance({ q: q2, r: r2 }, home));
   const lair = (await buildings(page)).find((b) => b.type === 'lair');
-  const score = ([q, r]) => distance({ q, r }, home) - (lair ? distance({ q, r }, lair) : 0);
-  return keys.map((k) => k.split(',').map(Number)).sort((x, y) => score(x) - score(y));
+  // Its reach counts from the edge of its seven cells.
+  const reach = /** @type {{ reach: number }} */ (BUILDING_TYPES.lair.attack).reach + 1;
+  const safe = lair ? cells.filter(([q, r]) => distance({ q, r }, lair) > reach) : cells;
+  return safe.length ? safe : cells;
 }
 
 /**
@@ -168,9 +190,10 @@ async function buildWith(page, kind, home, { touch = false, crew = undefined } =
   return (await buildings(page)).find((b) => b.q === spot.q && b.r === spot.r);
 }
 
-/** Select a building by clicking it, unless it already is. */
+/** Select a building by clicking it, in the middle of the view, unless it already is. */
 async function selectBuilding(page, b, { touch = false } = {}) {
   if (await page.evaluate(() => /** @type {any} */ (window).__vigame.selected) === b.id) return;
+  await lookAt(page, b);
   await clickHex(page, b.q, b.r, { touch });
   await page.waitForFunction((id) => /** @type {any} */ (window).__vigame.selected === id, b.id);
 }
@@ -232,6 +255,9 @@ async function report() {
         connected: v?.net?.connected(),
         tick: v?.view?.tick,
         marching: Object.values(v?.view?.units ?? {}).filter((u) => u.in === undefined),
+        // Buildings going up or being upgraded, and how they're doing.
+        works: Object.values(v?.view?.buildings ?? {}).filter((b) => b.raised !== undefined || b.upgrading !== undefined)
+          .map(({ id, type, q, r, hp, raised, upgrading }) => ({ id, type, q, r, hp, raised, upgrading })),
       };
     }).catch((e) => String(e));
     lines.push(`${label} ${page.url()}\n    ${JSON.stringify(seen)}`);
@@ -366,6 +392,7 @@ async function threeBrowsers(browser, url, { full, label }) {
 
   // Each castle is drawn in its side's colour: the cell below and left of its
   // centre is the castle's, and clear of its labels.
+  await a.click('#recenter');
   const crimson = await castleOf(a, 1);
   const tint = async (c) => {
     const p = await hexPoint(a, c.q - 1, c.r + 1);
@@ -413,6 +440,7 @@ async function threeBrowsers(browser, url, { full, label }) {
 
   // Building far from your own buildings is refused, and the page says why.
   await a.keyboard.press('Escape');
+  await a.click('#recenter');
   await a.click('#build-tower');
   const far = await openCell(a, [[crimson.q, crimson.r + 2], [crimson.q, crimson.r - 2], [crimson.q + 2, crimson.r - 2]]);
   await clickHex(a, far.q, far.r);
