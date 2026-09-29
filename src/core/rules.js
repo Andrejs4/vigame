@@ -211,10 +211,12 @@ export const REPAIR_WORK = 500;
  * @typedef {object} BuildingType
  * @property {string} name
  * @property {1 | 7} size Cells covered: 1, or 7 (a cell and its six neighbours).
- * @property {number} capacity Units it holds at grade 1; each grade adds as much again.
+ * @property {number} capacity Units it holds at grade 1; each grade adds as much again,
+ *   or `perGrade` if it has that.
  *   A castle takes in all its side's units, and stops breeding while it
  *   holds this many or more.
  * @property {number} grades Highest grade.
+ * @property {number} [perGrade] Units each grade after the first adds to its room.
  * @property {number} hp Hit points at grade 1; each grade adds as many again.
  *   At none left, the building collapses at once, and whoever was inside is
  *   left standing on its cell. A band has none: it protects nobody.
@@ -243,7 +245,8 @@ export const REPAIR_WORK = 500;
  * @property {'unit' | 'stone' | 'food'} [yields]
  * @property {number} [base] Food a farm yields every FOOD_PERIOD, worked or not.
  * @property {number} [perDepth] Stone a pit yields for each grade of depth.
- *   Each grade of depth adds `hp` to its hit points, as an upgrade does.
+ * @property {number} [hpPerDepth] Hit points each grade of depth adds to a
+ *   pit, gained as it gets there.
  * @property {number} [depth] A pit's last grade of depth. Once there it is
  *   dug out, and its crew goes home.
  * @property {number} [speed] Ticks per cell on open ground. Only moving buildings have one;
@@ -269,7 +272,7 @@ export const REPAIR_WORK = 500;
 /** @type {Record<string, BuildingType>} */
 export const BUILDING_TYPES = {
   castle: {
-    name: 'Castle', size: 7, capacity: 50, grades: 3, hp: 2000, build: false, cost: 0, upgrade: 200, reach: 1, life: true,
+    name: 'Castle', size: 7, capacity: 40, perGrade: 10, grades: 3, hp: 2000, build: false, cost: 0, upgrade: 200, reach: 1, life: true,
     skill: 'breeding', work: 24000, yields: 'unit', idleWork: 10, raise: 36000,
   },
   tower: {
@@ -281,8 +284,8 @@ export const BUILDING_TYPES = {
     skill: 'melee', speed: 2 * TICKS_PER_SECOND, raise: 9000,
   },
   pit: {
-    name: 'Pit', size: 1, capacity: 8, grades: 1, hp: 800, build: true, cost: 0,
-    skill: 'build', work: 9600, yields: 'stone', perDepth: 20, depth: 5, through: 0.25, raise: 3000,
+    name: 'Pit', size: 1, capacity: 8, grades: 1, hp: 200, build: true, cost: 0,
+    skill: 'build', work: 9600, yields: 'stone', perDepth: 20, hpPerDepth: 100, depth: 5, through: 0.25, raise: 3000,
   },
   farm: {
     name: 'Farm', size: 1, capacity: 6, grades: 1, hp: 200, build: true, cost: 30,

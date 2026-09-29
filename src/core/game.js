@@ -329,7 +329,8 @@ function heldCells(b) {
  * @param {Building} b
  */
 export function capacityOf(b) {
-  return BUILDING_TYPES[b.type].capacity * b.grade;
+  const { capacity, perGrade = capacity } = BUILDING_TYPES[b.type];
+  return capacity + perGrade * (b.grade - 1);
 }
 
 /**
@@ -343,16 +344,16 @@ export function lordScale(state) {
 }
 
 /**
- * A building's hit points when unharmed: its type's for each grade, and for
- * each grade of depth a pit is dug; half while it is going up; and more for
- * the Dark Lord's with more players (`lordScale`).
+ * A building's hit points when unharmed: its type's for each grade, and a
+ * pit's `hpPerDepth` for each grade of depth it is dug; half while it is
+ * going up; and more for the Dark Lord's with more players (`lordScale`).
  * @param {Pick<GameState, 'players'>} state
  * @param {Building} b
  */
 export function maxHp(state, b) {
   const type = BUILDING_TYPES[b.type];
-  const grades = b.grade + (type.depth !== undefined ? depthOf(b) : 0);
-  const full = Math.round(type.hp * grades * (type.scales ? lordScale(state) : 1));
+  const deep = (type.hpPerDepth ?? 0) * depthOf(b);
+  const full = Math.round((type.hp * b.grade + deep) * (type.scales ? lordScale(state) : 1));
   return isRising(b) ? Math.ceil(full / 2) : full;
 }
 
@@ -1505,8 +1506,8 @@ function work(board, state, occ) {
       const depth = depthOf(b);
       stock.stone += 1;
       b.dug = /** @type {number} */ (b.dug) + 1;
-      // A grade deeper is sturdier by a grade's hit points, as an upgrade is.
-      if (depthOf(b) > depth && b.hp !== undefined) b.hp += type.hp;
+      // A grade deeper is sturdier, as an upgrade is.
+      if (depthOf(b) > depth && b.hp !== undefined) b.hp += type.hpPerDepth ?? 0;
       if (isDugOut(b)) {
         b.work = 0;
         sendHome(board, state, occ, b);

@@ -93,19 +93,18 @@ test('a full castle raises no one, and its units learn nothing meanwhile', () =>
 
 test('no side makes units past the unit limit', () => {
   const board = openBoard(5);
-  const towerRoom = BUILDING_TYPES.tower.capacity * 3;
-  const inCastle = UNIT_LIMIT - 3 * towerRoom;
-  assert.ok(inCastle > 0 && inCastle < BUILDING_TYPES.castle.capacity * 3, 'the castle still has room');
-  const state = stateWith([
-    { id: 'b1', type: 'castle', grade: 3 },
-    { id: 'b2', grade: 3, q: 3, r: 0 },
-    { id: 'b3', grade: 3, q: -3, r: 0 },
-    { id: 'b4', grade: 3, q: 0, r: 3 },
-  ], [
+  // Full towers round the castle, and the rest of the limit at home.
+  const towers = [
+    { id: 'b2', grade: 3, q: 3, r: 0 }, { id: 'b3', grade: 3, q: -3, r: 0 }, { id: 'b4', grade: 3, q: 0, r: 3 },
+    { id: 'b5', grade: 3, q: 0, r: -3 }, { id: 'b6', grade: 1, q: 3, r: -3 },
+  ];
+  const castle = { id: 'b1', type: 'castle', grade: 3 };
+  const room = (/** @type {{ type?: string, grade: number }} */ b) => capacityOf(/** @type {any} */ ({ type: 'tower', ...b }));
+  const inCastle = UNIT_LIMIT - towers.reduce((sum, t) => sum + room(t), 0);
+  assert.ok(inCastle > 0 && inCastle < room(castle), 'the castle still has room');
+  const state = stateWith([castle, ...towers], [
     ...unitsIn('b1', inCastle, 1000),
-    ...unitsIn('b2', towerRoom, 2000),
-    ...unitsIn('b3', towerRoom, 3000),
-    ...unitsIn('b4', towerRoom, 4000),
+    ...towers.flatMap((t, i) => unitsIn(t.id, room(t), 2000 + 1000 * i)),
   ]);
   assert.deepEqual(checkState(board, state), []);
   run(board, state, 100);
@@ -243,15 +242,15 @@ test('a pit goes up at half its hit points once its crew gets there, then they d
   assert.equal(state.players[0].stone, stone + 1, 'straight into the stock');
 });
 
-test('a pit a grade deeper gains a grade\'s hit points', () => {
+test('a pit a grade deeper gains hit points', () => {
   const board = openBoard(4);
-  const { work, perDepth, hp } = BUILDING_TYPES.pit;
+  const { work, perDepth, hp, hpPerDepth = 0 } = BUILDING_TYPES.pit;
   const state = stateWith([{ id: 'b1', type: 'pit', q: 1, r: 0, dug: /** @type {number} */ (perDepth) - 1, work: /** @type {number} */ (work) - 1 }], unitsIn('b1', 1, 10));
   assert.equal(maxHp(state, state.buildings.b1), hp);
   run(board, state, 1);
   assert.equal(depthOf(state.buildings.b1), 1);
-  assert.equal(state.buildings.b1.hp, 2 * hp);
-  assert.equal(maxHp(state, state.buildings.b1), 2 * hp);
+  assert.equal(state.buildings.b1.hp, hp + hpPerDepth);
+  assert.equal(maxHp(state, state.buildings.b1), hp + hpPerDepth);
 });
 
 test('a dug-out pit sends its crew home, and takes no other', () => {
@@ -355,14 +354,14 @@ test('a side eats every minute; short shares make it hungry, full ones less so',
   const crowd = stateWith([{ id: 'b1', type: 'castle' }], unitsIn('b1', 100, 1000));
   crowd.players[0].food = 7;
   run(board, crowd, FOOD_PERIOD);
-  // 7 + 250 from the castle (for half its 50), shared by 100: 2 each, 57 left over.
-  assert.deepEqual([crowd.players[0].food, crowd.players[0].hunger], [57, 3]);
+  // 7 + 200 from the castle (for half its 40), shared by 100: 2 each, 7 left over.
+  assert.deepEqual([crowd.players[0].food, crowd.players[0].hunger], [7, 3]);
 
   // In a tower, so nobody is born meanwhile.
   const fed = stateWith([{ id: 'b1', type: 'castle' }, { id: 'b2', q: 3, r: 0 }], unitsIn('b2', 10, 1000));
   fed.players[0].hunger = 20;
   run(board, fed, FOOD_PERIOD);
-  assert.deepEqual([fed.players[0].food, fed.players[0].hunger], [250 - 10 * FOOD_PER_UNIT, 15]);
+  assert.deepEqual([fed.players[0].food, fed.players[0].hunger], [200 - 10 * FOOD_PER_UNIT, 15]);
 });
 
 test('at full hunger units may starve, the more likely the lower their level', () => {
