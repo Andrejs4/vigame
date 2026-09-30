@@ -16,6 +16,7 @@ import { playerId, replay, restoreGame } from '../server/room.js';
 import { BOARD_OPTIONS, createBoard } from '../src/core/board.js';
 import { advance, castleOf, checkState, nearStanding, newGame, occupancy, publicView } from '../src/core/game.js';
 import { key } from '../src/core/hex.js';
+import { GAME_NAMES } from '../src/core/names.js';
 import { createServerNet } from '../src/client/net.js';
 import { TICKS_PER_SECOND } from '../src/core/rules.js';
 
@@ -582,6 +583,21 @@ test('selections are shared, but only for hexes on the board', async () => {
 });
 
 // --- the page's transport --------------------------------------------------
+
+test('a player waiting for the others may rename the game, and the lobby shows it at once', async () => {
+  const id = await startGame();
+  const blue = await createServerNet({ client: new Client(base), gameId: id, token: TOKENS.a });
+  await blue.ready();
+  await until(() => blue.seat() === 0);
+  assert.equal(blue.running(), false, 'waiting for the second player');
+  const listed = async () => (await (await fetch(`${base}/api/games`)).json()).find((/** @type {any} */ g) => g.id === id);
+  assert.ok(GAME_NAMES.includes((await listed()).name), 'named from the preset list');
+  assert.deepEqual(await blue.send({ type: 'rename', name: 'Friday  fight' }), { ok: true });
+  assert.equal((await listed()).name, 'Friday fight');
+  assert.deepEqual(await blue.send({ type: 'rename', name: 'x'.repeat(30) }), { ok: false, reason: 'a name is 1 to 24 letters, digits and spaces' });
+  assert.deepEqual(await blue.send({ type: 'upgrade', building: 'b1' }), { ok: false, reason: 'the game is paused' }, 'other commands wait for the clock');
+  await blue.leave();
+});
 
 test('the page transport plays through the server and follows it', async () => {
   const id = await startGame();

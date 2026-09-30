@@ -278,9 +278,10 @@ export class GameRoom extends Room {
   play(client, message, ctx) {
     const seat = this.seatOf(client.auth.pid);
     if (seat === null) return ctx?.reject('not seated');
-    if (!this.state.running) return ctx?.reject('the game is paused');
     const command = flatCommand(message);
     if (!command) return ctx?.reject('not a command');
+    // Renaming the game needs no clock: players waiting for the rest may.
+    if (!this.state.running && command.type !== 'rename') return ctx?.reject('the game is paused');
 
     const next = structuredClone(this.game);
     const outcome = applyCommand(this.board, next, seat, command);
@@ -292,6 +293,8 @@ export class GameRoom extends Room {
 
     this.game = next;
     syncGame(this.state, publicView(next));
+    // The lobby reads names from the snapshot, which a paused game never takes.
+    if (command.type === 'rename') this.snapshot();
     return this.seq;
   }
 

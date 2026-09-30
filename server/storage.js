@@ -60,7 +60,7 @@ export function openStorage(file = ':memory:') {
     SELECT seq, tick, player, command, at FROM commands WHERE game_id = ? AND seq > ? ORDER BY seq`);
   const selectRecent = db.prepare(`
     SELECT id, seats, created_at, updated_at, json_extract(state, '$.tick') AS tick, json_extract(state, '$.mode') AS mode,
-      json_extract(state, '$.over') AS over, json_extract(state, '$.winner') AS winner
+      json_extract(state, '$.name') AS name, json_extract(state, '$.over') AS over, json_extract(state, '$.winner') AS winner
     FROM games ORDER BY updated_at DESC, id LIMIT ?`);
   const upsertPlayer = db.prepare(`
     INSERT INTO players (pid, name, created_at, updated_at) VALUES (@pid, @name, @now, @now)
@@ -147,6 +147,7 @@ export function openStorage(file = ':memory:') {
       return selectRecent.all(limit).map((/** @type {any} */ row) => ({
         id: row.id,
         mode: row.mode,
+        name: row.name ?? null,
         over: row.over ?? null,
         winner: row.winner ?? null,
         tick: row.tick,

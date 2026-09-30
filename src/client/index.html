@@ -89,6 +89,7 @@
   <div class="hud" id="status">
     <div class="masthead">Vigame &middot; prototype</div>
     <dl>
+      <div class="row"><dt>Game</dt><dd><span id="game-name">&mdash;</span><button class="inline" id="rename-button" hidden aria-label="Rename the game" title="Rename the game">✎</button></dd></div>
       <div class="row"><dt>Time</dt><dd id="time">0:00</dd></div>
       <div class="row"><dt>You</dt><dd id="seat">&mdash;</dd></div>
       <div class="row"><dt>Players</dt><dd id="players" title="Seated players here, of the game's seats; it blinks while the game waits for the rest">&mdash;</dd></div>
@@ -174,6 +175,20 @@
       <span id="crew-count"></span>
       <button id="crew-cancel" value="cancel">Cancel</button>
       <button id="crew-ok" value="ok" class="primary">Send</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="rename" aria-labelledby="rename-title">
+  <form method="dialog" novalidate>
+    <h2 id="rename-title">Rename the game</h2>
+    <p class="hint" id="rename-hint"></p>
+    <input id="rename-input" name="name" autocomplete="off" spellcheck="false" aria-labelledby="rename-title">
+    <p class="error" id="rename-error" role="alert"></p>
+    <div class="crew-foot">
+      <span></span>
+      <button value="cancel">Cancel</button>
+      <button id="rename-ok" value="ok" class="primary">Rename</button>
     </div>
   </form>
 </dialog>

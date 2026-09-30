@@ -9,6 +9,7 @@ import { BOARD_OPTIONS, TERRAIN, createBoard, tileAt } from '../core/board.js';
 import {
   capacityOf, castleOf, crewOf, depthOf, foodStore, fullMeal, inBuildRange, isDugOut, isRising, maxHp, occupancy, pointsOf, raiseWork, seatsOf, sideOf, upgradeCost,
 } from '../core/game.js';
+import { GAME_NAME_MAX, cleanGameName } from '../core/player.js';
 import { BUILDING_TYPES, POINTS, SKILLS, TICKS_PER_SECOND, UNIT_LIMIT } from '../core/rules.js';
 import { getJson, serverBase } from './api.js';
 import { Camera } from './camera.js';
@@ -96,6 +97,7 @@ export async function startGame(net, me) {
   const mapFrame = /** @type {HTMLElement} */ (document.getElementById('minimap-frame'));
   const controls = /** @type {HTMLElement} */ (document.getElementById('controls'));
   const hud = {
+    gameName: document.getElementById('game-name'),
     time: document.getElementById('time'),
     seat: document.getElementById('seat'),
     units: document.getElementById('units'),
@@ -120,6 +122,11 @@ export async function startGame(net, me) {
   const scoresDialog = /** @type {HTMLDialogElement} */ (document.getElementById('scores'));
   const gameId = new URLSearchParams(location.search).get('game') ?? '';
   const crewDialog = /** @type {HTMLDialogElement} */ (document.getElementById('crew'));
+  const renameDialog = /** @type {HTMLDialogElement} */ (document.getElementById('rename'));
+  const renameButton = /** @type {HTMLButtonElement} */ (document.getElementById('rename-button'));
+  const renameInput = /** @type {HTMLInputElement} */ (document.getElementById('rename-input'));
+  const renameError = /** @type {HTMLElement} */ (document.getElementById('rename-error'));
+  const renameOk = /** @type {HTMLButtonElement} */ (document.getElementById('rename-ok'));
   const crewParts = {
     title: /** @type {HTMLElement} */ (document.getElementById('crew-title')),
     hint: /** @type {HTMLElement} */ (document.getElementById('crew-hint')),
@@ -334,6 +341,12 @@ export async function startGame(net, me) {
   /** Whether this viewer can give commands right now. */
   const canCommand = () => net.seat() !== null && net.running();
 
+  /** Whether this viewer may rename the game: a player still in it, paused or not. */
+  function canRename() {
+    const seat = net.seat();
+    return seat !== null && view !== null && view.over === undefined && view.players[seat]?.lost === undefined;
+  }
+
   /**
    * Whether a building is this viewer's own.
    * @param {string | null} id
@@ -365,6 +378,9 @@ export async function startGame(net, me) {
     const seat = net.seat();
     const paused = !net.running();
 
+    if (hud.gameName) hud.gameName.textContent = view?.name ?? '—';
+    if (view?.name && document.title !== `${view.name} · Vigame`) document.title = `${view.name} · Vigame`;
+    renameButton.hidden = !canRename();
     if (hud.time) {
       const players = view?.players ?? [];
       const over = view?.over !== undefined;
@@ -862,7 +878,7 @@ export async function startGame(net, me) {
 
   addEventListener('keydown', (e) => {
     // Escape in the crew chooser closes just the chooser.
-    if (e.key !== 'Escape' || crewDialog.open || scoresDialog.open || (!placing && !selected && !aiming)) return;
+    if (e.key !== 'Escape' || crewDialog.open || scoresDialog.open || renameDialog.open || (!placing && !selected && !aiming)) return;
     aiming = null;
     placing = null;
     selected = null;
@@ -877,7 +893,7 @@ export async function startGame(net, me) {
   addEventListener('keydown', (e) => {
     const button = shortcuts.get(e.key.toLowerCase());
     if (!button || button.disabled || button.hidden) return;
-    if (e.repeat || e.ctrlKey || e.metaKey || e.altKey || crewDialog.open || scoresDialog.open) return;
+    if (e.repeat || e.ctrlKey || e.metaKey || e.altKey || crewDialog.open || scoresDialog.open || renameDialog.open) return;
     if (e.target instanceof Element && e.target.closest('input, select, textarea, [contenteditable]')) return;
     e.preventDefault();
     button.click();
@@ -894,6 +910,33 @@ export async function startGame(net, me) {
       updateHud();
     });
   }
+
+  // Renaming the game: the name as the lobby will show it, checked as the
+  // server will check it. Enter renames, Escape leaves it be.
+  const renameHint = /** @type {HTMLElement} */ (document.getElementById('rename-hint'));
+  renameHint.textContent = `What the lobby calls it, for everyone: up to ${GAME_NAME_MAX} letters, digits and spaces.`;
+  renameInput.maxLength = 2 * GAME_NAME_MAX; // counted in UTF-16; cleanGameName counts letters
+  renameButton.addEventListener('click', () => {
+    renameInput.value = view?.name ?? '';
+    renameError.textContent = '';
+    renameDialog.returnValue = '';
+    renameDialog.showModal();
+    renameInput.select();
+  });
+  renameInput.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    renameOk.click();
+  });
+  renameOk.addEventListener('click', (e) => {
+    const name = cleanGameName(renameInput.value);
+    if (name === null) {
+      e.preventDefault();
+      renameError.textContent = `Use 1–${GAME_NAME_MAX} letters, digits and spaces; - _ . ' may go between them.`;
+      return;
+    }
+    if (name !== view?.name) give({ type: 'rename', name }, 'rename the game');
+  });
 
   upgradeButton.addEventListener('click', () => {
     if (selected) give({ type: 'upgrade', building: selected }, 'upgrade');

@@ -38,7 +38,8 @@
 
 import { distance, key, neighbors, parseKey } from './hex.js';
 import { tileAt } from './board.js';
-import { unitName } from './names.js';
+import { gameName, unitName } from './names.js';
+import { GAME_NAME_MAX, cleanGameName } from './player.js';
 import {
   BUILDING_TYPES, BUILD_RANGE, DARK_LORD, LORD_HP, HORDE_MAX, HORDE_PERIOD, HORDE_START, POINTS, RAIDERS, SALVAGE, RAID_CHANCE, RAID_CLEAR, RAID_MAX, RAID_PERIOD, RAID_ROAM, START_METAL, DEFAULT_MODE, MAX_PLAYERS, MODES, COMBAT_PERIOD, DEPART_GAP, FOOD_PER_UNIT, KILL_EVEN, KILL_MAX, KILL_STEP, KILL_XP, MELEE_DAMAGE, MELEE_RANGE,
   RANGED_DAMAGE, RANGED_RANGE, REPAIR_WORK, FOOD_PERIOD, FOOD_STORE, HUNGER_PULL, LEVEL_GROWTH,
@@ -99,6 +100,8 @@ import {
  * @typedef {object} GameState
  * @property {number} version The shape of this object; see STATE_VERSION.
  * @property {string} mode A key of MODES.
+ * @property {string} name What the lobby calls it: one of GAME_NAMES (in
+ *   names.js) at first, then whatever its players rename it (cleanGameName).
  * @property {number} [over] The tick the game ended: once only one team (or
  *   none) of castles and lairs is left standing. Nothing happens after.
  * @property {number} [winner] The team left standing, if one is.
@@ -133,7 +136,8 @@ import {
  *   | { type: 'target', building: string, target: string }
  *   | { type: 'upgrade', building: string }
  *   | { type: 'abort', building: string }
- *   | { type: 'move', building: string, q: number, r: number }} Command
+ *   | { type: 'move', building: string, q: number, r: number }
+ *   | { type: 'rename', name: string }} Command
  * @typedef {{ ok: true } | { ok: false, reason: string }} Outcome
  */
 
@@ -147,7 +151,7 @@ import {
  */
 
 /** Bump when GameState changes shape, and teach `checkState` the new one. */
-export const STATE_VERSION = 10;
+export const STATE_VERSION = 11;
 
 const SKILL_NAMES = /** @type {Skill[]} */ (Object.keys(SKILLS));
 
@@ -179,6 +183,7 @@ export function newGame(board, { mode = DEFAULT_MODE } = {}) {
   const state = {
     version: STATE_VERSION,
     mode,
+    name: gameName(board.seed),
     seed: board.seed,
     tick: 0,
     rng: board.seed >>> 0,
@@ -780,8 +785,22 @@ export function applyCommand(board, state, player, command) {
     case 'upgrade': return upgrade(state, player, cmd);
     case 'abort': return abort(board, state, occ, player, cmd);
     case 'move': return moveBuilding(board, state, occ, player, cmd);
+    case 'rename': return rename(state, cmd);
     default: return refuse('unknown command');
   }
+}
+
+/**
+ * Rename the game, as any of its players may while it goes on.
+ * @param {GameState} state
+ * @param {Record<string, unknown>} cmd
+ * @returns {Outcome}
+ */
+function rename(state, cmd) {
+  const name = cleanGameName(cmd.name);
+  if (name === null) return refuse(`a name is 1 to ${GAME_NAME_MAX} letters, digits and spaces`);
+  state.name = name;
+  return { ok: true };
 }
 
 /**
@@ -1775,6 +1794,7 @@ export function checkState(board, raw) {
 
   if (state.version !== STATE_VERSION) return [`state version ${String(state.version)}, not ${STATE_VERSION}`];
   if (state.seed !== board.seed) fail('seed does not match the board');
+  if (cleanGameName(state.name) !== state.name) fail('bad name');
   if (!Number.isSafeInteger(state.tick) || state.tick < 0) fail('bad tick');
   if (!Number.isSafeInteger(state.rng) || state.rng < 0) fail('bad rng');
   if (!Number.isSafeInteger(state.nextId) || state.nextId < 1) fail('bad nextId');
@@ -1920,6 +1940,7 @@ export function publicView(state) {
   return {
     version: state.version,
     mode: state.mode,
+    name: state.name,
     ...(state.over !== undefined ? { over: state.over } : {}),
     ...(state.winner !== undefined ? { winner: state.winner } : {}),
     seed: state.seed,

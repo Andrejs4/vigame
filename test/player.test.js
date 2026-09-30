@@ -2,7 +2,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { createChallenges } from '../server/challenge.js';
-import { PLAYER_NAME_MAX, cleanPlayerName } from '../src/core/player.js';
+import { GAME_NAMES } from '../src/core/names.js';
+import { GAME_NAME_MAX, PLAYER_NAME_MAX, cleanGameName, cleanPlayerName } from '../src/core/player.js';
 
 test('player names: letters and digits in any script, up to 15 characters', () => {
   for (const name of ['Ann', 'Jānis', 'Ōtani 2', 'Анна-Мария', '李小龍', 'अनिल', "O'Neil", 'x_y.z', '7']) {
@@ -27,6 +28,16 @@ test('player names refuse symbols, emoji, invisible characters and odd shapes', 
     null, undefined, 42, ['Ann'],
   ];
   for (const name of refused) assert.equal(cleanPlayerName(name), null, JSON.stringify(name));
+});
+
+test('game names: as players\' names, up to 24 characters; the preset ones all pass', () => {
+  assert.equal(cleanGameName('  Friday   fight '), 'Friday fight');
+  assert.equal(cleanGameName('a'.repeat(GAME_NAME_MAX)), 'a'.repeat(GAME_NAME_MAX));
+  for (const name of ['', 'a'.repeat(GAME_NAME_MAX + 1), 'Ann & co', 'Fight 🙂', '-Fight', 7]) {
+    assert.equal(cleanGameName(name), null, JSON.stringify(name));
+  }
+  for (const name of GAME_NAMES) assert.equal(cleanGameName(name), name, name);
+  assert.equal(new Set(GAME_NAMES).size, GAME_NAMES.length, 'no name twice');
 });
 
 test('a challenge is a small sum, answered once', () => {

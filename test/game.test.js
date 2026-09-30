@@ -11,6 +11,7 @@ import {
   WALK_TICKS, WORK_BASE,
 } from '../src/core/rules.js';
 import { distance } from '../src/core/hex.js';
+import { GAME_NAMES } from '../src/core/names.js';
 import { boardFrom, noTally, openBoard, run, runUntil, skillsAt, stateWith, unitsIn } from './helpers.js';
 
 const OK = { ok: true };
@@ -26,6 +27,8 @@ test('a new game has a castle per player on the start sites, with named units in
   const state = newGame(board);
   assert.deepEqual(checkState(board, state), []);
   assert.equal(state.mode, 'coop', 'cooperation by default');
+  assert.ok(GAME_NAMES.includes(state.name), 'named from the preset list');
+  assert.equal(publicView(state).name, state.name, 'which everyone sees');
   assert.deepEqual(
     Object.values(state.buildings).map((b) => [b.owner, b.type, b.q, b.r]),
     board.starts.map((s, owner) => [owner, owner === 2 ? 'lair' : 'castle', s.q, s.r]),
@@ -309,6 +312,9 @@ test('commands that are not allowed are refused, and change nothing', () => {
     [0, { type: 'upgrade', building: 'b3' }, 'not your building'],
     [0, { type: 'upgrade', building: 'b6' }, 'fully upgraded'],
     [0, { type: 'move', building: 'b2', q: 1, r: 1 }, 'cannot move'],
+    [0, { type: 'rename', name: 'a'.repeat(25) }, 'a name is 1 to 24 letters, digits and spaces'],
+    [0, { type: 'rename', name: '<b>' }, 'a name is 1 to 24 letters, digits and spaces'],
+    [0, { type: 'rename' }, 'a name is 1 to 24 letters, digits and spaces'],
     [0, { type: 'fly' }, 'unknown command'],
     [0, null, 'not a command'],
     [0, 'crew', 'not a command'],
@@ -318,6 +324,18 @@ test('commands that are not allowed are refused, and change nothing', () => {
     assert.deepEqual(applyCommand(board, state, player, command), { ok: false, reason }, JSON.stringify(command));
   }
   assert.equal(JSON.stringify(state), before);
+});
+
+test('any player may rename the game, while it goes on', () => {
+  const board = openBoard(4);
+  const state = stateWith([{ id: 'b1', type: 'castle' }, { id: 'b2', owner: 1, type: 'castle', q: 3, r: 0 }]);
+  assert.deepEqual(applyCommand(board, state, 1, { type: 'rename', name: '  Pit   party 2 ' }), OK);
+  assert.equal(state.name, 'Pit party 2', 'tidied');
+  state.name = 'Pit & party';
+  assert.deepEqual(checkState(board, state), ['bad name']);
+  state.name = 'Pit party';
+  state.over = 10;
+  assert.deepEqual(applyCommand(board, state, 0, { type: 'rename', name: 'Afterparty' }), { ok: false, reason: 'the game is over' });
 });
 
 // --- stone, food and hit points --------------------------------------------------

@@ -47,8 +47,8 @@ function result(game) {
 }
 
 /**
- * One game as a list row: who plays which side, how far it has got, and a
- * button to open it.
+ * One game as a list row: its name, who plays which side, how far it has
+ * got, and a button to open it.
  * @param {import('./api.js').GameSummary} game
  * @param {string} action The button's label.
  */
@@ -56,6 +56,10 @@ function row(game, action) {
   const li = document.createElement('li');
   const who = document.createElement('span');
   who.className = 'who';
+  const title = document.createElement('span');
+  title.className = 'title';
+  title.textContent = game.name ?? 'A game';
+  who.append(title);
   // Teammates with "&", rivals with "vs".
   const between = hasLord(game.mode) ? ' & ' : ' vs ';
   game.seats.forEach((holder, i) => {

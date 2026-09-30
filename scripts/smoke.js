@@ -21,6 +21,7 @@ import { playerId } from '../server/room.js';
 import { BOARD_OPTIONS, createBoard } from '../src/core/board.js';
 import { checkState, newGame } from '../src/core/game.js';
 import { axialToPixel, distance } from '../src/core/hex.js';
+import { GAME_NAMES } from '../src/core/names.js';
 import { BUILDING_TYPES } from '../src/core/rules.js';
 import { PICTURES } from '../src/client/tokens.js';
 
@@ -432,9 +433,28 @@ async function threeBrowsers(browser, url, { full, label }) {
   await waitText(a, '#time', '0:00 · paused');
   assert.equal(await a.locator('#build-tower').isDisabled(), true);
 
-  // Bēla logs in and finds the game in the lobby, waiting for her.
+  // The game starts with one of the preset names. Ann renames it while she
+  // waits: a name with a symbol is refused on the page, a good one is tidied
+  // and taken, and the tab's title follows.
+  const named = await text(a, '#game-name');
+  assert.ok(GAME_NAMES.includes(named ?? ''), `"${named}" is not a preset name`);
+  const rename = `${label === 'direct' ? 'Friday' : 'Sunday'} fight`;
+  await a.click('#rename-button');
+  await a.waitForSelector('#rename[open]');
+  await a.fill('#rename-input', 'Ann & co');
+  await a.keyboard.press('Enter');
+  await waitMatch(a, '#rename-error', /letters, digits and spaces/);
+  await a.fill('#rename-input', `  ${rename.replace(' ', '   ')} `);
+  await a.keyboard.press('Enter');
+  await a.waitForSelector('#rename', { state: 'hidden' });
+  await waitText(a, '#game-name', rename);
+  assert.equal(await a.title(), `${rename} · Vigame`);
+
+  // Bēla logs in and finds the game in the lobby by its name, waiting for her.
   const b = await newPlayer(browser, url, `${label}-b`, 'Bēla');
   await inLobby(b);
+  await b.locator('#lobby-open li', { hasText: rename }).first().waitFor({ timeout: 10000 });
+  if (full) await b.screenshot({ path: join(OUT, 'lobby-games.png') });
   await openFromLobby(b, 'open', 'Ann & —');
   await waitText(b, '#seat', 'Bēla · Crimson');
   await waitMatch(a, '#time', /^0:0[1-9]$/);

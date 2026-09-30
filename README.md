@@ -33,8 +33,13 @@ Run `npm start` and open http://127.0.0.1:2567.
   around the middle, out of reach of the lair and of each other. A game's address (`?game=…`) is also the link to send
   someone. Players who join take the seats in order (Blue, Crimson, Green,
   Gold, Teal, Orange, Rose, Silver); once they are full, visitors watch.
-  **Release seat** frees a seat for a spectator to take. A game is in
-  one of three modes:
+  **Release seat** frees a seat for a spectator to take.
+- **Game names**: a new game gets a name from a list that sets its mood
+  (Pit party, Last stand, Ogre ballet, …), which the lobby and the status
+  panel show. Any player still in it may rename it with **✎** next to the
+  name, even while the game waits for the others: up to 24 letters, digits
+  and spaces, by the same rules as a player's name.
+- A game is in one of three modes:
   - **Cooperation** (the default): all the players are one team against the
     Dark Lord, whose lair (36000 hit points) stands in the middle of the map
     and strikes the nearest enemy within 4 cells by itself, 40 hit points a
@@ -341,7 +346,7 @@ http://127.0.0.1:2567;` with the same headers.
 
 ```js
 {
-  version: 7, mode: 'coop', seed: 1337, tick: 420, rng: 123456789, nextId: 58,
+  version: 11, mode: 'coop', name: 'Pit party', seed: 1337, tick: 420, rng: 123456789, nextId: 58,
   players: [                                                // by owner number
     { id: 0, side: 0, team: 0, stone: 140, metal: 10, food: 620, hunger: 0 },
     { id: 1, side: 1, team: 0, stone: 200, metal: 0, food: 300, hunger: 5 },
@@ -387,7 +392,8 @@ http://127.0.0.1:2567;` with the same headers.
   - `{ type: 'upgrade', building }`: paid now, then worked on by its crew;
   - `{ type: 'abort', building }`: gives up a building still going up;
   - `{ type: 'move', building, q, r }`: a wagon or band;
-  - `{ type: 'target', building, target }`: an enemy building or band to go for (`''` clears it).
+  - `{ type: 'target', building, target }`: an enemy building or band to go for (`''` clears it);
+  - `{ type: 'rename', name }`: the game's name (the room takes this one while the game is paused too).
 - `advance(board, state)` runs one tick: every second a round of fighting,
   collapses, every minute food and a meal, empty bands breaking up, mending,
   raising and upgrading, work in castles, pits and farms, wagons and bands,
@@ -437,7 +443,7 @@ HTTP API:
 | `GET /api/challenge` | A sum to answer when signing in: `{ id, question }`. Each one answers once and lasts 10 minutes. |
 | `POST /api/players` | Signs in (or renames): `{ token, name, challenge, answer }` gives `{ pid, name }`. `400` for a bad token or name, `403` for a wrong answer. |
 | `POST /api/games` | Starts a game with a random map: `{ token, mode?, players? }` of a signed-in player (`mode` `coop`, `easy` or `ffa`, `players` 1 to 8; by default a cooperation game for one) gives `201 { id }`; `401` if not signed in, `400` for a bad mode or number. |
-| `GET /api/games` | The 50 most recently active games, for the lobby, with their mode and who holds each seat: `{ pid, name }` or `null`. |
+| `GET /api/games` | The 50 most recently active games, for the lobby, with their name, mode and who holds each seat: `{ pid, name }` or `null`. |
 | `GET /api/games/:id` | One game: its seed, latest snapshot and seats. |
 | `GET /api/games/:id/commands` | Its command log, with each command's tick. |
 | `GET /api/games/:id/seats` | Who holds each seat: `{ pid, name }`, or `null` for a free one. |
