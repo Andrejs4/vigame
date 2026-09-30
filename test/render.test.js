@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { pipsOf } from '../src/client/render.js';
+import { heading, pipsOf } from '../src/client/render.js';
 import { BUILDING_TYPES } from '../src/core/rules.js';
 
 test('a building shows a pip for each upgrade, a pit for each grade of depth, a new one none', () => {
@@ -12,4 +12,12 @@ test('a building shows a pip for each upgrade, a pit for each grade of depth, a 
   assert.deepEqual([pipsOf({ type: 'farm', grade: 1 }), pipsOf({ type: 'band', grade: 1 }), pipsOf({ type: 'lair', grade: 1 })], [0, 0, 0]);
   const { perDepth = 1 } = BUILDING_TYPES.pit;
   assert.deepEqual([0, perDepth - 1, perDepth, 2 * perDepth, 3 * perDepth].map((dug) => pipsOf({ type: 'pit', grade: 1, dug })), [0, 0, 1, 2, 3]);
+});
+
+test('a moving building heads left or right by its next cell, and nowhere while it stands', () => {
+  const going = (/** @type {string} */ type, /** @type {Array<[number, number]>} */ path) => heading({ type, q: 0, r: 0, path });
+  // The six neighbours: east, west, then north-east, north-west, south-east, south-west.
+  assert.deepEqual([[1, 0], [-1, 0], [1, -1], [0, -1], [0, 1], [-1, 1]].map((c) => going('ghoul', [/** @type {[number, number]} */ (c)])), [1, -1, 1, -1, 1, -1]);
+  assert.equal(going('wagon', []), 0, 'standing');
+  assert.equal(going('castle', [[-1, 0]]), 0, 'never moves');
 });

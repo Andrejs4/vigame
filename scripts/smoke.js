@@ -627,12 +627,20 @@ async function threeBrowsers(browser, url, { full, label }) {
     const v = /** @type {any} */ (window).__vigame;
     const w = v.view.buildings[id];
     const d = (t) => (Math.abs(t.q - w.q) + Math.abs(t.r - w.r) + Math.abs(t.q + t.r - w.q - w.r)) / 2;
+    // Somewhere to its left, to see its picture turn that way.
     return v.board.list
-      .filter((t) => t.passable && !v.occ.buildingAt.has(`${t.q},${t.r}`) && d(t) === 2)
+      .filter((t) => t.passable && !v.occ.buildingAt.has(`${t.q},${t.r}`) && d(t) === 2 && t.q + t.r / 2 < w.q + w.r / 2)
       .map((t) => [t.q, t.r]);
   }, wagon);
   const dest = await openCell(b, goal);
   await clickHex(b, dest.q, dest.r);
+  // Going left, its picture is mirrored, on the other side's page too.
+  await a.waitForFunction((id) => {
+    const v = /** @type {any} */ (window).__vigame;
+    const w = v.view.buildings[id];
+    const next = w?.path?.[0];
+    return Boolean(next) && next[0] - w.q + (next[1] - w.r) / 2 < 0 && v.facingLeft.includes(id);
+  }, wagon.id, { timeout: 6000 });
   await a.waitForFunction(({ id, q, r }) => {
     const w = /** @type {any} */ (window).__vigame.view.buildings[id];
     return w.q !== q || w.r !== r;

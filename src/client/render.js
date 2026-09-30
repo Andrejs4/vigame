@@ -124,6 +124,27 @@ export function pipsOf(b) {
   return BUILDING_TYPES[b.type].depth !== undefined ? depthOf(b) : b.grade - 1;
 }
 
+/**
+ * The cell a building is rolling to, if it moves and is on its way.
+ * @param {Pick<Building, 'type' | 'path'>} b
+ */
+function rollingTo(b) {
+  return BUILDING_TYPES[b.type]?.speed && b.path?.length ? b.path[0] : undefined;
+}
+
+/**
+ * Which way a moving building goes across the screen: -1 left, 1 right, 0
+ * while it stands. On these hexes every step goes one way or the other.
+ * @param {Pick<Building, 'type' | 'q' | 'r' | 'path'>} b
+ */
+export function heading(b) {
+  const next = rollingTo(b);
+  return next ? Math.sign(next[0] - b.q + (next[1] - b.r) / 2) : 0;
+}
+
+/** Past this many, the facings of buildings that are gone are forgotten. */
+const FACING_KEEP = 64;
+
 /** A unit's token, in hexes; narrower than UNIT_TOKEN_MIN pixels, a dot. */
 const UNIT_TOKEN = 0.42;
 const UNIT_TOKEN_MIN = 11;
@@ -146,6 +167,9 @@ export class BoardRenderer {
     this.tokens = tokens;
     this.cornerOffsets = corners(board.hexSize);
     this.showCoords = false;
+    /** Moving buildings facing left, the way they last went; the pictures face right. */
+    /** @type {Set<string>} */
+    this.facingLeft = new Set();
   }
 
   /**
@@ -182,14 +206,19 @@ export class BoardRenderer {
 
   /**
    * Where a building is drawn: on its anchor cell, or between cells while
-   * it rolls, toward `rolling`.
+   * it rolls, toward `rolling`; and whether its token is mirrored, facing
+   * left, as it last went.
    * @param {import('./camera.js').Camera} camera
    * @param {Building} b
    * @param {number} clock
    */
   place(camera, b, clock) {
-    const rolling = BUILDING_TYPES[b.type]?.speed && b.path?.length ? b.path[0] : undefined;
-    return { centre: this.between(camera, b.q, b.r, rolling, progress(b, clock)), rolling };
+    const rolling = rollingTo(b);
+    const way = heading(b);
+    if (way < 0) this.facingLeft.add(b.id);
+    else if (way > 0) this.facingLeft.delete(b.id);
+    const mirror = this.facingLeft.has(b.id);
+    return { centre: this.between(camera, b.q, b.r, rolling, progress(b, clock)), rolling, mirror };
   }
 
   /**
@@ -308,7 +337,7 @@ export class BoardRenderer {
         const side = sideOf(view, b.owner);
         if (!type || !side) continue;
         const isSelected = b.id === selected;
-        const { centre, rolling } = this.place(camera, b, clock);
+        const { centre, rolling, mirror } = this.place(camera, b, clock);
         if (!onScreen(centre)) continue;
 
         // A building going up is pale, with a dashed outline. One just hit
@@ -350,7 +379,7 @@ export class BoardRenderer {
         // pictures arrive), its pips under it, and how many are inside.
         const across = size * zoom * tokenHexes(type, Boolean(rolling));
         const built = rising ? Math.min(1, (b.raised ?? 0) / Math.max(1, raiseWork(b))) : 1;
-        const drawn = this.tokens?.draw(ctx, b.type, side.color, centre.x, centre.y, across, 0.3 + 0.7 * built);
+        const drawn = this.tokens?.draw(ctx, b.type, side.color, centre.x, centre.y, across, 0.3 + 0.7 * built, mirror);
         ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
@@ -390,6 +419,11 @@ export class BoardRenderer {
             });
           }
         }
+      }
+      // Forget the facings of buildings long gone; a gone one's still shows
+      // as it falls.
+      if (this.facingLeft.size > FACING_KEEP) {
+        for (const id of this.facingLeft) if (!view.buildings[id]) this.facingLeft.delete(id);
       }
     }
 
@@ -505,7 +539,7 @@ export class BoardRenderer {
     const ctx = this.ctx;
     const zoom = camera.zoom;
     const size = this.board.hexSize;
-    const { centre, rolling } = this.place(camera, b, e.clock);
+    const { centre, rolling, mirror } = this.place(camera, b, e.clock);
     const cells = rolling ? [centre] : footprint(b.type, b.q, b.r).map((c) => this.cellAt(camera, c.q, c.r));
     const spread = size * zoom * (type.size === 7 ? 2.4 : 0.9);
     ctx.save();
@@ -520,7 +554,7 @@ export class BoardRenderer {
     }
     // Its token sinks and shrinks as it fades (the alpha is already set).
     const across = size * zoom * tokenHexes(type, Boolean(rolling));
-    this.tokens?.draw(ctx, b.type, side.color, centre.x, centre.y + size * zoom * 0.2 * t, across * (1 - 0.3 * t));
+    this.tokens?.draw(ctx, b.type, side.color, centre.x, centre.y + size * zoom * 0.2 * t, across * (1 - 0.3 * t), 1, mirror);
 
     const ring = spread * (0.7 + 0.8 * easeOut(t));
     ctx.globalAlpha = 0.6 * (1 - t);

@@ -1003,6 +1003,7 @@ export async function startGame(net, me) {
       get highlights() { return [...highlights]; },
       get peers() { return peers; },
       get minimap() { return minimap; },
+      get facingLeft() { return [...renderer.facingLeft]; },
       effects,
       tokens,
       sounds,

@@ -209,9 +209,10 @@ Run `npm start` and open http://127.0.0.1:2567.
 - Buildings and units are round tokens in their side's colour, with a
   picture on each (from [game-icons.net](https://game-icons.net), CC BY
   3.0; see `src/client/art/CREDITS.md`). A building going up shows faint,
-  and firms up as it rises. Pips under a building count its upgrades (a
-  pit's: how deep it is dug); a new one has none. Zoomed far out, units are
-  dots.
+  and firms up as it rises. A moving one faces the way it last went, left
+  or right (the pictures face right, and turn over going left). Pips under
+  a building count its upgrades (a pit's: how deep it is dug); a new one
+  has none. Zoomed far out, units are dots.
 - A building shows its hit points in a bar over it while it is hurt or
   selected. A hit flashes it red and floats up the points lost; a building
   that falls crumbles, and a unit that dies leaves a cross (with how many,
