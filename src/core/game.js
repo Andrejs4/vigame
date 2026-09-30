@@ -40,7 +40,7 @@ import { distance, key, neighbors, parseKey } from './hex.js';
 import { tileAt } from './board.js';
 import { unitName } from './names.js';
 import {
-  BUILDING_TYPES, BUILD_RANGE, DARK_LORD, HORDE_MAX, HORDE_PERIOD, HORDE_START, POINTS, RAIDERS, SALVAGE, RAID_CHANCE, RAID_CLEAR, RAID_MAX, RAID_PERIOD, RAID_ROAM, START_METAL, DEFAULT_MODE, MAX_PLAYERS, MODES, COMBAT_PERIOD, DEPART_GAP, FOOD_PER_UNIT, KILL_EVEN, KILL_MAX, KILL_STEP, KILL_XP, MELEE_DAMAGE, MELEE_RANGE,
+  BUILDING_TYPES, BUILD_RANGE, DARK_LORD, LORD_HP, HORDE_MAX, HORDE_PERIOD, HORDE_START, POINTS, RAIDERS, SALVAGE, RAID_CHANCE, RAID_CLEAR, RAID_MAX, RAID_PERIOD, RAID_ROAM, START_METAL, DEFAULT_MODE, MAX_PLAYERS, MODES, COMBAT_PERIOD, DEPART_GAP, FOOD_PER_UNIT, KILL_EVEN, KILL_MAX, KILL_STEP, KILL_XP, MELEE_DAMAGE, MELEE_RANGE,
   RANGED_DAMAGE, RANGED_RANGE, REPAIR_WORK, FOOD_PERIOD, FOOD_STORE, HUNGER_PULL, LEVEL_GROWTH,
   LEVEL_RATE, LEVEL_XP, MAX_HUNGER, MAX_LEVEL, SIDES, SKILLS, SKILL_RATE, SKILL_XP, START_STONE, START_UNITS, STARVE_CHANCE,
   UNIT_LIMIT, WAGON_PATIENCE, WALK_TICKS, WORK_BASE,
@@ -187,7 +187,7 @@ export function newGame(board, { mode = DEFAULT_MODE } = {}) {
     buildings: {},
     units: {},
   };
-  const coop = mode === 'coop';
+  const coop = hasLord(mode);
   // The board's last site is the lair's; the others are the players'.
   const players = board.starts.length - 1;
   board.starts.slice(0, coop ? players + 1 : players).forEach((start, owner) => {
@@ -368,16 +368,27 @@ export function lordScale(state) {
 }
 
 /**
+ * Whether a game in this mode has the Dark Lord, against the players as one
+ * team.
+ * @param {string} mode
+ */
+export function hasLord(mode) {
+  return Object.hasOwn(LORD_HP, mode);
+}
+
+/**
  * A building's hit points when unharmed: its type's for each grade, and a
  * pit's `hpPerDepth` for each grade of depth it is dug; half while it is
- * going up; and more for the Dark Lord's with more players (`lordScale`).
- * @param {Pick<GameState, 'players'>} state
+ * going up; and for the Dark Lord's, more with more players (`lordScale`),
+ * and less in Easy Lord (`LORD_HP`).
+ * @param {Pick<GameState, 'players' | 'mode'>} state
  * @param {Building} b
  */
 export function maxHp(state, b) {
   const type = BUILDING_TYPES[b.type];
   const deep = (type.hpPerDepth ?? 0) * depthOf(b);
-  const full = Math.round((type.hp * b.grade + deep) * (type.scales ? lordScale(state) : 1));
+  const lord = type.scales ? lordScale(state) * (LORD_HP[state.mode] ?? 1) : 1;
+  const full = Math.round((type.hp * b.grade + deep) * lord);
   return isRising(b) ? Math.ceil(full / 2) : full;
 }
 

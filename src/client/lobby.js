@@ -4,6 +4,7 @@
  * an invitation link has.
  */
 
+import { hasLord } from '../core/game.js';
 import { MODES, SIDES, TICKS_PER_SECOND } from '../core/rules.js';
 import { getJson, post, reason } from './api.js';
 import { showLogin } from './login.js';
@@ -34,7 +35,7 @@ function gameTime(tick) {
  */
 function result(game) {
   if (game.winner === null) return 'over, nobody won';
-  if (game.mode === 'coop') return game.winner === 0 ? 'won' : 'the Dark Lord won';
+  if (hasLord(game.mode)) return game.winner === 0 ? 'won' : 'the Dark Lord won';
   return `${SIDES[game.winner]?.name ?? '?'} won`;
 }
 
@@ -49,7 +50,7 @@ function row(game, action) {
   const who = document.createElement('span');
   who.className = 'who';
   // Teammates with "&", rivals with "vs".
-  const between = game.mode === 'coop' ? ' & ' : ' vs ';
+  const between = hasLord(game.mode) ? ' & ' : ' vs ';
   game.seats.forEach((holder, i) => {
     if (i) who.append(between);
     const name = document.createElement('span');

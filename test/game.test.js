@@ -49,7 +49,7 @@ test('games seat 1 to 8 players, on maps that grow with them', () => {
   for (const players of [1, 8]) {
     const board = createBoard({ ...BOARD_OPTIONS, seed: 9, players });
     assert.equal(board.starts.length, players + 1, 'a site per player, and the lair\'s');
-    for (const mode of players > 1 ? ['coop', 'ffa'] : ['coop']) {
+    for (const mode of players > 1 ? ['coop', 'easy', 'ffa'] : ['coop', 'easy']) {
       const state = newGame(board, { mode });
       assert.deepEqual(checkState(board, state), [], `${players} players, ${mode}`);
       assert.equal(seatsOf(state), players);
@@ -604,6 +604,27 @@ test('the Dark Lord grows with the players: four times the hit points and twice 
   assert.deepEqual(horde.map((b) => [b.type, b.hp]), [['ghoul', 4 * BUILDING_TYPES.ghoul.hp], ['ghoul', 4 * BUILDING_TYPES.ghoul.hp]]);
 });
 
+test('in Easy Lord the Dark Lord\'s lair and horde have half the hit points, and his waves are as big', () => {
+  const map = createBoard({ ...BOARD_OPTIONS, seed: 3 });
+  const easy = newGame(map, { mode: 'easy' });
+  assert.deepEqual(easy.players.map((p) => p.team), [0, 0, 1, -1], 'the players together against him, as in cooperation');
+  assert.equal(Object.values(easy.buildings).find((b) => b.type === 'lair')?.hp, BUILDING_TYPES.lair.hp / 2);
+
+  // Three waves, from a lair far from the one castle, which has nobody to strike back.
+  const horde = (/** @type {string} */ mode) => {
+    const board = openBoard(9);
+    const game = stateWith([{ id: 'b1', type: 'castle', q: -8, r: 0 }, { id: 'b2', owner: 1, type: 'lair', q: 3, r: 0 }]);
+    game.mode = mode;
+    game.players[1].side = DARK_LORD;
+    game.buildings.b2.hp = maxHp(game, game.buildings.b2);
+    run(board, game, HORDE_START + 2 * HORDE_PERIOD);
+    return Object.values(game.buildings).filter((b) => BUILDING_TYPES[b.type].hunts).map((b) => [b.type, b.hp]);
+  };
+  const usual = horde('coop');
+  assert.ok(usual.some(([type]) => type === 'ogre'), 'ghouls and an ogre by then');
+  assert.deepEqual(horde('easy'), usual.map(([type, hp]) => [type, /** @type {number} */ (hp) / 2]));
+});
+
 test('the horde goes for the nearest farm, turns on a building that strikes it, and on castles once no farm is left', () => {
   const board = openBoard(7);
   const sites = [
@@ -961,6 +982,7 @@ test('the same commands at the same ticks give the same game, saved and reloaded
   const straight = randomGame(11, 1000);
   const reloaded = randomGame(11, 1000, () => {});
   assert.deepEqual(randomGame(11, 1000, () => {}, 'coop').state, randomGame(11, 1000, undefined, 'coop').state);
+  assert.deepEqual(randomGame(11, 1000, () => {}, 'easy').state, randomGame(11, 1000, undefined, 'easy').state);
   assert.deepEqual(reloaded.state, straight.state);
   assert.notDeepEqual(randomGame(12, 1000).state, straight.state);
 });

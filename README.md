@@ -32,7 +32,7 @@ Run `npm start` and open http://127.0.0.1:2567.
   someone. Players who join take the seats in order (Blue, Crimson, Green,
   Gold, Teal, Orange, Rose, Silver); once they are full, visitors watch.
   **Release seat** frees a seat for a spectator to take. A game is in
-  either mode:
+  one of three modes:
   - **Cooperation** (the default): all the players are one team against the
     Dark Lord, whose lair (36000 hit points) stands in the middle of the map
     and strikes the nearest enemy within 4 cells by itself, 40 hit points a
@@ -51,6 +51,10 @@ Run `npm start` and open http://127.0.0.1:2567.
     does nothing with yet. Allies never strike each
     other and pass through each other's buildings. The players win when the lair falls, and lose when all
     their castles have. One player alone is a game too.
+  - **Easy Lord**: cooperation against a weaker Dark Lord: his lair and his
+    horde have half the hit points (the lair 18000, ghouls 600, ogres 3000,
+    before growing with the players). Everything else is as in cooperation;
+    the raiders are their own side, and as strong as ever.
   - **Free for all** (two players or more): each against the others; the
     middle of the map is left empty.
 - **The game clock** runs only while every player is here. (`npm run dev`
@@ -428,7 +432,7 @@ HTTP API:
 | `POST /api/me` | Who a token belongs to: `{ token }` gives `{ pid, name }`, or `null` if it hasn't signed in. |
 | `GET /api/challenge` | A sum to answer when signing in: `{ id, question }`. Each one answers once and lasts 10 minutes. |
 | `POST /api/players` | Signs in (or renames): `{ token, name, challenge, answer }` gives `{ pid, name }`. `400` for a bad token or name, `403` for a wrong answer. |
-| `POST /api/games` | Starts a game with a random map: `{ token, mode?, players? }` of a signed-in player (`mode` `coop` or `ffa`, `players` 1 to 8; by default a cooperation game for two) gives `201 { id }`; `401` if not signed in, `400` for a bad mode or number. |
+| `POST /api/games` | Starts a game with a random map: `{ token, mode?, players? }` of a signed-in player (`mode` `coop`, `easy` or `ffa`, `players` 1 to 8; by default a cooperation game for one) gives `201 { id }`; `401` if not signed in, `400` for a bad mode or number. |
 | `GET /api/games` | The 50 most recently active games, for the lobby, with their mode and who holds each seat: `{ pid, name }` or `null`. |
 | `GET /api/games/:id` | One game: its seed, latest snapshot and seats. |
 | `GET /api/games/:id/commands` | Its command log, with each command's tick. |
