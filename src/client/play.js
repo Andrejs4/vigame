@@ -7,7 +7,8 @@
 import { axialToPixel, bounds, key, pixelToAxial } from '../core/hex.js';
 import { BOARD_OPTIONS, TERRAIN, createBoard, tileAt } from '../core/board.js';
 import {
-  capacityOf, castleOf, crewOf, depthOf, foodStore, fullMeal, inBuildRange, isDugOut, isRising, maxHp, occupancy, pointsOf, raiseWork, seatsOf, sideOf, upgradeCost,
+  buildCost, capacityOf, castleOf, crewOf, depthOf, foodStore, fullMeal, inBuildRange, isDugOut, isRising, maxHp, occupancy, pointsOf, purseOf,
+  raiseWork, seatsOf, sharesStock, shortOf, sideOf, upgradeCost,
 } from '../core/game.js';
 import { GAME_NAME_MAX, cleanGameName } from '../core/player.js';
 import { BUILDING_TYPES, POINTS, SKILLS, TICKS_PER_SECOND, UNIT_LIMIT } from '../core/rules.js';
@@ -400,7 +401,14 @@ export async function startGame(net, me) {
     if (hud.units) {
       hud.units.textContent = seat !== null && occ ? `${occ.unitCount[seat] ?? 0} / ${UNIT_LIMIT}` : '—';
     }
-    const stock = seat !== null ? view?.players[seat] : null;
+    // The stock this side lives off: its own, or its team's when they share.
+    const stock = seat !== null && view ? purseOf(view, seat) : null;
+    const team = Boolean(view && sharesStock(view.mode));
+    for (const [id, label] of [['stone-label', 'Stone'], ['metal-label', 'Dark metal'], ['food-label', 'Food']]) {
+      const dt = document.getElementById(id);
+      const text = team ? `Team ${label.toLowerCase()}` : label;
+      if (dt && dt.textContent !== text) dt.textContent = text;
+    }
     if (hud.stone) {
       hud.stone.textContent = stock ? String(stock.stone) : '—';
       hud.stone.classList.toggle('marked', (stock?.stone ?? 0) >= PLENTY.stone);
@@ -689,6 +697,18 @@ export async function startGame(net, me) {
       const type = BUILDING_TYPES[kind];
       /** @type {string[]} */
       let units = [];
+      // Short of its price now (a teammate may have spent it), say so
+      // before a crew is chosen for nothing.
+      const seat = net.seat();
+      const short = seat !== null ? shortOf(view, seat, buildCost(kind)) : null;
+      if (short) {
+        flash(`Can't build a ${type.name.toLowerCase()}: ${short}.`);
+        sounds.play('no');
+        placing = null;
+        refreshHighlights();
+        updateHud();
+        return;
+      }
       // Only for a cell it can go on: anywhere else, the server says why not.
       if (highlights.has(key(at.q, at.r))) {
         const chosen = await chooseCrew({
@@ -905,6 +925,14 @@ export async function startGame(net, me) {
     button.title = `${name} (${name[0]}): ${cost ? `${cost} stone` : metal ? `${metal} dark metal, near your castle` : 'free'}`;
     button.addEventListener('click', () => {
       const kind = button.dataset.kind ?? null;
+      // Short of its price, say so now, not after a cell and a crew are chosen.
+      const seat = net.seat();
+      const short = kind && placing !== kind && view && seat !== null ? shortOf(view, seat, buildCost(kind)) : null;
+      if (short) {
+        flash(`Can't build a ${name.toLowerCase()}: ${short}.`);
+        sounds.play('no');
+        return;
+      }
       placing = placing === kind ? null : kind;
       refreshHighlights();
       updateHud();

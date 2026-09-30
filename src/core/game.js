@@ -41,7 +41,7 @@ import { tileAt } from './board.js';
 import { gameName, unitName } from './names.js';
 import { GAME_NAME_MAX, cleanGameName } from './player.js';
 import {
-  BUILDING_TYPES, BUILD_RANGE, DARK_LORD, LORD_HP, HORDE_MAX, HORDE_PERIOD, HORDE_START, POINTS, RAIDERS, SALVAGE, RAID_CHANCE, RAID_CLEAR, RAID_MAX, RAID_PERIOD, RAID_ROAM, START_METAL, DEFAULT_MODE, MAX_PLAYERS, MODES, COMBAT_PERIOD, DEPART_GAP, FOOD_PER_UNIT, KILL_EVEN, KILL_MAX, KILL_STEP, KILL_XP, MELEE_DAMAGE, MELEE_RANGE,
+  BUILDING_TYPES, BUILD_RANGE, DARK_LORD, LORD_HP, SHARED_STOCK, HORDE_MAX, HORDE_PERIOD, HORDE_START, POINTS, RAIDERS, SALVAGE, RAID_CHANCE, RAID_CLEAR, RAID_MAX, RAID_PERIOD, RAID_ROAM, START_METAL, DEFAULT_MODE, MAX_PLAYERS, MODES, COMBAT_PERIOD, DEPART_GAP, FOOD_PER_UNIT, KILL_EVEN, KILL_MAX, KILL_STEP, KILL_XP, MELEE_DAMAGE, MELEE_RANGE,
   RANGED_DAMAGE, RANGED_RANGE, REPAIR_WORK, FOOD_PERIOD, FOOD_STORE, HUNGER_PULL, LEVEL_GROWTH,
   LEVEL_RATE, LEVEL_XP, MAX_HUNGER, MAX_LEVEL, SIDES, SKILLS, SKILL_RATE, SKILL_XP, START_STONE, START_UNITS, STARVE_CHANCE,
   UNIT_LIMIT, WAGON_PATIENCE, WALK_TICKS, WORK_BASE,
@@ -212,6 +212,17 @@ export function newGame(board, { mode = DEFAULT_MODE } = {}) {
   });
   // The raiders: a side of their own, against everyone, with nothing yet.
   state.players.push({ id: state.players.length, side: RAIDERS, team: -1, stone: 0, metal: 0, food: 0, hunger: 0, tally: newTally() });
+  // Sharing a stock, a team starts with what each of its sides would have had, together.
+  for (const p of state.players) {
+    const purse = purseOf(state, p.id);
+    if (purse === p) continue;
+    purse.stone += p.stone;
+    purse.metal += p.metal;
+    purse.food += p.food;
+    p.stone = 0;
+    p.metal = 0;
+    p.food = 0;
+  }
   return state;
 }
 
@@ -424,13 +435,75 @@ export function depthOf(b) {
 }
 
 /**
- * The most food a side can keep: FOOD_STORE meals for its castle's full house.
- * @param {Pick<GameState, 'buildings'>} state
+ * Whether a game in this mode keeps one stock for each team.
+ * @param {string} mode
+ */
+export function sharesStock(mode) {
+  return SHARED_STOCK.includes(mode);
+}
+
+/**
+ * The side whose record holds this side's stone, dark metal, food and
+ * hunger: its own, or in a game that shares stock its team's first side's.
+ * The others of a team that shares keep none.
+ * @template {Pick<Player, 'id' | 'team'>} P
+ * @param {{ mode: string, players: P[] }} state
+ * @param {number} owner
+ * @returns {P}
+ */
+export function purseOf(state, owner) {
+  const side = state.players[owner];
+  return sharesStock(state.mode) ? state.players.find((p) => p.team === side.team) ?? side : side;
+}
+
+/**
+ * The sides that live off this side's stock: itself, or its whole team.
+ * @param {Pick<GameState, 'mode' | 'players'>} state
+ * @param {number} owner
+ * @returns {number[]}
+ */
+function sharersOf(state, owner) {
+  const purse = purseOf(state, owner);
+  return state.players.filter((p) => purseOf(state, p.id) === purse).map((p) => p.id);
+}
+
+/**
+ * Why a side can't pay a price now, or null if it can, from the stock it
+ * lives off. The page asks too, before a player picks a cell and a crew.
+ * @param {Pick<GameState, 'mode' | 'players'>} state
+ * @param {number} owner
+ * @param {{ stone: number, metal: number }} price
+ * @returns {string | null}
+ */
+export function shortOf(state, owner, price) {
+  const stock = purseOf(state, owner);
+  if (stock.stone < price.stone) return 'not enough stone';
+  if (stock.metal < price.metal) return 'not enough dark metal';
+  return null;
+}
+
+/**
+ * What a new building of this kind costs.
+ * @param {string} kind
+ */
+export function buildCost(kind) {
+  const { cost, metal = 0 } = BUILDING_TYPES[kind];
+  return { stone: cost, metal };
+}
+
+/**
+ * The most food a side can keep: FOOD_STORE meals for its castle's full
+ * house, or its team's castles' in a game that shares stock.
+ * @param {Pick<GameState, 'buildings' | 'mode' | 'players'>} state
  * @param {number} owner
  */
 export function foodStore(state, owner) {
-  const castle = castleOf(state, owner);
-  return castle ? FOOD_STORE * FOOD_PER_UNIT * capacityOf(castle) : 0;
+  let room = 0;
+  for (const id of sharersOf(state, owner)) {
+    const castle = castleOf(state, id);
+    if (castle) room += FOOD_STORE * FOOD_PER_UNIT * capacityOf(castle);
+  }
+  return room;
 }
 
 /**
@@ -450,15 +523,18 @@ export function harvestOf(state, owner) {
 }
 
 /**
- * Whether a side's store, with the next harvest, gives every unit of it a
- * full meal. Food its crews grow before then may still make up the rest.
- * @param {Pick<GameState, 'buildings' | 'units' | 'players'>} state
+ * Whether a side's store, with the next harvest, gives every unit that eats
+ * from it (its own, or its team's in a game that shares stock) a full meal.
+ * Food crews grow before then may still make up the rest.
+ * @param {Pick<GameState, 'buildings' | 'units' | 'players' | 'mode'>} state
  * @param {number} owner
  */
 export function fullMeal(state, owner) {
-  const units = Object.values(state.units).filter((u) => u.owner === owner).length;
-  const { food } = state.players[owner];
-  const stored = Math.max(food, Math.min(food + harvestOf(state, owner), foodStore(state, owner)));
+  const sharers = sharersOf(state, owner);
+  const units = Object.values(state.units).filter((u) => sharers.includes(u.owner)).length;
+  const { food } = purseOf(state, owner);
+  const coming = sharers.reduce((sum, id) => sum + harvestOf(state, id), 0);
+  const stored = Math.max(food, Math.min(food + coming, foodStore(state, owner)));
   return stored >= units * FOOD_PER_UNIT;
 }
 
@@ -917,9 +993,9 @@ function build(board, state, occ, player, cmd) {
   const ids = unitList(state, player, cmd.units ?? []);
   if (typeof ids === 'string') return refuse(ids);
   if (type.band && !ids.length) return refuse('a band needs units');
-  const stock = state.players[player];
-  if (stock.stone < type.cost) return refuse('not enough stone');
-  if (stock.metal < (type.metal ?? 0)) return refuse('not enough dark metal');
+  const price = buildCost(kind);
+  const short = shortOf(state, player, price);
+  if (short) return refuse(short);
 
   /** @type {Building} */
   const b = { id: `b${state.nextId}`, owner: player, type: kind, grade: 1, q: at.q, r: at.r };
@@ -934,8 +1010,9 @@ function build(board, state, occ, player, cmd) {
   if (!staffed.ok) return staffed;
   state.buildings[b.id] = b;
   state.nextId += 1;
-  stock.stone -= type.cost;
-  stock.metal -= type.metal ?? 0;
+  const stock = purseOf(state, player);
+  stock.stone -= price.stone;
+  stock.metal -= price.metal;
   return { ok: true };
 }
 
@@ -992,10 +1069,10 @@ function upgrade(state, player, cmd) {
   if (isRising(b)) return refuse('still going up');
   if (b.upgrading !== undefined) return refuse('already upgrading');
   if (b.grade >= type.grades) return refuse('fully upgraded');
-  const stock = state.players[player];
   const cost = upgradeCost(b);
-  if (stock.stone < cost.stone) return refuse('not enough stone');
-  if (stock.metal < cost.metal) return refuse('not enough dark metal');
+  const short = shortOf(state, player, cost);
+  if (short) return refuse(short);
+  const stock = purseOf(state, player);
   stock.stone -= cost.stone;
   stock.metal -= cost.metal;
   b.upgrading = 0;
@@ -1070,7 +1147,7 @@ export function advance(board, state) {
   if (state.tick >= HORDE_START && (state.tick - HORDE_START) % HORDE_PERIOD === 0) summon(board, state);
   if (state.tick % FOOD_PERIOD === 0) {
     harvest(state);
-    for (const p of state.players) eat(state, p);
+    for (const p of state.players) if (purseOf(state, p.id) === p) eat(state, p);
   }
   for (const b of Object.values(state.buildings)) {
     if (BUILDING_TYPES[b.type].band && !crewOf(state, b.id).length) delete state.buildings[b.id];
@@ -1225,7 +1302,7 @@ function fight(board, state, occ) {
       if (from !== undefined && from !== hit.target && BUILDING_TYPES[hit.type].hunts) turnTo(hit, from);
       if (hit.hp > 0) return false;
       const { loot, metal = 0, life } = BUILDING_TYPES[hit.type];
-      state.players[owner].metal += loot ?? Math.floor(metal * SALVAGE);
+      purseOf(state, owner).metal += loot ?? Math.floor(metal * SALVAGE);
       if (life) tally.castles += 1;
       else tally.felled += 1;
       return true;
@@ -1399,7 +1476,7 @@ function harvest(state) {
  * @param {number} food
  */
 function addFood(state, owner, food) {
-  const stock = state.players[owner];
+  const stock = purseOf(state, owner);
   stock.food = Math.max(stock.food, Math.min(stock.food + food, foodStore(state, owner)));
 }
 
@@ -1407,12 +1484,14 @@ function addFood(state, owner, food) {
  * A side's meal: each unit eats FOOD_PER_UNIT, or an even share of what
  * there is, and what doesn't share evenly waits for the next meal. The
  * side's hunger moves toward how short the share fell (see HUNGER_PULL). At
- * MAX_HUNGER, units may starve, the weak more likely than the seasoned.
+ * MAX_HUNGER, units may starve, the weak more likely than the seasoned. In a
+ * game that shares stock, the side holding it feeds its whole team.
  * @param {GameState} state
- * @param {Player} p
+ * @param {Player} p A side holding its stock.
  */
 function eat(state, p) {
-  const units = Object.values(state.units).filter((u) => u.owner === p.id);
+  const sharers = sharersOf(state, p.id);
+  const units = Object.values(state.units).filter((u) => sharers.includes(u.owner));
   if (!units.length) return;
   const share = Math.min(FOOD_PER_UNIT, Math.floor(p.food / units.length));
   p.food -= share * units.length;
@@ -1602,7 +1681,7 @@ function work(board, state, occ) {
       stock.tally.food += 1;
     } else {
       const depth = depthOf(b);
-      stock.stone += 1;
+      purseOf(state, b.owner).stone += 1;
       stock.tally.stone += 1;
       b.dug = /** @type {number} */ (b.dug) + 1;
       // A grade deeper is sturdier, as an upgrade is.
@@ -1810,6 +1889,7 @@ export function checkState(board, raw) {
     if (!Number.isInteger(p.side) || !SIDES[p.side]) fail(`side ${i}: bad palette`);
     if (!isCount(p.stone, Infinity) || !isCount(p.food, Infinity) || !isCount(p.metal, Infinity)) fail(`side ${i}: bad stock`);
     if (!isCount(p.hunger, MAX_HUNGER + 1)) fail(`side ${i}: bad hunger`);
+    if (purseOf(state, i) !== p && (p.stone || p.metal || p.food || p.hunger)) fail(`side ${i}: keeps stock apart from its team's`);
     const tally = /** @type {Record<string, unknown>} */ (p.tally);
     if (!isRecord(tally) || Object.keys(tally).sort().join() !== Object.keys(POINTS).sort().join()
       || !Object.values(tally).every((n) => isCount(n, Infinity)) || Number(tally.won) > 1) fail(`side ${i}: bad tally`);

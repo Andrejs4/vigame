@@ -569,6 +569,11 @@ async function threeBrowsers(browser, url, { full, label }) {
   await waitMatch(a, '#selection', /^Tower \(grade 2\)/, 60000);
   await b.waitForFunction((id) => /** @type {any} */ (window).__vigame.view.buildings[id].grade === 2, tower.id);
 
+  // Short of dark metal, W says so at once, before any cell or crew is chosen.
+  await a.keyboard.press('w');
+  await waitText(a, '#message', "Can't build a wagon: not enough dark metal.");
+  assert.equal(await a.locator('#build-wagon').getAttribute('aria-pressed'), 'false', 'not placing a wagon');
+
   // Building far from your own buildings is refused, and the page says why.
   await a.keyboard.press('Escape');
   await lookAt(a, crimson);
@@ -715,18 +720,24 @@ async function threeBrowsers(browser, url, { full, label }) {
   for (const p of [a, b, c, lost]) await p.context().close();
 }
 
-/** The login page, the lobby and a game on a phone, with a desktop opponent. */
+/** The login page, the lobby and a Shared Easy Lord game on a phone, with a desktop teammate. */
 async function phone(browser, url) {
   const page = await newPlayer(browser, url, 'phone', 'Pia', PHONE);
   await inLobby(page);
   const fits = () => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth);
   assert.ok(await fits(), 'the lobby scrolls sideways on a phone');
+  await page.selectOption('#lobby-mode', 'shared');
   await page.selectOption('#lobby-players', '2');
   await page.tap('#lobby-new');
   await inGame(page);
   const other = await newPlayer(browser, page.url(), 'phone-opponent', 'Oli');
   await inGame(other);
   await waitMatch(page, '#time', /^0:0[1-9]$/);
+  // Shared Easy Lord: both see the team's stock, both starts' stone together.
+  for (const p of [page, other]) {
+    await waitText(p, '#stone-label', 'Team stone');
+    await waitText(p, '#stone', '400');
+  }
 
   const layout = await page.evaluate(() => {
     const box = (id) => document.getElementById(id).getBoundingClientRect().toJSON();

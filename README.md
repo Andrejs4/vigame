@@ -39,7 +39,7 @@ Run `npm start` and open http://127.0.0.1:2567.
   panel show. Any player still in it may rename it with **✎** next to the
   name, even while the game waits for the others: up to 24 letters, digits
   and spaces, by the same rules as a player's name.
-- A game is in one of three modes:
+- A game is in one of four modes:
   - **Cooperation** (the default): all the players are one team against the
     Dark Lord, whose lair (36000 hit points) stands in the middle of the map
     and strikes the nearest enemy within 4 cells by itself, 40 hit points a
@@ -62,6 +62,12 @@ Run `npm start` and open http://127.0.0.1:2567.
     horde have half the hit points (the lair 18000, ghouls 600, ogres 3000,
     before growing with the players). Everything else is as in cooperation;
     the raiders are their own side, and as strong as ever.
+  - **Shared Easy Lord**: Easy Lord where the team lives off one stock:
+    stone, dark metal and food (so one hunger too), which any of them
+    spends and all their pits, farms, castles and kills fill. It starts with
+    every player's stone together (400 for two), and keeps food for all
+    their castles. The HUD calls it Team stone, Team dark metal and Team
+    food. Each player's points still count what their own units did.
   - **Free for all** (two players or more): each against the others; the
     middle of the map is left empty.
 - **The game clock** runs only while every player is here. (`npm run dev`
@@ -107,7 +113,9 @@ Run `npm start` and open http://127.0.0.1:2567.
   buildable ground within three cells of one of your standing buildings (a
   wagon: of your castle). Scrub can be crossed but not built on; water is
   neither. One building per cell. Placing one asks for its crew first, with
-  the best at home for its work ticked, up to half of those at home.
+  the best at home for its work ticked, up to half of those at home. Short
+  of its price, the button (or its key) says so at once, as does clicking
+  a cell if the stock ran low meanwhile, so no crew is chosen for nothing.
 - **Going up**: a new tower, wagon, pit or farm is only a site until its crew
   raises it. They start once they get there, faster the more of them and the
   better they build, and it trains their building skill as they go (one
@@ -442,7 +450,7 @@ HTTP API:
 | `POST /api/me` | Who a token belongs to: `{ token }` gives `{ pid, name }`, or `null` if it hasn't signed in. |
 | `GET /api/challenge` | A sum to answer when signing in: `{ id, question }`. Each one answers once and lasts 10 minutes. |
 | `POST /api/players` | Signs in (or renames): `{ token, name, challenge, answer }` gives `{ pid, name }`. `400` for a bad token or name, `403` for a wrong answer. |
-| `POST /api/games` | Starts a game with a random map: `{ token, mode?, players? }` of a signed-in player (`mode` `coop`, `easy` or `ffa`, `players` 1 to 8; by default a cooperation game for one) gives `201 { id }`; `401` if not signed in, `400` for a bad mode or number. |
+| `POST /api/games` | Starts a game with a random map: `{ token, mode?, players? }` of a signed-in player (`mode` `coop`, `easy`, `shared` or `ffa`, `players` 1 to 8; by default a cooperation game for one) gives `201 { id }`; `401` if not signed in, `400` for a bad mode or number. |
 | `GET /api/games` | The 50 most recently active games, for the lobby, with their name, mode and who holds each seat: `{ pid, name }` or `null`. |
 | `GET /api/games/:id` | One game: its seed, latest snapshot and seats. |
 | `GET /api/games/:id/commands` | Its command log, with each command's tick. |
