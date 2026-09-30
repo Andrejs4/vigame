@@ -87,7 +87,10 @@ Run `npm start` and open http://127.0.0.1:2567.
   building collapsed, say) goes home by itself.
 - **Stone, dark metal and food** go straight into your side's stock (the
   HUD shows them, and hunger next to food); nothing carries them. Each side
-  starts with 200 stone and no dark metal.
+  starts with 200 stone and no dark metal. The HUD shows stone in bold from
+  60 (a tower), dark metal from 30 (a wagon's upgrade), and food when the
+  store, with what the castle and farms give before the meal, won't give
+  every unit a full one.
 - **Build**: pick **Tower** (60 stone), **Pit**, **Farm** (30 stone),
   **Band** or **Wagon** (15 dark metal), then a highlighted cell: open,
   buildable ground within three cells of one of your standing buildings (a
@@ -105,7 +108,8 @@ Run `npm start` and open http://127.0.0.1:2567.
 - **Pits**: the crew, up to 8, digs stone, faster the more of them and the
   better they build (an unskilled unit alone digs a stone in 48 s); every
   20 stone the pit is a grade deeper, and 100 hit points sturdier. At depth
-  5 it is dug out and the crew goes home.
+  5 it is dug out and the crew goes home. Selected, it shows the stone left
+  to its next grade.
 - **Food**: a unit eats 10 a minute. Every minute the castle yields enough
   for half the units it can hold, and each farm a little (10) even with
   nobody working it; a farm's crew (up to 6) grows more, faster the better

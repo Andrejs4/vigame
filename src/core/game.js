@@ -418,6 +418,35 @@ export function foodStore(state, owner) {
 }
 
 /**
+ * The food a side gets without work before each meal: its castle's, for half
+ * the units it can hold, and each standing farm's base.
+ * @param {Pick<GameState, 'buildings'>} state
+ * @param {number} owner
+ */
+export function harvestOf(state, owner) {
+  let food = 0;
+  for (const b of Object.values(state.buildings)) {
+    if (b.owner !== owner) continue;
+    if (b.type === 'castle') food += Math.floor(capacityOf(b) / 2) * FOOD_PER_UNIT;
+    else if (!isRising(b)) food += BUILDING_TYPES[b.type].base ?? 0;
+  }
+  return food;
+}
+
+/**
+ * Whether a side's store, with the next harvest, gives every unit of it a
+ * full meal. Food its crews grow before then may still make up the rest.
+ * @param {Pick<GameState, 'buildings' | 'units' | 'players'>} state
+ * @param {number} owner
+ */
+export function fullMeal(state, owner) {
+  const units = Object.values(state.units).filter((u) => u.owner === owner).length;
+  const { food } = state.players[owner];
+  const stored = Math.max(food, Math.min(food + harvestOf(state, owner), foodStore(state, owner)));
+  return stored >= units * FOOD_PER_UNIT;
+}
+
+/**
  * The chance a unit starves at a meal while its side is as hungry as it gets.
  * @param {number} level
  */
@@ -1326,15 +1355,11 @@ function summon(board, state) {
 }
 
 /**
- * Food that comes without work, every FOOD_PERIOD: a castle's, for half the
- * units it can hold, and each farm's base.
+ * Food that comes without work, every FOOD_PERIOD (`harvestOf`).
  * @param {GameState} state
  */
 function harvest(state) {
-  for (const b of Object.values(state.buildings)) {
-    if (b.type === 'castle') addFood(state, b.owner, Math.floor(capacityOf(b) / 2) * FOOD_PER_UNIT);
-    else if (!isRising(b)) addFood(state, b.owner, BUILDING_TYPES[b.type].base ?? 0);
-  }
+  for (const p of state.players) addFood(state, p.id, harvestOf(state, p.id));
 }
 
 /**

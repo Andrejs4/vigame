@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { BOARD_OPTIONS, createBoard } from '../src/core/board.js';
 import {
   advance, applyCommand, capacityOf, checkState, crewOf, footprint, levelXp, newGame, occupancy, publicView, random,
-  depthOf, isRising, killChance, maxHp, pointsOf, seatsOf, starveChance,
+  depthOf, fullMeal, isRising, killChance, maxHp, pointsOf, seatsOf, starveChance,
 } from '../src/core/game.js';
 import {
   BUILDING_TYPES, COMBAT_PERIOD, DARK_LORD, HORDE_PERIOD, HORDE_START, RAIDERS, RAID_PERIOD, SALVAGE, FOOD_PER_UNIT, FOOD_PERIOD, KILL_XP, LEVEL_RATE, RANGED_DAMAGE, LEVEL_XP, MAX_HUNGER, MAX_LEVEL, SKILL_RATE, SKILL_XP, START_UNITS, UNIT_LIMIT, WAGON_PATIENCE,
@@ -364,6 +364,23 @@ test('a side eats every minute; short shares make it hungry, full ones less so',
   fed.players[0].hunger = 20;
   run(board, fed, FOOD_PERIOD);
   assert.deepEqual([fed.players[0].food, fed.players[0].hunger], [200 - 10 * FOOD_PER_UNIT, 15]);
+});
+
+test('fullMeal says whether the store and the harvest before the meal feed everyone', () => {
+  const board = openBoard(4);
+  // The castle gives 200 before each meal: a full one for 20 units, in a tower
+  // so nobody is born meanwhile.
+  const twenty = stateWith([{ id: 'b1', type: 'castle' }, { id: 'b2', q: 3, r: 0 }], unitsIn('b2', 20, 1000));
+  assert.equal(fullMeal(publicView(twenty), 0), true);
+  run(board, twenty, FOOD_PERIOD);
+  assert.deepEqual([twenty.players[0].food, twenty.players[0].hunger], [0, 0]);
+
+  const more = stateWith([{ id: 'b1', type: 'castle' }], unitsIn('b1', 21, 1000));
+  assert.equal(fullMeal(more, 0), false);
+  more.players[0].food = FOOD_PER_UNIT;
+  assert.equal(fullMeal(more, 0), true, 'the store makes up the rest');
+  const farmed = stateWith([{ id: 'b1', type: 'castle' }, { id: 'b2', type: 'farm', q: 3, r: 0 }], unitsIn('b1', 21, 1000));
+  assert.equal(fullMeal(farmed, 0), true, "so does a farm's base");
 });
 
 test('hunger follows how short meals fall: none on full ones, half on half rations', () => {

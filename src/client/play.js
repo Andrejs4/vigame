@@ -7,7 +7,7 @@
 import { axialToPixel, bounds, key, pixelToAxial } from '../core/hex.js';
 import { BOARD_OPTIONS, TERRAIN, createBoard, tileAt } from '../core/board.js';
 import {
-  capacityOf, castleOf, crewOf, depthOf, foodStore, inBuildRange, isDugOut, isRising, maxHp, occupancy, pointsOf, raiseWork, seatsOf, sideOf, upgradeCost,
+  capacityOf, castleOf, crewOf, depthOf, foodStore, fullMeal, inBuildRange, isDugOut, isRising, maxHp, occupancy, pointsOf, raiseWork, seatsOf, sideOf, upgradeCost,
 } from '../core/game.js';
 import { BUILDING_TYPES, POINTS, SKILLS, TICKS_PER_SECOND, UNIT_LIMIT } from '../core/rules.js';
 import { getJson, serverBase } from './api.js';
@@ -64,6 +64,9 @@ function worth(line) {
   return each >= 1 ? `${each} points each` : `a point per ${Math.round(1 / each)}`;
 }
 
+/** Stone and dark metal the HUD shows in bold: enough for a tower, and for a wagon's upgrade. */
+const PLENTY = { stone: 60, metal: 30 };
+
 /** Where the browser keeps whether "How to play" is open. */
 const HOW_TO_KEY = 'vigame.howToPlay';
 
@@ -87,6 +90,8 @@ export async function startGame(net, me) {
     stone: document.getElementById('stone'),
     metal: document.getElementById('metal'),
     food: document.getElementById('food'),
+    foodCount: document.getElementById('food-count'),
+    foodRest: document.getElementById('food-rest'),
     selection: document.getElementById('selection'),
     tile: document.getElementById('tile'),
     players: document.getElementById('players'),
@@ -341,6 +346,9 @@ export async function startGame(net, me) {
     needsDraw = true;
   }
 
+  /** Whether the next meal falls short (`fullMeal`), checked once a game second. */
+  let meal = { second: -1, seat: /** @type {number | null} */ (null), short: false };
+
   function updateHud() {
     const seat = net.seat();
     const paused = !net.running();
@@ -365,12 +373,22 @@ export async function startGame(net, me) {
       hud.units.textContent = seat !== null && occ ? `${occ.unitCount[seat] ?? 0} / ${UNIT_LIMIT}` : '—';
     }
     const stock = seat !== null ? view?.players[seat] : null;
-    if (hud.stone) hud.stone.textContent = stock ? String(stock.stone) : '—';
-    if (hud.metal) hud.metal.textContent = stock ? String(stock.metal) : '—';
-    if (hud.food) {
-      hud.food.textContent = stock && view && seat !== null
-        ? `${stock.food} / ${foodStore(view, seat)} · hunger ${stock.hunger}%`
-        : '—';
+    if (hud.stone) {
+      hud.stone.textContent = stock ? String(stock.stone) : '—';
+      hud.stone.classList.toggle('marked', (stock?.stone ?? 0) >= PLENTY.stone);
+    }
+    if (hud.metal) {
+      hud.metal.textContent = stock ? String(stock.metal) : '—';
+      hud.metal.classList.toggle('marked', (stock?.metal ?? 0) >= PLENTY.metal);
+    }
+    if (hud.food && hud.foodCount && hud.foodRest) {
+      const second = Math.floor((view?.tick ?? 0) / TICKS_PER_SECOND);
+      if (view && stock && seat !== null && (second !== meal.second || seat !== meal.seat)) {
+        meal = { second, seat, short: !fullMeal(view, seat) };
+      }
+      hud.foodCount.textContent = stock ? String(stock.food) : '—';
+      hud.foodCount.classList.toggle('marked', Boolean(stock) && meal.seat === seat && meal.short);
+      hud.foodRest.textContent = stock && view && seat !== null ? ` / ${foodStore(view, seat)} · hunger ${stock.hunger}%` : '';
       hud.food.style.color = stock?.hunger ? 'var(--amber)' : '';
     }
     if (hud.selection) {
@@ -446,7 +464,11 @@ export async function startGame(net, me) {
     if (isRising(b)) {
       parts.push(`going up ${toward(b.raised ?? 0)}`);
     } else {
-      if (type.depth !== undefined) parts.push(isDugOut(b) ? 'dug out' : `depth ${depthOf(b)}/${type.depth}, ${b.dug} stone`);
+      if (type.depth !== undefined) {
+        const per = type.perDepth ?? 1;
+        const left = per - ((b.dug ?? 0) % per);
+        parts.push(isDugOut(b) ? 'dug out' : `depth ${depthOf(b)}/${type.depth}, ${left} stone to depth ${depthOf(b) + 1}`);
+      }
       if (type.yields === 'food') parts.push(`next food ${done}`);
     }
     if (b.hp !== undefined && view) parts.push(`HP ${b.hp}/${maxHp(view, b)}`);
