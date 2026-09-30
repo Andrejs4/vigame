@@ -107,8 +107,8 @@ Run `npm start` and open http://127.0.0.1:2567.
   way, goes home, and what it cost is lost.
 - **Pits**: the crew, up to 8, digs stone, faster the more of them and the
   better they build (an unskilled unit alone digs a stone in 48 s); every
-  20 stone the pit is a grade deeper, and 100 hit points sturdier. At depth
-  5 it is dug out and the crew goes home. Selected, it shows the stone left
+  20 stone the pit is a grade deeper, and 150 hit points sturdier. At depth
+  3 it is dug out and the crew goes home. Selected, it shows the stone left
   to its next grade.
 - **Food**: a unit eats 10 a minute. Every minute the castle yields enough
   for half the units it can hold, and each farm a little (10) even with
@@ -141,7 +141,7 @@ Run `npm start` and open http://127.0.0.1:2567.
   crew still fights, and mends the building first when it's damaged (and
   out of the fight), but a
   castle's units don't breed (the castle's own slow breeding goes on).
-- **Hit points**: every building has them, a castle 2000 and a pit 200 (100
+- **Hit points**: every building has them, a castle 2000 and a pit 250 (150
   more for each grade of depth). At
   none left it collapses at once, and whoever was inside is left standing
   there. While a building is damaged, the units inside mend it instead of
@@ -209,7 +209,9 @@ Run `npm start` and open http://127.0.0.1:2567.
 - Buildings and units are round tokens in their side's colour, with a
   picture on each (from [game-icons.net](https://game-icons.net), CC BY
   3.0; see `src/client/art/CREDITS.md`). A building going up shows faint,
-  and firms up as it rises. Zoomed far out, units are dots.
+  and firms up as it rises. Pips under a building count its upgrades (a
+  pit's: how deep it is dug); a new one has none. Zoomed far out, units are
+  dots.
 - A building shows its hit points in a bar over it while it is hurt or
   selected. A hit flashes it red and floats up the points lost; a building
   that falls crumbles, and a unit that dies leaves a cross (with how many,
@@ -338,7 +340,7 @@ http://127.0.0.1:2567;` with the same headers.
     b1: { id: 'b1', owner: 0, type: 'castle', grade: 1, q: 2, r: 5, hp: 2000,
           work: 5200,                                        // toward the next unit
           upgrading: 9000 },                                 // toward grade 2, a quarter done
-    b30: { id: 'b30', owner: 0, type: 'pit', grade: 1, q: 5, r: 3, hp: 800,
+    b30: { id: 'b30', owner: 0, type: 'pit', grade: 1, q: 5, r: 3, hp: 550,
            work: 1200, dug: 47 },                            // 47 stone so far: depth 2
     b31: { id: 'b31', owner: 0, type: 'wagon', grade: 1, q: 6, r: 4, hp: 280,
            path: [[7, 4], [8, 4]], since: 410, until: 430,  // rolling to 7,4

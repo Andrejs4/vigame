@@ -15,6 +15,9 @@ import { boardFrom, noTally, openBoard, run, runUntil, skillsAt, stateWith, unit
 
 const OK = { ok: true };
 
+/** The stone dug from a pit once it is dug out. */
+const DUG_OUT = /** @type {number} */ (BUILDING_TYPES.pit.depth) * /** @type {number} */ (BUILDING_TYPES.pit.perDepth);
+
 /** A whole unit, from the fields a test cares about. */
 const unit = (/** @type {Partial<import('../src/core/game.js').Unit> & { id: string }} */ u) => stateWith([], [u]).units[u.id];
 
@@ -275,7 +278,7 @@ test('commands that are not allowed are refused, and change nothing', () => {
   const board = openBoard(4, { '3,0': 'water', '3,1': 'water', '4,-1': 'water' });
   const state = stateWith([
     { id: 'b1', type: 'castle' }, { id: 'b2', q: -3, r: 0 }, { id: 'b3', owner: 1, q: 0, r: -3 }, { id: 'b4', q: 4, r: 0 },
-    { id: 'b5', type: 'pit', q: 3, r: -3, dug: 100 }, { id: 'b6', type: 'pit', q: -3, r: 3 },
+    { id: 'b5', type: 'pit', q: 3, r: -3, dug: DUG_OUT }, { id: 'b6', type: 'pit', q: -3, r: 3 },
   ], [...unitsIn('b1', 10, 10), { id: 'u30', owner: 1, in: 'b3' }]);
   assert.deepEqual(checkState(board, state), []);
   const before = JSON.stringify(state);
@@ -1001,7 +1004,7 @@ test('checkState finds broken states', () => {
       s.nextId = 100;
     }, /a crew of 21, more than it holds/],
     [(s) => {
-      s.buildings.b3 = { id: 'b3', owner: 0, type: 'pit', grade: 1, q: -3, r: 0, hp: 1, work: 0, dug: 100 };
+      s.buildings.b3 = { id: 'b3', owner: 0, type: 'pit', grade: 1, q: -3, r: 0, hp: 1, work: 0, dug: DUG_OUT };
       s.units.u11.in = 'b3';
       s.nextId = 100;
     }, /dug out, but still has a crew/],

@@ -465,9 +465,9 @@ export async function startGame(net, me) {
       parts.push(`going up ${toward(b.raised ?? 0)}`);
     } else {
       if (type.depth !== undefined) {
+        // The stone left to dig before it is a grade deeper.
         const per = type.perDepth ?? 1;
-        const left = per - ((b.dug ?? 0) % per);
-        parts.push(isDugOut(b) ? 'dug out' : `depth ${depthOf(b)}/${type.depth}, ${left} stone to depth ${depthOf(b) + 1}`);
+        parts.push(isDugOut(b) ? 'dug out' : `depth ${depthOf(b)}/${type.depth}, ${per - ((b.dug ?? 0) % per)} stone`);
       }
       if (type.yields === 'food') parts.push(`next food ${done}`);
     }

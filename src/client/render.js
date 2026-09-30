@@ -12,7 +12,7 @@
  */
 
 import { DIRECTIONS, axialToPixel, corners, key } from '../core/hex.js';
-import { footprint, maxHp, occupancy, raiseWork, sideOf } from '../core/game.js';
+import { depthOf, footprint, maxHp, occupancy, raiseWork, sideOf } from '../core/game.js';
 import { BUILDING_TYPES } from '../core/rules.js';
 
 /** Base colours per terrain, before per-tile tint. */
@@ -114,6 +114,15 @@ function tokenHexes(type, rolling) {
 
 /** Zoomed out past this, buildings don't show how many units are inside. */
 export const COUNT_ZOOM = 0.45;
+
+/**
+ * The pips under a building: one for each upgrade it has had, or for a pit
+ * each grade it is dug deep; none for a new one.
+ * @param {Pick<Building, 'type' | 'grade' | 'dug'>} b
+ */
+export function pipsOf(b) {
+  return BUILDING_TYPES[b.type].depth !== undefined ? depthOf(b) : b.grade - 1;
+}
 
 /** A unit's token, in hexes; narrower than UNIT_TOKEN_MIN pixels, a dot. */
 const UNIT_TOKEN = 0.42;
@@ -338,7 +347,7 @@ export class BoardRenderer {
         ctx.setLineDash([]);
 
         // Its token (a site's fades in as it goes up; its letter until the
-        // pictures arrive), grade pips under it, and how many are inside.
+        // pictures arrive), its pips under it, and how many are inside.
         const across = size * zoom * tokenHexes(type, Boolean(rolling));
         const built = rising ? Math.min(1, (b.raised ?? 0) / Math.max(1, raiseWork(b))) : 1;
         const drawn = this.tokens?.draw(ctx, b.type, side.color, centre.x, centre.y, across, 0.3 + 0.7 * built);
@@ -349,9 +358,10 @@ export class BoardRenderer {
           ctx.font = `600 ${Math.round(across * 0.45)}px ui-sans-serif, system-ui, sans-serif`;
           ctx.fillText(type.name[0], centre.x, centre.y);
         }
-        for (let g = 0; g < b.grade; g++) {
+        const pips = pipsOf(b);
+        for (let g = 0; g < pips; g++) {
           ctx.beginPath();
-          ctx.arc(centre.x + (g - (b.grade - 1) / 2) * 6 * zoom, centre.y + across / 2 + 3 * zoom, 1.8 * zoom, 0, Math.PI * 2);
+          ctx.arc(centre.x + (g - (pips - 1) / 2) * 6 * zoom, centre.y + across / 2 + 3 * zoom, 1.8 * zoom, 0, Math.PI * 2);
           ctx.fill();
         }
         const count = occ.inside.get(b.id)?.length ?? 0;

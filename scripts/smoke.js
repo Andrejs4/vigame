@@ -563,7 +563,7 @@ async function threeBrowsers(browser, url, { full, label }) {
   const pit = (await buildings(a)).find((x) => x.type === 'pit');
   await a.waitForFunction((id) => /** @type {any} */ (window).__vigame.view.buildings[id].work > 0, pit.id, { timeout: 30000 });
   await selectBuilding(a, pit);
-  await waitMatch(a, '#selection', /^Pit · crew \d+\/\d+ · depth 0\/\d+, \d+ stone to depth 1 · HP \d+\/\d+$/);
+  await waitMatch(a, '#selection', /^Pit · crew \d+\/\d+ · depth 0\/\d+, \d+ stone · HP \d+\/\d+$/);
   // Stone from 60 and dark metal from 30 show in bold: enough to spend.
   for (const [id, from] of [['stone', 60], ['metal', 30]]) {
     const [shown, bold] = await a.$eval(`#${id}`, (el) => [Number(el.textContent), el.classList.contains('marked')]);

@@ -307,8 +307,8 @@ export const BUILDING_TYPES = {
     upgradeMetal: 30, skill: 'melee', speed: 2 * TICKS_PER_SECOND, raise: 9000,
   },
   pit: {
-    name: 'Pit', size: 1, capacity: 8, grades: 1, hp: 200, build: true, cost: 0,
-    skill: 'build', work: 9600, yields: 'stone', perDepth: 20, hpPerDepth: 100, depth: 5, through: 0.25, raise: 3000,
+    name: 'Pit', size: 1, capacity: 8, grades: 1, hp: 250, build: true, cost: 0,
+    skill: 'build', work: 9600, yields: 'stone', perDepth: 20, hpPerDepth: 150, depth: 3, through: 0.25, raise: 3000,
   },
   farm: {
     name: 'Farm', size: 1, capacity: 6, grades: 1, hp: 200, build: true, cost: 30,
