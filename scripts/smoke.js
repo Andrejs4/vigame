@@ -299,7 +299,7 @@ const inLobby = (page) => page.waitForFunction(() => {
 
 /**
  * Open a game from the lobby: the row naming these players.
- * @param {string} list 'mine' or 'open'
+ * @param {string} list 'mine', 'open' or 'playing'
  * @param {string} who The row's text, such as "Ann & —".
  */
 async function openFromLobby(page, list, who, { touch = false } = {}) {
@@ -347,6 +347,9 @@ async function finished(browser, url) {
   assert.deepEqual(checkState(board, state), []);
   games.storage.createGame({ id: 'finished-game', seed, state, seats: [playerId(/** @type {string} */ (token))] });
 
+  // Recently finished starts folded away.
+  assert.equal(await page.locator('#lobby-done-section[open]').count(), 0);
+  await page.click('#lobby-done-section summary');
   const row = page.locator('#lobby-done li', { hasText: 'Fay' });
   await row.waitFor({ timeout: 10000 });
   await row.locator('a').click();
@@ -680,6 +683,12 @@ async function threeBrowsers(browser, url, { full, label }) {
   await inLobby(lost);
   await waitText(lost, '#lobby-notice', 'There is no game at that address.');
   assert.equal(new URL(lost.url()).search, '', 'the address is the lobby again');
+  // Lou finds Ann and Bēla's game among those under way, folded away until
+  // opened, and watches it from there.
+  assert.equal(await lost.locator('#lobby-playing-section[open]').count(), 0);
+  await lost.click('#lobby-playing-section summary');
+  await openFromLobby(lost, 'playing', 'Ann & Bēla');
+  await waitText(lost, '#seat', 'Lou · Spectator');
 
   for (const p of [a, b, c, lost]) await p.context().close();
 }

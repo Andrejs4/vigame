@@ -60,15 +60,26 @@
       <option value="8">8</option>
     </select>
     <button id="lobby-new" class="primary">New game</button>
-    <h2>Your games</h2>
-    <ul class="games" id="lobby-mine"></ul>
-    <p class="empty" id="lobby-mine-empty">None yet. Start one, or join one below.</p>
-    <h2>Waiting for a player</h2>
-    <ul class="games" id="lobby-open"></ul>
-    <p class="empty" id="lobby-open-empty">No one is waiting right now.</p>
-    <h2>Recently finished</h2>
-    <ul class="games" id="lobby-done"></ul>
-    <p class="empty" id="lobby-done-empty">No game has ended yet.</p>
+    <details class="games-list" id="lobby-mine-section" open>
+      <summary><h2>Your games <span class="count" id="lobby-mine-count"></span></h2></summary>
+      <ul class="games" id="lobby-mine"></ul>
+      <p class="empty" id="lobby-mine-empty">None yet. Start one, or join one below.</p>
+    </details>
+    <details class="games-list" id="lobby-open-section" open>
+      <summary><h2>Waiting for a player <span class="count" id="lobby-open-count"></span></h2></summary>
+      <ul class="games" id="lobby-open"></ul>
+      <p class="empty" id="lobby-open-empty">No one is waiting right now.</p>
+    </details>
+    <details class="games-list" id="lobby-playing-section">
+      <summary><h2>Ongoing <span class="count" id="lobby-playing-count"></span></h2></summary>
+      <ul class="games" id="lobby-playing"></ul>
+      <p class="empty" id="lobby-playing-empty">Nobody else is playing right now.</p>
+    </details>
+    <details class="games-list" id="lobby-done-section">
+      <summary><h2>Recently finished <span class="count" id="lobby-done-count"></span></h2></summary>
+      <ul class="games" id="lobby-done"></ul>
+      <p class="empty" id="lobby-done-empty">No game has ended yet.</p>
+    </details>
   </div>
 </main>
 

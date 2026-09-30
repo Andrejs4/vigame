@@ -23,9 +23,11 @@ Run `npm start` and open http://127.0.0.1:2567.
 
 - **Log in** with a name and the answer to a small sum. A browser stays
   logged in across visits.
-- **The lobby** lists your games under way, games with a free seat, and
-  the last five finished (anyone's; **Scores** opens one at its table of
-  points); **New game**
+- **The lobby** lists your games under way, games with a free seat, other
+  people's under way with every seat taken (**Watch** opens one as an
+  observer), and the last five finished (anyone's; **Scores** opens one at
+  its table of points). Each list folds away; the last two start folded,
+  and the browser keeps them as you leave them. **New game**
   starts one for 1 to 8 players (1 by default, against the Dark Lord), on a map that grows with
   them (29 × 20 cells for two, 59 × 39 for eight), castles in a ring
   around the middle, out of reach of the lair and of each other. A game's address (`?game=…`) is also the link to send
