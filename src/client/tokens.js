@@ -86,9 +86,10 @@ export class Tokens {
    * @param {number} y
    * @param {number} across
    * @param {number} [alpha=1]
+   * @param {boolean} [mirror=false] Flipped left to right, facing left.
    * @returns {boolean} Whether it drew.
    */
-  draw(ctx, name, color, x, y, across, alpha = 1) {
+  draw(ctx, name, color, x, y, across, alpha = 1, mirror = false) {
     const img = this.images.get(name);
     if (!img || across < 1) return false;
     const dpr = ctx.getTransform().a || 1;
@@ -106,7 +107,15 @@ export class Tokens {
     const w = token.width * scale;
     const before = ctx.globalAlpha;
     ctx.globalAlpha = before * alpha;
-    ctx.drawImage(token, x - w / 2, y - w / 2, w, w);
+    if (mirror) {
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.scale(-1, 1);
+      ctx.drawImage(token, -w / 2, -w / 2, w, w);
+      ctx.restore();
+    } else {
+      ctx.drawImage(token, x - w / 2, y - w / 2, w, w);
+    }
     ctx.globalAlpha = before;
     return true;
   }

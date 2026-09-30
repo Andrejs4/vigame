@@ -11,7 +11,7 @@ The core is `src/core/game.js`, with its numbers in `src/core/rules.js` and the 
 functions that change it:
 
 - `newGame(board, { mode })`: the opening position: a castle per player
-  with its first units, and in cooperation the Dark Lord's lair.
+  with its first units, and in cooperation (and Easy Lord) the Dark Lord's lair.
 - `applyCommand(board, state, side, command)`: what a player does (build,
   choose a building's crew, upgrade, move a wagon). It checks everything
   first and either changes the state or refuses with a reason.

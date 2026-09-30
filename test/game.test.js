@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { BOARD_OPTIONS, createBoard } from '../src/core/board.js';
 import {
   advance, applyCommand, capacityOf, checkState, crewOf, footprint, levelXp, newGame, occupancy, publicView, random,
-  depthOf, isRising, killChance, maxHp, pointsOf, seatsOf, starveChance,
+  depthOf, fullMeal, isRising, killChance, maxHp, pointsOf, seatsOf, starveChance,
 } from '../src/core/game.js';
 import {
   BUILDING_TYPES, COMBAT_PERIOD, DARK_LORD, HORDE_PERIOD, HORDE_START, RAIDERS, RAID_PERIOD, SALVAGE, FOOD_PER_UNIT, FOOD_PERIOD, KILL_XP, LEVEL_RATE, RANGED_DAMAGE, LEVEL_XP, MAX_HUNGER, MAX_LEVEL, SKILL_RATE, SKILL_XP, START_UNITS, UNIT_LIMIT, WAGON_PATIENCE,
@@ -14,6 +14,9 @@ import { distance } from '../src/core/hex.js';
 import { boardFrom, noTally, openBoard, run, runUntil, skillsAt, stateWith, unitsIn } from './helpers.js';
 
 const OK = { ok: true };
+
+/** The stone dug from a pit once it is dug out. */
+const DUG_OUT = /** @type {number} */ (BUILDING_TYPES.pit.depth) * /** @type {number} */ (BUILDING_TYPES.pit.perDepth);
 
 /** A whole unit, from the fields a test cares about. */
 const unit = (/** @type {Partial<import('../src/core/game.js').Unit> & { id: string }} */ u) => stateWith([], [u]).units[u.id];
@@ -46,7 +49,7 @@ test('games seat 1 to 8 players, on maps that grow with them', () => {
   for (const players of [1, 8]) {
     const board = createBoard({ ...BOARD_OPTIONS, seed: 9, players });
     assert.equal(board.starts.length, players + 1, 'a site per player, and the lair\'s');
-    for (const mode of players > 1 ? ['coop', 'ffa'] : ['coop']) {
+    for (const mode of players > 1 ? ['coop', 'easy', 'ffa'] : ['coop', 'easy']) {
       const state = newGame(board, { mode });
       assert.deepEqual(checkState(board, state), [], `${players} players, ${mode}`);
       assert.equal(seatsOf(state), players);
@@ -275,7 +278,7 @@ test('commands that are not allowed are refused, and change nothing', () => {
   const board = openBoard(4, { '3,0': 'water', '3,1': 'water', '4,-1': 'water' });
   const state = stateWith([
     { id: 'b1', type: 'castle' }, { id: 'b2', q: -3, r: 0 }, { id: 'b3', owner: 1, q: 0, r: -3 }, { id: 'b4', q: 4, r: 0 },
-    { id: 'b5', type: 'pit', q: 3, r: -3, dug: 100 }, { id: 'b6', type: 'pit', q: -3, r: 3 },
+    { id: 'b5', type: 'pit', q: 3, r: -3, dug: DUG_OUT }, { id: 'b6', type: 'pit', q: -3, r: 3 },
   ], [...unitsIn('b1', 10, 10), { id: 'u30', owner: 1, in: 'b3' }]);
   assert.deepEqual(checkState(board, state), []);
   const before = JSON.stringify(state);
@@ -364,6 +367,23 @@ test('a side eats every minute; short shares make it hungry, full ones less so',
   fed.players[0].hunger = 20;
   run(board, fed, FOOD_PERIOD);
   assert.deepEqual([fed.players[0].food, fed.players[0].hunger], [200 - 10 * FOOD_PER_UNIT, 15]);
+});
+
+test('fullMeal says whether the store and the harvest before the meal feed everyone', () => {
+  const board = openBoard(4);
+  // The castle gives 200 before each meal: a full one for 20 units, in a tower
+  // so nobody is born meanwhile.
+  const twenty = stateWith([{ id: 'b1', type: 'castle' }, { id: 'b2', q: 3, r: 0 }], unitsIn('b2', 20, 1000));
+  assert.equal(fullMeal(publicView(twenty), 0), true);
+  run(board, twenty, FOOD_PERIOD);
+  assert.deepEqual([twenty.players[0].food, twenty.players[0].hunger], [0, 0]);
+
+  const more = stateWith([{ id: 'b1', type: 'castle' }], unitsIn('b1', 21, 1000));
+  assert.equal(fullMeal(more, 0), false);
+  more.players[0].food = FOOD_PER_UNIT;
+  assert.equal(fullMeal(more, 0), true, 'the store makes up the rest');
+  const farmed = stateWith([{ id: 'b1', type: 'castle' }, { id: 'b2', type: 'farm', q: 3, r: 0 }], unitsIn('b1', 21, 1000));
+  assert.equal(fullMeal(farmed, 0), true, "so does a farm's base");
 });
 
 test('hunger follows how short meals fall: none on full ones, half on half rations', () => {
@@ -582,6 +602,27 @@ test('the Dark Lord grows with the players: four times the hit points and twice 
   run(board, game, HORDE_START);
   const horde = Object.values(game.buildings).filter((b) => BUILDING_TYPES[b.type].hunts);
   assert.deepEqual(horde.map((b) => [b.type, b.hp]), [['ghoul', 4 * BUILDING_TYPES.ghoul.hp], ['ghoul', 4 * BUILDING_TYPES.ghoul.hp]]);
+});
+
+test('in Easy Lord the Dark Lord\'s lair and horde have half the hit points, and his waves are as big', () => {
+  const map = createBoard({ ...BOARD_OPTIONS, seed: 3 });
+  const easy = newGame(map, { mode: 'easy' });
+  assert.deepEqual(easy.players.map((p) => p.team), [0, 0, 1, -1], 'the players together against him, as in cooperation');
+  assert.equal(Object.values(easy.buildings).find((b) => b.type === 'lair')?.hp, BUILDING_TYPES.lair.hp / 2);
+
+  // Three waves, from a lair far from the one castle, which has nobody to strike back.
+  const horde = (/** @type {string} */ mode) => {
+    const board = openBoard(9);
+    const game = stateWith([{ id: 'b1', type: 'castle', q: -8, r: 0 }, { id: 'b2', owner: 1, type: 'lair', q: 3, r: 0 }]);
+    game.mode = mode;
+    game.players[1].side = DARK_LORD;
+    game.buildings.b2.hp = maxHp(game, game.buildings.b2);
+    run(board, game, HORDE_START + 2 * HORDE_PERIOD);
+    return Object.values(game.buildings).filter((b) => BUILDING_TYPES[b.type].hunts).map((b) => [b.type, b.hp]);
+  };
+  const usual = horde('coop');
+  assert.ok(usual.some(([type]) => type === 'ogre'), 'ghouls and an ogre by then');
+  assert.deepEqual(horde('easy'), usual.map(([type, hp]) => [type, /** @type {number} */ (hp) / 2]));
 });
 
 test('the horde goes for the nearest farm, turns on a building that strikes it, and on castles once no farm is left', () => {
@@ -809,6 +850,24 @@ test('building needs open, buildable ground near one of your standing buildings'
   assert.deepEqual(applyCommand(board, roaming, 0, tower(1, 0)), { ok: false, reason: 'too far from your buildings' });
 });
 
+test('a wagon upgrades for dark metal, three times, each to its hit points again and no more room', () => {
+  const board = openBoard(4);
+  const state = stateWith([{ id: 'b1', type: 'wagon', q: 2, r: 0 }], unitsIn('b1', 15, 10));
+  const { hp, upgradeMetal = 0 } = BUILDING_TYPES.wagon;
+  const upgrade = () => applyCommand(board, state, 0, { type: 'upgrade', building: 'b1' });
+  state.players[0].metal = upgradeMetal - 1;
+  assert.deepEqual(upgrade(), { ok: false, reason: 'not enough dark metal' });
+  state.players[0].metal = 3 * upgradeMetal;
+  const stone = state.players[0].stone;
+  for (const grade of [2, 3, 4]) {
+    assert.deepEqual(upgrade(), OK);
+    runUntil(board, state, () => state.buildings.b1.upgrading === undefined);
+    assert.deepEqual([state.buildings.b1.grade, state.buildings.b1.hp, capacityOf(state.buildings.b1)], [grade, hp * grade, 15]);
+  }
+  assert.deepEqual([state.players[0].metal, state.players[0].stone], [0, stone], 'dark metal only');
+  assert.deepEqual(upgrade(), { ok: false, reason: 'fully upgraded' });
+});
+
 test('an upgrade is work for the crew, and brings the next grade\'s room and hit points once done', () => {
   const board = openBoard(1);
   const state = stateWith([{ id: 'b1' }], unitsIn('b1', 10, 10));
@@ -923,6 +982,7 @@ test('the same commands at the same ticks give the same game, saved and reloaded
   const straight = randomGame(11, 1000);
   const reloaded = randomGame(11, 1000, () => {});
   assert.deepEqual(randomGame(11, 1000, () => {}, 'coop').state, randomGame(11, 1000, undefined, 'coop').state);
+  assert.deepEqual(randomGame(11, 1000, () => {}, 'easy').state, randomGame(11, 1000, undefined, 'easy').state);
   assert.deepEqual(reloaded.state, straight.state);
   assert.notDeepEqual(randomGame(12, 1000).state, straight.state);
 });
@@ -966,7 +1026,7 @@ test('checkState finds broken states', () => {
       s.nextId = 100;
     }, /a crew of 21, more than it holds/],
     [(s) => {
-      s.buildings.b3 = { id: 'b3', owner: 0, type: 'pit', grade: 1, q: -3, r: 0, hp: 1, work: 0, dug: 100 };
+      s.buildings.b3 = { id: 'b3', owner: 0, type: 'pit', grade: 1, q: -3, r: 0, hp: 1, work: 0, dug: DUG_OUT };
       s.units.u11.in = 'b3';
       s.nextId = 100;
     }, /dug out, but still has a crew/],

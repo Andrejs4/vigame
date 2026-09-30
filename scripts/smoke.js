@@ -535,8 +535,11 @@ async function threeBrowsers(browser, url, { full, label }) {
   await a.waitForFunction((id) => /** @type {any} */ (window).__vigame.view.buildings[id].raised === undefined, tower.id, { timeout: 60000 });
   await crewWith(a, tower, 0);
   await waitMatch(a, '#selection', /^Tower \(grade 1\) · crew \d+\/\d+ · HP/);
-  // The upgrade is work for the crew too.
-  await a.click('#upgrade');
+  // Each button with a key shows its letter in bold.
+  assert.deepEqual(await a.$$eval('#controls button[aria-keyshortcuts]', (els) => els.map((el) => el.querySelector('b')?.textContent)),
+    ['T', 'W', 'P', 'F', 'B', 'U', 'C', 'A']);
+  // The upgrade is work for the crew too. U upgrades, as the button does.
+  await a.keyboard.press('u');
   await waitMatch(a, '#selection', /^Tower \(grade 1\) · crew \d+\/\d+ · upgrading\s+\d+%/);
   await waitMatch(a, '#selection', /^Tower \(grade 2\)/, 60000);
   await b.waitForFunction((id) => /** @type {any} */ (window).__vigame.view.buildings[id].grade === 2, tower.id);
@@ -544,7 +547,7 @@ async function threeBrowsers(browser, url, { full, label }) {
   // Building far from your own buildings is refused, and the page says why.
   await a.keyboard.press('Escape');
   await lookAt(a, crimson);
-  await a.click('#build-tower');
+  await a.keyboard.press('t');
   const far = await openCell(a, [[crimson.q, crimson.r + 2], [crimson.q, crimson.r - 2], [crimson.q + 2, crimson.r - 2]]);
   await clickHex(a, far.q, far.r);
   await waitText(a, '#message', "Can't build there: too far from your buildings.");
@@ -564,6 +567,11 @@ async function threeBrowsers(browser, url, { full, label }) {
   await a.waitForFunction((id) => /** @type {any} */ (window).__vigame.view.buildings[id].work > 0, pit.id, { timeout: 30000 });
   await selectBuilding(a, pit);
   await waitMatch(a, '#selection', /^Pit · crew \d+\/\d+ · depth 0\/\d+, \d+ stone · HP \d+\/\d+$/);
+  // Stone from 60 and dark metal from 30 show in bold: enough to spend.
+  for (const [id, from] of [['stone', 60], ['metal', 30]]) {
+    const [shown, bold] = await a.$eval(`#${id}`, (el) => [Number(el.textContent), el.classList.contains('marked')]);
+    assert.equal(bold, shown >= from, `${id} ${shown} is ${bold ? '' : 'not '}bold`);
+  }
   await a.click('#return-button');
   await a.waitForFunction((id) => !Object.values(/** @type {any} */ (window).__vigame.view.units)
     .some((u) => u.to === id || u.in === id), pit.id);
@@ -576,7 +584,7 @@ async function threeBrowsers(browser, url, { full, label }) {
   await selectBuilding(a, site);
   await a.keyboard.press('a');
   assert.equal(await a.evaluate(() => /** @type {any} */ (window).__vigame.aiming), site.id, 'A aims, as Attack does');
-  await a.click('#crew-button');
+  await a.keyboard.press('c');
   await a.waitForSelector('#crew[open]');
   // Each unit shows its age; a mouse drag down the list ticks each row it crosses.
   assert.match(await a.locator('#crew-list .stats').first().textContent() ?? '', /· \d+ min$/);
@@ -622,12 +630,20 @@ async function threeBrowsers(browser, url, { full, label }) {
     const v = /** @type {any} */ (window).__vigame;
     const w = v.view.buildings[id];
     const d = (t) => (Math.abs(t.q - w.q) + Math.abs(t.r - w.r) + Math.abs(t.q + t.r - w.q - w.r)) / 2;
+    // Somewhere to its left, to see its picture turn that way.
     return v.board.list
-      .filter((t) => t.passable && !v.occ.buildingAt.has(`${t.q},${t.r}`) && d(t) === 2)
+      .filter((t) => t.passable && !v.occ.buildingAt.has(`${t.q},${t.r}`) && d(t) === 2 && t.q + t.r / 2 < w.q + w.r / 2)
       .map((t) => [t.q, t.r]);
   }, wagon);
   const dest = await openCell(b, goal);
   await clickHex(b, dest.q, dest.r);
+  // Going left, its picture is mirrored, on the other side's page too.
+  await a.waitForFunction((id) => {
+    const v = /** @type {any} */ (window).__vigame;
+    const w = v.view.buildings[id];
+    const next = w?.path?.[0];
+    return Boolean(next) && next[0] - w.q + (next[1] - w.r) / 2 < 0 && v.facingLeft.includes(id);
+  }, wagon.id, { timeout: 6000 });
   await a.waitForFunction(({ id, q, r }) => {
     const w = /** @type {any} */ (window).__vigame.view.buildings[id];
     return w.q !== q || w.r !== r;

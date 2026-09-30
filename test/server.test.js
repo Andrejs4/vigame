@@ -239,6 +239,10 @@ test('new games are stored with a castle per side, and listed; unknown ones are 
   assert.equal(ffa.status, 201);
   const ffaGame = await (await fetch(`${base}/api/games/${(await ffa.json()).id}`)).json();
   assert.equal(ffaGame.state.mode, 'ffa');
+  const easy = await post('/api/games', { token: TOKENS.a, mode: 'easy' });
+  assert.equal(easy.status, 201);
+  const easyGame = await (await fetch(`${base}/api/games/${(await easy.json()).id}`)).json();
+  assert.deepEqual([easyGame.state.mode, easyGame.seats.length], ['easy', 1], 'Easy Lord, one player by default');
   assert.equal((await post('/api/games', { token: TOKENS.a, mode: 'solo' })).status, 400);
   const eight = await post('/api/games', { token: TOKENS.a, players: 8 });
   assert.equal(eight.status, 201);

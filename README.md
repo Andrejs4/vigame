@@ -32,7 +32,7 @@ Run `npm start` and open http://127.0.0.1:2567.
   someone. Players who join take the seats in order (Blue, Crimson, Green,
   Gold, Teal, Orange, Rose, Silver); once they are full, visitors watch.
   **Release seat** frees a seat for a spectator to take. A game is in
-  either mode:
+  one of three modes:
   - **Cooperation** (the default): all the players are one team against the
     Dark Lord, whose lair (36000 hit points) stands in the middle of the map
     and strikes the nearest enemy within 4 cells by itself, 40 hit points a
@@ -51,6 +51,10 @@ Run `npm start` and open http://127.0.0.1:2567.
     does nothing with yet. Allies never strike each
     other and pass through each other's buildings. The players win when the lair falls, and lose when all
     their castles have. One player alone is a game too.
+  - **Easy Lord**: cooperation against a weaker Dark Lord: his lair and his
+    horde have half the hit points (the lair 18000, ghouls 600, ogres 3000,
+    before growing with the players). Everything else is as in cooperation;
+    the raiders are their own side, and as strong as ever.
   - **Free for all** (two players or more): each against the others; the
     middle of the map is left empty.
 - **The game clock** runs only while every player is here. (`npm run dev`
@@ -87,7 +91,10 @@ Run `npm start` and open http://127.0.0.1:2567.
   building collapsed, say) goes home by itself.
 - **Stone, dark metal and food** go straight into your side's stock (the
   HUD shows them, and hunger next to food); nothing carries them. Each side
-  starts with 200 stone and no dark metal.
+  starts with 200 stone and no dark metal. The HUD shows stone in bold from
+  60 (a tower), dark metal from 30 (a wagon's upgrade), and food when the
+  store, with what the castle and farms give before the meal, won't give
+  every unit a full one.
 - **Build**: pick **Tower** (60 stone), **Pit**, **Farm** (30 stone),
   **Band** or **Wagon** (15 dark metal), then a highlighted cell: open,
   buildable ground within three cells of one of your standing buildings (a
@@ -104,8 +111,9 @@ Run `npm start` and open http://127.0.0.1:2567.
   way, goes home, and what it cost is lost.
 - **Pits**: the crew, up to 8, digs stone, faster the more of them and the
   better they build (an unskilled unit alone digs a stone in 48 s); every
-  20 stone the pit is a grade deeper, and 100 hit points sturdier. At depth
-  5 it is dug out and the crew goes home.
+  40 stone the pit is a grade deeper, and 150 hit points sturdier. At depth
+  3, 120 stone in all, it is dug out and the crew goes home. Selected, it
+  shows the stone left to its next grade.
 - **Food**: a unit eats 10 a minute. Every minute the castle yields enough
   for half the units it can hold, and each farm a little (10) even with
   nobody working it; a farm's crew (up to 6) grows more, faster the better
@@ -127,8 +135,9 @@ Run `npm start` and open http://127.0.0.1:2567.
   0%, half rations to 50%, and nothing at all up to 100% (in about a
   quarter of an hour). At 100%, every unit may starve at each meal: about
   5% at level 1, 0.6% at level 50, never at 100.
-- **Upgrade** the selected building, for stone: the castle 200 × its grade,
-  a tower 60 × its grade. Then its crew works on it, as on a new building,
+- **Upgrade** the selected building: the castle for 200 stone × its grade,
+  a tower for 60 × its grade, a wagon for 30 dark metal (the price of two
+  wagons) up to three times. Then its crew works on it, as on a new building,
   instead of their usual work, which trains their building skill: each grade
   takes as long again as the one before (a tower as long as raising it, a
   castle three times that). Once done, it holds as many units again (a
@@ -136,7 +145,7 @@ Run `npm start` and open http://127.0.0.1:2567.
   crew still fights, and mends the building first when it's damaged (and
   out of the fight), but a
   castle's units don't breed (the castle's own slow breeding goes on).
-- **Hit points**: every building has them, a castle 2000 and a pit 200 (100
+- **Hit points**: every building has them, a castle 2000 and a pit 250 (150
   more for each grade of depth). At
   none left it collapses at once, and whoever was inside is left standing
   there. While a building is damaged, the units inside mend it instead of
@@ -163,6 +172,9 @@ Run `npm start` and open http://127.0.0.1:2567.
   is in reach, and the nearest enemy otherwise; a wagon or band goes after
   it until it's close enough for close combat. Driving a wagon or band by
   hand drops its target.
+- **Keys**: a button's bold letter presses it: **T**ower, **W**agon, **P**it,
+  **F**arm and **B**and pick what to place (again to stop), **U**pgrade,
+  **C**rew and **A**ttack act on the selected building, and Escape lets go.
 - **Losing and winning**: a side whose castle falls has lost, and can give
   no more commands; its units stay and still fight. Once only one team has
   a castle (or lair) standing, it has won and the game is over: the clock
@@ -179,7 +191,8 @@ Run `npm start` and open http://127.0.0.1:2567.
   pass through other buildings, each other included: a blocked wagon waits,
   then looks for another way, and stops if there is none. Whoever brings a
   wagon down (another player, the Dark Lord, raiders) gets half its price in
-  dark metal, 7 for 15.
+  dark metal, 7 for 15. An upgrade armours a wagon: each of three adds its
+  300 hit points again (up to 1200), but no room.
 - **Bands** are groups of up to 30 units that move like wagons, for free.
   Placing one asks who goes. A band holds no cell, so it passes anything of
   yours and blocks nothing; it has no hit points and gives no cover, and it
@@ -203,7 +216,10 @@ Run `npm start` and open http://127.0.0.1:2567.
 - Buildings and units are round tokens in their side's colour, with a
   picture on each (from [game-icons.net](https://game-icons.net), CC BY
   3.0; see `src/client/art/CREDITS.md`). A building going up shows faint,
-  and firms up as it rises. Zoomed far out, units are dots.
+  and firms up as it rises. A moving one faces the way it last went, left
+  or right (the pictures face right, and turn over going left). Pips under
+  a building count its upgrades (a pit's: how deep it is dug); a new one
+  has none. Zoomed far out, units are dots.
 - A building shows its hit points in a bar over it while it is hurt or
   selected. A hit flashes it red and floats up the points lost; a building
   that falls crumbles, and a unit that dies leaves a cross (with how many,
@@ -332,8 +348,8 @@ http://127.0.0.1:2567;` with the same headers.
     b1: { id: 'b1', owner: 0, type: 'castle', grade: 1, q: 2, r: 5, hp: 2000,
           work: 5200,                                        // toward the next unit
           upgrading: 9000 },                                 // toward grade 2, a quarter done
-    b30: { id: 'b30', owner: 0, type: 'pit', grade: 1, q: 5, r: 3, hp: 800,
-           work: 1200, dug: 47 },                            // 47 stone so far: depth 2
+    b30: { id: 'b30', owner: 0, type: 'pit', grade: 1, q: 5, r: 3, hp: 550,
+           work: 1200, dug: 87 },                            // 87 stone so far: depth 2
     b31: { id: 'b31', owner: 0, type: 'wagon', grade: 1, q: 6, r: 4, hp: 280,
            path: [[7, 4], [8, 4]], since: 410, until: 430,  // rolling to 7,4
            target: 'b27', mend: 40 },                       // after b27; being mended
@@ -416,7 +432,7 @@ HTTP API:
 | `POST /api/me` | Who a token belongs to: `{ token }` gives `{ pid, name }`, or `null` if it hasn't signed in. |
 | `GET /api/challenge` | A sum to answer when signing in: `{ id, question }`. Each one answers once and lasts 10 minutes. |
 | `POST /api/players` | Signs in (or renames): `{ token, name, challenge, answer }` gives `{ pid, name }`. `400` for a bad token or name, `403` for a wrong answer. |
-| `POST /api/games` | Starts a game with a random map: `{ token, mode?, players? }` of a signed-in player (`mode` `coop` or `ffa`, `players` 1 to 8; by default a cooperation game for two) gives `201 { id }`; `401` if not signed in, `400` for a bad mode or number. |
+| `POST /api/games` | Starts a game with a random map: `{ token, mode?, players? }` of a signed-in player (`mode` `coop`, `easy` or `ffa`, `players` 1 to 8; by default a cooperation game for one) gives `201 { id }`; `401` if not signed in, `400` for a bad mode or number. |
 | `GET /api/games` | The 50 most recently active games, for the lobby, with their mode and who holds each seat: `{ pid, name }` or `null`. |
 | `GET /api/games/:id` | One game: its seed, latest snapshot and seats. |
 | `GET /api/games/:id/commands` | Its command log, with each command's tick. |
@@ -469,7 +485,7 @@ comes next.
   59 × 39 map make route-finding and fighting costlier, and nobody has
   measured how much.
 - On a phone, the 29 × 20 board is wider than the screen even at minimum
-  zoom. Pinch-to-zoom and keyboard play are not wired up.
+  zoom. Pinch-to-zoom is not wired up, and the keys are for a keyboard.
 
 ## License
 

@@ -7,7 +7,7 @@
 import { axialToPixel, bounds, key, pixelToAxial } from '../core/hex.js';
 import { BOARD_OPTIONS, TERRAIN, createBoard, tileAt } from '../core/board.js';
 import {
-  capacityOf, castleOf, crewOf, depthOf, foodStore, inBuildRange, isDugOut, isRising, maxHp, occupancy, pointsOf, raiseWork, seatsOf, sideOf, upgradeCost,
+  capacityOf, castleOf, crewOf, depthOf, foodStore, fullMeal, inBuildRange, isDugOut, isRising, maxHp, occupancy, pointsOf, raiseWork, seatsOf, sideOf, upgradeCost,
 } from '../core/game.js';
 import { BUILDING_TYPES, POINTS, SKILLS, TICKS_PER_SECOND, UNIT_LIMIT } from '../core/rules.js';
 import { getJson, serverBase } from './api.js';
@@ -64,6 +64,21 @@ function worth(line) {
   return each >= 1 ? `${each} points each` : `a point per ${Math.round(1 / each)}`;
 }
 
+/** Stone and dark metal the HUD shows in bold: enough for a tower, and for a wagon's upgrade. */
+const PLENTY = { stone: 60, metal: 30 };
+
+/**
+ * Set a button's label with its first letter in bold: the key that presses it.
+ * @param {HTMLElement} button
+ * @param {string} label
+ */
+function keyLabel(button, label) {
+  if (button.textContent === label && button.firstChild?.nodeName === 'B') return;
+  const key = document.createElement('b');
+  key.textContent = label[0];
+  button.replaceChildren(key, label.slice(1));
+}
+
 /** Where the browser keeps whether "How to play" is open. */
 const HOW_TO_KEY = 'vigame.howToPlay';
 
@@ -87,6 +102,8 @@ export async function startGame(net, me) {
     stone: document.getElementById('stone'),
     metal: document.getElementById('metal'),
     food: document.getElementById('food'),
+    foodCount: document.getElementById('food-count'),
+    foodRest: document.getElementById('food-rest'),
     selection: document.getElementById('selection'),
     tile: document.getElementById('tile'),
     players: document.getElementById('players'),
@@ -341,6 +358,9 @@ export async function startGame(net, me) {
     needsDraw = true;
   }
 
+  /** Whether the next meal falls short (`fullMeal`), checked once a game second. */
+  let meal = { second: -1, seat: /** @type {number | null} */ (null), short: false };
+
   function updateHud() {
     const seat = net.seat();
     const paused = !net.running();
@@ -365,12 +385,22 @@ export async function startGame(net, me) {
       hud.units.textContent = seat !== null && occ ? `${occ.unitCount[seat] ?? 0} / ${UNIT_LIMIT}` : '—';
     }
     const stock = seat !== null ? view?.players[seat] : null;
-    if (hud.stone) hud.stone.textContent = stock ? String(stock.stone) : '—';
-    if (hud.metal) hud.metal.textContent = stock ? String(stock.metal) : '—';
-    if (hud.food) {
-      hud.food.textContent = stock && view && seat !== null
-        ? `${stock.food} / ${foodStore(view, seat)} · hunger ${stock.hunger}%`
-        : '—';
+    if (hud.stone) {
+      hud.stone.textContent = stock ? String(stock.stone) : '—';
+      hud.stone.classList.toggle('marked', (stock?.stone ?? 0) >= PLENTY.stone);
+    }
+    if (hud.metal) {
+      hud.metal.textContent = stock ? String(stock.metal) : '—';
+      hud.metal.classList.toggle('marked', (stock?.metal ?? 0) >= PLENTY.metal);
+    }
+    if (hud.food && hud.foodCount && hud.foodRest) {
+      const second = Math.floor((view?.tick ?? 0) / TICKS_PER_SECOND);
+      if (view && stock && seat !== null && (second !== meal.second || seat !== meal.seat)) {
+        meal = { second, seat, short: !fullMeal(view, seat) };
+      }
+      hud.foodCount.textContent = stock ? String(stock.food) : '—';
+      hud.foodCount.classList.toggle('marked', Boolean(stock) && meal.seat === seat && meal.short);
+      hud.foodRest.textContent = stock && view && seat !== null ? ` / ${foodStore(view, seat)} · hunger ${stock.hunger}%` : '';
       hud.food.style.color = stock?.hunger ? 'var(--amber)' : '';
     }
     if (hud.selection) {
@@ -415,7 +445,9 @@ export async function startGame(net, me) {
     const mine = Boolean(can && b && isMine(selected));
     const upgradable = Boolean(mine && b && !isRising(b) && b.upgrading === undefined && b.grade < BUILDING_TYPES[b.type].grades);
     upgradeButton.disabled = !upgradable;
-    upgradeButton.textContent = upgradable && b && upgradeCost(b) ? `Upgrade · ${upgradeCost(b)}` : 'Upgrade';
+    const price = upgradable && b ? upgradeCost(b) : null;
+    const priced = [price?.stone ? String(price.stone) : '', price?.metal ? `${price.metal}◆` : ''].filter(Boolean);
+    keyLabel(upgradeButton, priced.length ? `Upgrade · ${priced.join(' + ')}` : 'Upgrade');
     const crewed = Boolean(mine && b && b.type !== 'castle' && !isDugOut(b));
     crewButton.disabled = !crewed;
     returnButton.disabled = !(crewed && view && b && crewOf(view, b.id).length > 0);
@@ -444,7 +476,11 @@ export async function startGame(net, me) {
     if (isRising(b)) {
       parts.push(`going up ${toward(b.raised ?? 0)}`);
     } else {
-      if (type.depth !== undefined) parts.push(isDugOut(b) ? 'dug out' : `depth ${depthOf(b)}/${type.depth}, ${b.dug} stone`);
+      if (type.depth !== undefined) {
+        // The stone left to dig before it is a grade deeper.
+        const per = type.perDepth ?? 1;
+        parts.push(isDugOut(b) ? 'dug out' : `depth ${depthOf(b)}/${type.depth}, ${per - ((b.dug ?? 0) % per)} stone`);
+      }
       if (type.yields === 'food') parts.push(`next food ${done}`);
     }
     if (b.hp !== undefined && view) parts.push(`HP ${b.hp}/${maxHp(view, b)}`);
@@ -820,20 +856,23 @@ export async function startGame(net, me) {
     updateHud();
   });
 
-  // A, as the Attack button (its A is bold), unless typing or in a dialog.
+  // A letter presses the button it is bold on (its aria-keyshortcuts),
+  // unless typing or in a dialog.
+  const shortcuts = new Map([...controls.querySelectorAll('button[aria-keyshortcuts]')]
+    .map((button) => [button.getAttribute('aria-keyshortcuts')?.toLowerCase(), /** @type {HTMLButtonElement} */ (button)]));
   addEventListener('keydown', (e) => {
-    if (e.key !== 'a' && e.key !== 'A') return;
+    const button = shortcuts.get(e.key.toLowerCase());
+    if (!button || button.disabled || button.hidden) return;
     if (e.repeat || e.ctrlKey || e.metaKey || e.altKey || crewDialog.open || scoresDialog.open) return;
     if (e.target instanceof Element && e.target.closest('input, select, textarea, [contenteditable]')) return;
-    if (attackButton.disabled) return;
     e.preventDefault();
-    attackButton.click();
+    button.click();
   });
 
   for (const button of buildButtons) {
     const { name, cost, metal } = BUILDING_TYPES[button.dataset.kind ?? ''];
-    button.textContent = cost ? `${name} · ${cost}` : metal ? `${name} · ${metal}◆` : name;
-    button.title = cost ? `${cost} stone` : metal ? `${metal} dark metal, near your castle` : 'Free';
+    keyLabel(button, cost ? `${name} · ${cost}` : metal ? `${name} · ${metal}◆` : name);
+    button.title = `${name} (${name[0]}): ${cost ? `${cost} stone` : metal ? `${metal} dark metal, near your castle` : 'free'}`;
     button.addEventListener('click', () => {
       const kind = button.dataset.kind ?? null;
       placing = placing === kind ? null : kind;
@@ -979,6 +1018,7 @@ export async function startGame(net, me) {
       get highlights() { return [...highlights]; },
       get peers() { return peers; },
       get minimap() { return minimap; },
+      get facingLeft() { return [...renderer.facingLeft]; },
       effects,
       tokens,
       sounds,

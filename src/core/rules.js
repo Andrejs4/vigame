@@ -46,10 +46,18 @@ export const DEFAULT_PLAYERS = 1;
 
 /**
  * Game modes. In cooperation the players are one team against the Dark
- * Lord; in free for all, each against the others (two players at least).
+ * Lord; Easy Lord is the same against a weaker one; in free for all, each
+ * against the others (two players at least).
  */
-export const MODES = { coop: 'Cooperation', ffa: 'Free for all' };
+export const MODES = { coop: 'Cooperation', easy: 'Easy Lord', ffa: 'Free for all' };
 export const DEFAULT_MODE = 'coop';
+
+/**
+ * The modes with a Dark Lord, and his buildings' hit points in each (his
+ * lair's and his horde's), as a share of the usual.
+ * @type {Record<string, number>}
+ */
+export const LORD_HP = { coop: 1, easy: 0.5 };
 
 /** Most units one player may have at once, inside buildings or out. */
 export const UNIT_LIMIT = 300;
@@ -259,6 +267,7 @@ export const REPAIR_WORK = 500;
  * @property {number} [loot] Dark metal for the side that brings it down;
  *   without it, a share of its price in dark metal (SALVAGE).
  * @property {number} [upgrade] Stone to upgrade it, times its grade before.
+ * @property {number} [upgradeMetal] Dark metal to upgrade it, the same at each grade.
  * @property {Skill} skill The skill its units use there.
  * @property {number} [work] Work, from the units inside, for each thing it
  *   yields: a castle a new unit, a pit a stone, a farm a food.
@@ -300,12 +309,14 @@ export const BUILDING_TYPES = {
     raise: 12000,
   },
   wagon: {
-    name: 'Wagon', size: 1, capacity: 15, grades: 1, hp: 300, build: true, cost: 0, metal: 15, nearCastle: true,
-    skill: 'melee', speed: 2 * TICKS_PER_SECOND, raise: 9000,
+    // Upgrades armour it: each adds its hit points again (up to four times)
+    // and no room, for the price of two wagons.
+    name: 'Wagon', size: 1, capacity: 15, perGrade: 0, grades: 4, hp: 300, build: true, cost: 0, metal: 15, nearCastle: true,
+    upgradeMetal: 30, skill: 'melee', speed: 2 * TICKS_PER_SECOND, raise: 9000,
   },
   pit: {
-    name: 'Pit', size: 1, capacity: 8, grades: 1, hp: 200, build: true, cost: 0,
-    skill: 'build', work: 9600, yields: 'stone', perDepth: 20, hpPerDepth: 100, depth: 5, through: 0.25, raise: 3000,
+    name: 'Pit', size: 1, capacity: 8, grades: 1, hp: 250, build: true, cost: 0,
+    skill: 'build', work: 9600, yields: 'stone', perDepth: 40, hpPerDepth: 150, depth: 3, through: 0.25, raise: 3000,
   },
   farm: {
     name: 'Farm', size: 1, capacity: 6, grades: 1, hp: 200, build: true, cost: 30,

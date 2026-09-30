@@ -40,7 +40,7 @@ import { distance, key, neighbors, parseKey } from './hex.js';
 import { tileAt } from './board.js';
 import { unitName } from './names.js';
 import {
-  BUILDING_TYPES, BUILD_RANGE, DARK_LORD, HORDE_MAX, HORDE_PERIOD, HORDE_START, POINTS, RAIDERS, SALVAGE, RAID_CHANCE, RAID_CLEAR, RAID_MAX, RAID_PERIOD, RAID_ROAM, START_METAL, DEFAULT_MODE, MAX_PLAYERS, MODES, COMBAT_PERIOD, DEPART_GAP, FOOD_PER_UNIT, KILL_EVEN, KILL_MAX, KILL_STEP, KILL_XP, MELEE_DAMAGE, MELEE_RANGE,
+  BUILDING_TYPES, BUILD_RANGE, DARK_LORD, LORD_HP, HORDE_MAX, HORDE_PERIOD, HORDE_START, POINTS, RAIDERS, SALVAGE, RAID_CHANCE, RAID_CLEAR, RAID_MAX, RAID_PERIOD, RAID_ROAM, START_METAL, DEFAULT_MODE, MAX_PLAYERS, MODES, COMBAT_PERIOD, DEPART_GAP, FOOD_PER_UNIT, KILL_EVEN, KILL_MAX, KILL_STEP, KILL_XP, MELEE_DAMAGE, MELEE_RANGE,
   RANGED_DAMAGE, RANGED_RANGE, REPAIR_WORK, FOOD_PERIOD, FOOD_STORE, HUNGER_PULL, LEVEL_GROWTH,
   LEVEL_RATE, LEVEL_XP, MAX_HUNGER, MAX_LEVEL, SIDES, SKILLS, SKILL_RATE, SKILL_XP, START_STONE, START_UNITS, STARVE_CHANCE,
   UNIT_LIMIT, WAGON_PATIENCE, WALK_TICKS, WORK_BASE,
@@ -187,7 +187,7 @@ export function newGame(board, { mode = DEFAULT_MODE } = {}) {
     buildings: {},
     units: {},
   };
-  const coop = mode === 'coop';
+  const coop = hasLord(mode);
   // The board's last site is the lair's; the others are the players'.
   const players = board.starts.length - 1;
   board.starts.slice(0, coop ? players + 1 : players).forEach((start, owner) => {
@@ -368,16 +368,27 @@ export function lordScale(state) {
 }
 
 /**
+ * Whether a game in this mode has the Dark Lord, against the players as one
+ * team.
+ * @param {string} mode
+ */
+export function hasLord(mode) {
+  return Object.hasOwn(LORD_HP, mode);
+}
+
+/**
  * A building's hit points when unharmed: its type's for each grade, and a
  * pit's `hpPerDepth` for each grade of depth it is dug; half while it is
- * going up; and more for the Dark Lord's with more players (`lordScale`).
- * @param {Pick<GameState, 'players'>} state
+ * going up; and for the Dark Lord's, more with more players (`lordScale`),
+ * and less in Easy Lord (`LORD_HP`).
+ * @param {Pick<GameState, 'players' | 'mode'>} state
  * @param {Building} b
  */
 export function maxHp(state, b) {
   const type = BUILDING_TYPES[b.type];
   const deep = (type.hpPerDepth ?? 0) * depthOf(b);
-  const full = Math.round((type.hp * b.grade + deep) * (type.scales ? lordScale(state) : 1));
+  const lord = type.scales ? lordScale(state) * (LORD_HP[state.mode] ?? 1) : 1;
+  const full = Math.round((type.hp * b.grade + deep) * lord);
   return isRising(b) ? Math.ceil(full / 2) : full;
 }
 
@@ -415,6 +426,35 @@ export function depthOf(b) {
 export function foodStore(state, owner) {
   const castle = castleOf(state, owner);
   return castle ? FOOD_STORE * FOOD_PER_UNIT * capacityOf(castle) : 0;
+}
+
+/**
+ * The food a side gets without work before each meal: its castle's, for half
+ * the units it can hold, and each standing farm's base.
+ * @param {Pick<GameState, 'buildings'>} state
+ * @param {number} owner
+ */
+export function harvestOf(state, owner) {
+  let food = 0;
+  for (const b of Object.values(state.buildings)) {
+    if (b.owner !== owner) continue;
+    if (b.type === 'castle') food += Math.floor(capacityOf(b) / 2) * FOOD_PER_UNIT;
+    else if (!isRising(b)) food += BUILDING_TYPES[b.type].base ?? 0;
+  }
+  return food;
+}
+
+/**
+ * Whether a side's store, with the next harvest, gives every unit of it a
+ * full meal. Food its crews grow before then may still make up the rest.
+ * @param {Pick<GameState, 'buildings' | 'units' | 'players'>} state
+ * @param {number} owner
+ */
+export function fullMeal(state, owner) {
+  const units = Object.values(state.units).filter((u) => u.owner === owner).length;
+  const { food } = state.players[owner];
+  const stored = Math.max(food, Math.min(food + harvestOf(state, owner), foodStore(state, owner)));
+  return stored >= units * FOOD_PER_UNIT;
 }
 
 /**
@@ -909,11 +949,12 @@ export function nearStanding(state, player, at) {
 }
 
 /**
- * Stone to upgrade a building from its grade now.
+ * What upgrading a building from its grade now costs: stone, dark metal, or both.
  * @param {Building} b
  */
 export function upgradeCost(b) {
-  return (BUILDING_TYPES[b.type].upgrade ?? 0) * b.grade;
+  const type = BUILDING_TYPES[b.type];
+  return { stone: (type.upgrade ?? 0) * b.grade, metal: type.upgradeMetal ?? 0 };
 }
 
 /**
@@ -934,8 +975,10 @@ function upgrade(state, player, cmd) {
   if (b.grade >= type.grades) return refuse('fully upgraded');
   const stock = state.players[player];
   const cost = upgradeCost(b);
-  if (stock.stone < cost) return refuse('not enough stone');
-  stock.stone -= cost;
+  if (stock.stone < cost.stone) return refuse('not enough stone');
+  if (stock.metal < cost.metal) return refuse('not enough dark metal');
+  stock.stone -= cost.stone;
+  stock.metal -= cost.metal;
   b.upgrading = 0;
   return { ok: true };
 }
@@ -1323,15 +1366,11 @@ function summon(board, state) {
 }
 
 /**
- * Food that comes without work, every FOOD_PERIOD: a castle's, for half the
- * units it can hold, and each farm's base.
+ * Food that comes without work, every FOOD_PERIOD (`harvestOf`).
  * @param {GameState} state
  */
 function harvest(state) {
-  for (const b of Object.values(state.buildings)) {
-    if (b.type === 'castle') addFood(state, b.owner, Math.floor(capacityOf(b) / 2) * FOOD_PER_UNIT);
-    else if (!isRising(b)) addFood(state, b.owner, BUILDING_TYPES[b.type].base ?? 0);
-  }
+  for (const p of state.players) addFood(state, p.id, harvestOf(state, p.id));
 }
 
 /**

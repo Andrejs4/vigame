@@ -6,7 +6,7 @@
 <title>Vigame</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
 <link rel="stylesheet" href="client/style.css">
 <!-- Every address here is relative, so a proxy can serve the game under a subfolder. -->
 <script src="vendor/colyseus.js"></script>
@@ -45,6 +45,7 @@
     <label for="lobby-mode">Mode</label>
     <select id="lobby-mode">
       <option value="coop" selected>Cooperation: together against the Dark Lord</option>
+      <option value="easy">Easy Lord: together against a weaker Dark Lord</option>
       <option value="ffa">Free for all: each against the other</option>
     </select>
     <label for="lobby-players">Players</label>
@@ -81,9 +82,9 @@
       <div class="row"><dt>You</dt><dd id="seat">&mdash;</dd></div>
       <div class="row"><dt>Players</dt><dd id="players" title="Seated players here, of the game's seats; it blinks while the game waits for the rest">&mdash;</dd></div>
       <div class="row"><dt>Units</dt><dd id="units">&mdash;</dd></div>
-      <div class="row"><dt>Stone</dt><dd id="stone">&mdash;</dd></div>
-      <div class="row"><dt>Dark metal</dt><dd id="metal">&mdash;</dd></div>
-      <div class="row"><dt>Food</dt><dd id="food">&mdash;</dd></div>
+      <div class="row"><dt>Stone</dt><dd id="stone" title="In bold from 60, enough for a tower">&mdash;</dd></div>
+      <div class="row"><dt>Dark metal</dt><dd id="metal" title="In bold from 30, enough for a wagon's upgrade">&mdash;</dd></div>
+      <div class="row"><dt>Food</dt><dd id="food"><span id="food-count" title="In bold when the store, with what the castle and farms give by then, won't feed every unit a full next meal">&mdash;</span><span id="food-rest"></span></dd></div>
       <div class="row"><dt>Selected</dt><dd id="selection">none</dd></div>
       <div class="row"><dt>Tile</dt><dd id="tile">&mdash;</dd></div>
       <div class="row"><dt>Observers</dt><dd id="observers">0</dd></div>
@@ -93,14 +94,14 @@
 
   <div class="hud" id="controls">
     <div class="group-label">Build</div>
-    <button id="build-tower" data-kind="tower" aria-pressed="false">Tower</button>
-    <button id="build-wagon" data-kind="wagon" aria-pressed="false">Wagon</button>
-    <button id="build-pit" data-kind="pit" aria-pressed="false">Pit</button>
-    <button id="build-farm" data-kind="farm" aria-pressed="false">Farm</button>
-    <button id="build-band" data-kind="band" aria-pressed="false">Band</button>
+    <button id="build-tower" data-kind="tower" aria-pressed="false" aria-keyshortcuts="T">Tower</button>
+    <button id="build-wagon" data-kind="wagon" aria-pressed="false" aria-keyshortcuts="W">Wagon</button>
+    <button id="build-pit" data-kind="pit" aria-pressed="false" aria-keyshortcuts="P">Pit</button>
+    <button id="build-farm" data-kind="farm" aria-pressed="false" aria-keyshortcuts="F">Farm</button>
+    <button id="build-band" data-kind="band" aria-pressed="false" aria-keyshortcuts="B">Band</button>
     <div class="group-label">Selected</div>
-    <button id="upgrade" disabled>Upgrade</button>
-    <button id="crew-button" disabled>Crew…</button>
+    <button id="upgrade" disabled aria-keyshortcuts="U" title="Upgrade (U)"><b>U</b>pgrade</button>
+    <button id="crew-button" disabled aria-keyshortcuts="C" title="Choose who works here (C)"><b>C</b>rew…</button>
     <button id="return-button" disabled>Return</button>
     <button id="abort-button" disabled title="Give up a building still going up: its crew goes home, and its cost is lost">Abort</button>
     <button id="attack-button" disabled aria-pressed="false" aria-keyshortcuts="A" title="Attack (A)"><b>A</b>ttack…</button>
@@ -143,7 +144,7 @@
       gives no cover, and breaks up when it has nobody. Units in buildings
       and bands strike enemies in reach; press Attack, then an enemy
       building, to choose their target. Drag to pan, wheel to zoom; press
-      the minimap to look anywhere.
+      the minimap to look anywhere. A button's bold letter is its key.
     </details>
     <div class="legend-note">
       Pictures: <a href="https://game-icons.net" target="_blank" rel="noopener">game-icons.net</a>
