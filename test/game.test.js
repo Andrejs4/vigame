@@ -11,6 +11,7 @@ import {
   WALK_TICKS, WORK_BASE,
 } from '../src/core/rules.js';
 import { distance } from '../src/core/hex.js';
+import { GAME_NAMES } from '../src/core/names.js';
 import { boardFrom, noTally, openBoard, run, runUntil, skillsAt, stateWith, unitsIn } from './helpers.js';
 
 const OK = { ok: true };
@@ -26,6 +27,8 @@ test('a new game has a castle per player on the start sites, with named units in
   const state = newGame(board);
   assert.deepEqual(checkState(board, state), []);
   assert.equal(state.mode, 'coop', 'cooperation by default');
+  assert.ok(GAME_NAMES.includes(state.name), 'named from the preset list');
+  assert.equal(publicView(state).name, state.name, 'which everyone sees');
   assert.deepEqual(
     Object.values(state.buildings).map((b) => [b.owner, b.type, b.q, b.r]),
     board.starts.map((s, owner) => [owner, owner === 2 ? 'lair' : 'castle', s.q, s.r]),
@@ -49,7 +52,7 @@ test('games seat 1 to 8 players, on maps that grow with them', () => {
   for (const players of [1, 8]) {
     const board = createBoard({ ...BOARD_OPTIONS, seed: 9, players });
     assert.equal(board.starts.length, players + 1, 'a site per player, and the lair\'s');
-    for (const mode of players > 1 ? ['coop', 'easy', 'ffa'] : ['coop', 'easy']) {
+    for (const mode of players > 1 ? ['coop', 'easy', 'shared', 'ffa'] : ['coop', 'easy', 'shared']) {
       const state = newGame(board, { mode });
       assert.deepEqual(checkState(board, state), [], `${players} players, ${mode}`);
       assert.equal(seatsOf(state), players);
@@ -309,6 +312,9 @@ test('commands that are not allowed are refused, and change nothing', () => {
     [0, { type: 'upgrade', building: 'b3' }, 'not your building'],
     [0, { type: 'upgrade', building: 'b6' }, 'fully upgraded'],
     [0, { type: 'move', building: 'b2', q: 1, r: 1 }, 'cannot move'],
+    [0, { type: 'rename', name: 'a'.repeat(25) }, 'a name is 1 to 24 letters, digits and spaces'],
+    [0, { type: 'rename', name: '<b>' }, 'a name is 1 to 24 letters, digits and spaces'],
+    [0, { type: 'rename' }, 'a name is 1 to 24 letters, digits and spaces'],
     [0, { type: 'fly' }, 'unknown command'],
     [0, null, 'not a command'],
     [0, 'crew', 'not a command'],
@@ -318,6 +324,18 @@ test('commands that are not allowed are refused, and change nothing', () => {
     assert.deepEqual(applyCommand(board, state, player, command), { ok: false, reason }, JSON.stringify(command));
   }
   assert.equal(JSON.stringify(state), before);
+});
+
+test('any player may rename the game, while it goes on', () => {
+  const board = openBoard(4);
+  const state = stateWith([{ id: 'b1', type: 'castle' }, { id: 'b2', owner: 1, type: 'castle', q: 3, r: 0 }]);
+  assert.deepEqual(applyCommand(board, state, 1, { type: 'rename', name: '  Pit   party 2 ' }), OK);
+  assert.equal(state.name, 'Pit party 2', 'tidied');
+  state.name = 'Pit & party';
+  assert.deepEqual(checkState(board, state), ['bad name']);
+  state.name = 'Pit party';
+  state.over = 10;
+  assert.deepEqual(applyCommand(board, state, 0, { type: 'rename', name: 'Afterparty' }), { ok: false, reason: 'the game is over' });
 });
 
 // --- stone, food and hit points --------------------------------------------------
@@ -623,6 +641,45 @@ test('in Easy Lord the Dark Lord\'s lair and horde have half the hit points, and
   const usual = horde('coop');
   assert.ok(usual.some(([type]) => type === 'ogre'), 'ghouls and an ogre by then');
   assert.deepEqual(horde('easy'), usual.map(([type, hp]) => [type, /** @type {number} */ (hp) / 2]));
+});
+
+test('in Shared Easy Lord the team lives off one stock, kept by its first side, against an easy Lord', () => {
+  const map = createBoard({ ...BOARD_OPTIONS, seed: 3 });
+  const game = newGame(map, { mode: 'shared' });
+  assert.deepEqual(checkState(map, game), []);
+  assert.deepEqual(game.players.map((p) => p.stone), [400, 0, 0, 0], 'the players\' stone together, on the first');
+  assert.equal(Object.values(game.buildings).find((b) => b.type === 'lair')?.hp, BUILDING_TYPES.lair.hp / 2);
+
+  // Two castles, and forty units in towers (so nobody is born), all the second side's.
+  const board = openBoard(6);
+  const shared = (/** @type {string} */ mode) => {
+    const state = stateWith(
+      [{ id: 'b1', type: 'castle' }, { id: 'b2', owner: 1, type: 'castle', q: 4, r: -4 },
+        { id: 'b3', owner: 1, q: 4, r: 0 }, { id: 'b4', owner: 1, q: 0, r: 4 }],
+      [...unitsIn('b3', 20, 100, 1), ...unitsIn('b4', 20, 200, 1)],
+    );
+    state.mode = mode;
+    state.players[1].team = 0;
+    for (const p of state.players) Object.assign(p, { stone: 0, metal: 0 });
+    return state;
+  };
+  const state = shared('shared');
+  state.players[0].stone = 100;
+  assert.deepEqual(checkState(board, state), []);
+  // The second side builds and upgrades from the first's stone, while there is enough.
+  assert.deepEqual(applyCommand(board, state, 1, { type: 'upgrade', building: 'b3' }), OK);
+  assert.deepEqual([state.players[0].stone, state.players[1].stone], [100 - BUILDING_TYPES.tower.upgrade, 0]);
+  assert.deepEqual(applyCommand(board, state, 1, { type: 'upgrade', building: 'b4' }), { ok: false, reason: 'not enough stone' });
+  // Both castles' food feeds the forty at one meal, with one hunger for the team.
+  delete state.buildings.b3.upgrading;
+  run(board, state, FOOD_PERIOD);
+  assert.deepEqual(state.players.slice(0, 2).map((p) => [p.food, p.hunger]), [[0, 0], [0, 0]], 'fed in full');
+  const apart = shared('easy');
+  run(board, apart, FOOD_PERIOD);
+  assert.ok(apart.players[1].hunger > 0, 'apart, the second side\'s castle alone feeds only half of them');
+
+  state.players[1].food = 5;
+  assert.deepEqual(checkState(board, state), ['side 1: keeps stock apart from its team\'s']);
 });
 
 test('the horde goes for the nearest farm, turns on a building that strikes it, and on castles once no farm is left', () => {
@@ -983,6 +1040,7 @@ test('the same commands at the same ticks give the same game, saved and reloaded
   const reloaded = randomGame(11, 1000, () => {});
   assert.deepEqual(randomGame(11, 1000, () => {}, 'coop').state, randomGame(11, 1000, undefined, 'coop').state);
   assert.deepEqual(randomGame(11, 1000, () => {}, 'easy').state, randomGame(11, 1000, undefined, 'easy').state);
+  assert.deepEqual(randomGame(11, 1000, () => {}, 'shared').state, randomGame(11, 1000, undefined, 'shared').state);
   assert.deepEqual(reloaded.state, straight.state);
   assert.notDeepEqual(randomGame(12, 1000).state, straight.state);
 });

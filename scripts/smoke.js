@@ -21,6 +21,7 @@ import { playerId } from '../server/room.js';
 import { BOARD_OPTIONS, createBoard } from '../src/core/board.js';
 import { checkState, newGame } from '../src/core/game.js';
 import { axialToPixel, distance } from '../src/core/hex.js';
+import { GAME_NAMES } from '../src/core/names.js';
 import { BUILDING_TYPES } from '../src/core/rules.js';
 import { PICTURES } from '../src/client/tokens.js';
 
@@ -204,10 +205,10 @@ async function selectBuilding(page, b, { touch = false } = {}) {
 
 /**
  * Confirm the crew dialog, after ticking `add` more units than it came with,
- * or only the first `only`.
+ * or only the first `only`; with the button, or `key` if given.
  * @returns {Promise<string>} The dialog's count, such as "3 of 20", when it opened.
  */
-async function confirmCrew(page, { add = 0, only = undefined, shot = '' } = {}) {
+async function confirmCrew(page, { add = 0, only = undefined, shot = '', key = '' } = {}) {
   await page.waitForSelector('#crew[open]');
   const count = await text(page, '#crew-count');
   if (only !== undefined) {
@@ -218,7 +219,9 @@ async function confirmCrew(page, { add = 0, only = undefined, shot = '' } = {}) 
   }
   for (let i = 0; i < add; i++) await page.locator('#crew-list input:not(:checked):not(:disabled)').first().check();
   if (shot) await page.screenshot({ path: join(OUT, shot) });
-  await page.click('#crew-ok');
+  // Enter or the letter that opened it confirms, as the button does.
+  if (key) await page.keyboard.press(key);
+  else await page.click('#crew-ok');
   await page.waitForSelector('#crew', { state: 'hidden' });
   return count ?? '';
 }
@@ -227,7 +230,7 @@ async function confirmCrew(page, { add = 0, only = undefined, shot = '' } = {}) 
 async function crewWith(page, b, n) {
   await selectBuilding(page, b);
   await page.click('#crew-button');
-  await confirmCrew(page, { add: n });
+  await confirmCrew(page, { add: n, key: 'c' });
   await page.waitForFunction((id) => Object.values(/** @type {any} */ (window).__vigame.view.units)
     .some((u) => u.to === id || u.in === id), b.id);
 }
@@ -299,7 +302,7 @@ const inLobby = (page) => page.waitForFunction(() => {
 
 /**
  * Open a game from the lobby: the row naming these players.
- * @param {string} list 'mine' or 'open'
+ * @param {string} list 'mine', 'open' or 'playing'
  * @param {string} who The row's text, such as "Ann & —".
  */
 async function openFromLobby(page, list, who, { touch = false } = {}) {
@@ -347,6 +350,9 @@ async function finished(browser, url) {
   assert.deepEqual(checkState(board, state), []);
   games.storage.createGame({ id: 'finished-game', seed, state, seats: [playerId(/** @type {string} */ (token))] });
 
+  // Recently finished starts folded away.
+  assert.equal(await page.locator('#lobby-done-section[open]').count(), 0);
+  await page.click('#lobby-done-section summary');
   const row = page.locator('#lobby-done li', { hasText: 'Fay' });
   await row.waitFor({ timeout: 10000 });
   await row.locator('a').click();
@@ -427,9 +433,28 @@ async function threeBrowsers(browser, url, { full, label }) {
   await waitText(a, '#time', '0:00 · paused');
   assert.equal(await a.locator('#build-tower').isDisabled(), true);
 
-  // Bēla logs in and finds the game in the lobby, waiting for her.
+  // The game starts with one of the preset names. Ann renames it while she
+  // waits: a name with a symbol is refused on the page, a good one is tidied
+  // and taken, and the tab's title follows.
+  const named = await text(a, '#game-name');
+  assert.ok(GAME_NAMES.includes(named ?? ''), `"${named}" is not a preset name`);
+  const rename = `${label === 'direct' ? 'Friday' : 'Sunday'} fight`;
+  await a.click('#rename-button');
+  await a.waitForSelector('#rename[open]');
+  await a.fill('#rename-input', 'Ann & co');
+  await a.keyboard.press('Enter');
+  await waitMatch(a, '#rename-error', /letters, digits and spaces/);
+  await a.fill('#rename-input', `  ${rename.replace(' ', '   ')} `);
+  await a.keyboard.press('Enter');
+  await a.waitForSelector('#rename', { state: 'hidden' });
+  await waitText(a, '#game-name', rename);
+  assert.equal(await a.title(), `${rename} · Vigame`);
+
+  // Bēla logs in and finds the game in the lobby by its name, waiting for her.
   const b = await newPlayer(browser, url, `${label}-b`, 'Bēla');
   await inLobby(b);
+  await b.locator('#lobby-open li', { hasText: rename }).first().waitFor({ timeout: 10000 });
+  if (full) await b.screenshot({ path: join(OUT, 'lobby-games.png') });
   await openFromLobby(b, 'open', 'Ann & —');
   await waitText(b, '#seat', 'Bēla · Crimson');
   await waitMatch(a, '#time', /^0:0[1-9]$/);
@@ -544,6 +569,11 @@ async function threeBrowsers(browser, url, { full, label }) {
   await waitMatch(a, '#selection', /^Tower \(grade 2\)/, 60000);
   await b.waitForFunction((id) => /** @type {any} */ (window).__vigame.view.buildings[id].grade === 2, tower.id);
 
+  // Short of dark metal, W says so at once, before any cell or crew is chosen.
+  await a.keyboard.press('w');
+  await waitText(a, '#message', "Can't build a wagon: not enough dark metal.");
+  assert.equal(await a.locator('#build-wagon').getAttribute('aria-pressed'), 'false', 'not placing a wagon');
+
   // Building far from your own buildings is refused, and the page says why.
   await a.keyboard.press('Escape');
   await lookAt(a, crimson);
@@ -561,7 +591,7 @@ async function threeBrowsers(browser, url, { full, label }) {
   // Near the castle: the crew walks two seconds a cell, four on scrub.
   const pitSpot = await openCell(a, await spotsNear(a, blue));
   await clickHex(a, pitSpot.q, pitSpot.r);
-  assert.match(await confirmCrew(a, { shot: 'crew.png' }), /^[1-8] of 8$/, 'up to half of those at home are ticked');
+  assert.match(await confirmCrew(a, { shot: 'crew.png', key: 'p' }), /^[1-8] of 8$/, 'up to half of those at home are ticked');
   await a.waitForFunction((n) => Object.keys(/** @type {any} */ (window).__vigame.view.buildings).length === n, count + 1);
   const pit = (await buildings(a)).find((x) => x.type === 'pit');
   await a.waitForFunction((id) => /** @type {any} */ (window).__vigame.view.buildings[id].work > 0, pit.id, { timeout: 30000 });
@@ -617,7 +647,7 @@ async function threeBrowsers(browser, url, { full, label }) {
   const bandSpot = await openCell(b, bandCells.map((k) => k.split(',').map(Number))
     .sort(([q1, r1], [q2, r2]) => distance({ q: q1, r: r1 }, crimson) - distance({ q: q2, r: r2 }, crimson)));
   await clickHex(b, bandSpot.q, bandSpot.r);
-  await confirmCrew(b);
+  await confirmCrew(b, { key: 'Enter' });
   await b.waitForFunction((n) => Object.keys(/** @type {any} */ (window).__vigame.view.buildings).length === n, before + 1);
   const wagon = (await buildings(b)).find((x) => x.type === 'band');
   await b.waitForFunction((id) => !Object.values(/** @type {any} */ (window).__vigame.view.units)
@@ -680,22 +710,34 @@ async function threeBrowsers(browser, url, { full, label }) {
   await inLobby(lost);
   await waitText(lost, '#lobby-notice', 'There is no game at that address.');
   assert.equal(new URL(lost.url()).search, '', 'the address is the lobby again');
+  // Lou finds Ann and Bēla's game among those under way, folded away until
+  // opened, and watches it from there.
+  assert.equal(await lost.locator('#lobby-playing-section[open]').count(), 0);
+  await lost.click('#lobby-playing-section summary');
+  await openFromLobby(lost, 'playing', 'Ann & Bēla');
+  await waitText(lost, '#seat', 'Lou · Spectator');
 
   for (const p of [a, b, c, lost]) await p.context().close();
 }
 
-/** The login page, the lobby and a game on a phone, with a desktop opponent. */
+/** The login page, the lobby and a Shared Easy Lord game on a phone, with a desktop teammate. */
 async function phone(browser, url) {
   const page = await newPlayer(browser, url, 'phone', 'Pia', PHONE);
   await inLobby(page);
   const fits = () => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth);
   assert.ok(await fits(), 'the lobby scrolls sideways on a phone');
+  await page.selectOption('#lobby-mode', 'shared');
   await page.selectOption('#lobby-players', '2');
   await page.tap('#lobby-new');
   await inGame(page);
   const other = await newPlayer(browser, page.url(), 'phone-opponent', 'Oli');
   await inGame(other);
   await waitMatch(page, '#time', /^0:0[1-9]$/);
+  // Shared Easy Lord: both see the team's stock, both starts' stone together.
+  for (const p of [page, other]) {
+    await waitText(p, '#stone-label', 'Team stone');
+    await waitText(p, '#stone', '400');
+  }
 
   const layout = await page.evaluate(() => {
     const box = (id) => document.getElementById(id).getBoundingClientRect().toJSON();

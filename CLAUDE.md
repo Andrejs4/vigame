@@ -104,15 +104,18 @@ persistence.
   tick, then adopt the copy. The tests check that a failed write changes
   nothing.
 - The clock runs only while every seat is held by a player who is here, and
-  never again once the game is over (`over` in the state).
+  never again once the game is over (`over` in the state). While it is
+  paused the room refuses commands, except `rename`, which needs no clock;
+  after a rename it saves a snapshot at once, since the lobby reads a game's
+  name from its snapshot and a paused game takes none.
 - Commands are flat objects of short strings, numbers and short lists of
   short strings (such as a crew's unit ids); the room rejects
   anything else before the core sees it (`flatCommand`).
 - Only signed-in players join: `gameRoom(storage)` in `server/room.js` makes
   the room class whose static `onAuth` checks the `players` table. Colyseus
   calls `onAuth` on the class before any room exists, with only the client's
-  options, which is why the class carries the storage. Name rules live in
-  `src/core/player.js` so the page and the server agree.
+  options, which is why the class carries the storage. Name rules (players'
+  and games') live in `src/core/player.js` so the page and the server agree.
 - The page may be served under a subfolder by a proxy that strips it
   (README, "Behind nginx"). So the page never uses a root-relative address:
   resolve against `serverBase()` in `src/client/api.js`, and keep every

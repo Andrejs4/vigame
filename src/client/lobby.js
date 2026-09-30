@@ -1,7 +1,8 @@
 /**
  * The lobby: the player's own games under way, games waiting for a player,
- * the last few finished (to see their points again), and starting a new one. Opening a game goes to `?game=<id>`, the same address
- * an invitation link has.
+ * other people's under way (to watch), the last few finished (to see their
+ * points again), and starting a new one. Opening a game goes to
+ * `?game=<id>`, the same address an invitation link has.
  */
 
 import { hasLord } from '../core/game.js';
@@ -14,6 +15,12 @@ const REFRESH_MS = 5000;
 
 /** How many finished games the lobby lists. */
 const RECENT_DONE = 5;
+
+/** How many of other people's games under way the lobby lists. */
+const ONGOING_SHOWN = 10;
+
+/** Where the browser keeps which of the lobby's lists are open. */
+const OPEN_KEY = 'vigame.lobbyOpen';
 
 /**
  * The address of a game, relative to the lobby's.
@@ -40,8 +47,8 @@ function result(game) {
 }
 
 /**
- * One game as a list row: who plays which side, how far it has got, and a
- * button to open it.
+ * One game as a list row: its name, who plays which side, how far it has
+ * got, and a button to open it.
  * @param {import('./api.js').GameSummary} game
  * @param {string} action The button's label.
  */
@@ -49,6 +56,10 @@ function row(game, action) {
   const li = document.createElement('li');
   const who = document.createElement('span');
   who.className = 'who';
+  const title = document.createElement('span');
+  title.className = 'title';
+  title.textContent = game.name ?? 'A game';
+  who.append(title);
   // Teammates with "&", rivals with "vs".
   const between = hasLord(game.mode) ? ' & ' : ' vs ';
   game.seats.forEach((holder, i) => {
@@ -72,6 +83,20 @@ function row(game, action) {
 }
 
 /**
+ * Fill one of the lobby's lists, with its count in its heading, or its note
+ * when it has none.
+ * @param {string} name
+ * @param {import('./api.js').GameSummary[]} games
+ * @param {string} action The buttons' label.
+ */
+function fill(name, games, action) {
+  const byId = (/** @type {string} */ id) => /** @type {HTMLElement} */ (document.getElementById(id));
+  byId(`lobby-${name}`).replaceChildren(...games.map((g) => row(g, action)));
+  byId(`lobby-${name}-empty`).hidden = games.length > 0;
+  byId(`lobby-${name}-count`).textContent = games.length ? String(games.length) : '';
+}
+
+/**
  * Show the lobby. It stays up until the player opens a game, which loads
  * that game's address.
  * @param {string} token
@@ -83,16 +108,24 @@ export function showLobby(token, me, { notice } = {}) {
   const page = /** @type {HTMLElement} */ (document.getElementById('lobby'));
   const nameOut = /** @type {HTMLElement} */ (document.getElementById('lobby-name'));
   const noticeOut = /** @type {HTMLElement} */ (document.getElementById('lobby-notice'));
-  const mine = /** @type {HTMLElement} */ (document.getElementById('lobby-mine'));
-  const open = /** @type {HTMLElement} */ (document.getElementById('lobby-open'));
-  const done = /** @type {HTMLElement} */ (document.getElementById('lobby-done'));
-  const doneEmpty = /** @type {HTMLElement} */ (document.getElementById('lobby-done-empty'));
-  const mineEmpty = /** @type {HTMLElement} */ (document.getElementById('lobby-mine-empty'));
-  const openEmpty = /** @type {HTMLElement} */ (document.getElementById('lobby-open-empty'));
   const newButton = /** @type {HTMLButtonElement} */ (document.getElementById('lobby-new'));
   const modeSelect = /** @type {HTMLSelectElement} */ (document.getElementById('lobby-mode'));
   const playersSelect = /** @type {HTMLSelectElement} */ (document.getElementById('lobby-players'));
   const rename = /** @type {HTMLElement} */ (document.getElementById('lobby-rename'));
+
+  // Each list stays open or shut as the player last left it, in this browser.
+  const sections = /** @type {HTMLDetailsElement[]} */ ([...page.querySelectorAll('details.games-list')]);
+  try {
+    const kept = JSON.parse(localStorage.getItem(OPEN_KEY) ?? '{}');
+    for (const s of sections) if (typeof kept[s.id] === 'boolean') s.open = kept[s.id];
+  } catch { /* nothing kept: as the page has them */ }
+  for (const s of sections) {
+    s.ontoggle = () => {
+      try {
+        localStorage.setItem(OPEN_KEY, JSON.stringify(Object.fromEntries(sections.map((x) => [x.id, x.open]))));
+      } catch { /* not kept */ }
+    };
+  }
 
   /** @param {string} [text] */
   function say(text) {
@@ -110,16 +143,14 @@ export function showLobby(token, me, { notice } = {}) {
       return;
     }
     const isMine = (/** @type {import('./api.js').GameSummary} */ g) => g.seats.some((s) => s?.pid === me.pid);
-    const mineList = games.filter((g) => isMine(g) && g.over === null);
-    const openList = games.filter((g) => !isMine(g) && g.over === null && g.seats.some((s) => s === null));
+    const going = games.filter((g) => g.over === null);
+    const others = going.filter((g) => !isMine(g));
+    fill('mine', going.filter(isMine), 'Open');
+    fill('open', others.filter((g) => g.seats.some((s) => s === null)), 'Join');
+    // Every seat taken, most recently active first: opening one watches it.
+    fill('playing', others.filter((g) => g.seats.every((s) => s !== null)).slice(0, ONGOING_SHOWN), 'Watch');
     // Anyone's, most recent first: opening one shows its table of points.
-    const doneList = games.filter((g) => g.over !== null).slice(0, RECENT_DONE);
-    mine.replaceChildren(...mineList.map((g) => row(g, 'Open')));
-    open.replaceChildren(...openList.map((g) => row(g, 'Join')));
-    done.replaceChildren(...doneList.map((g) => row(g, 'Scores')));
-    mineEmpty.hidden = mineList.length > 0;
-    openEmpty.hidden = openList.length > 0;
-    doneEmpty.hidden = doneList.length > 0;
+    fill('done', games.filter((g) => g.over !== null).slice(0, RECENT_DONE), 'Scores');
   }
 
   nameOut.textContent = me.name;

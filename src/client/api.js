@@ -11,6 +11,8 @@
  * @typedef {object} GameSummary A game as the lobby lists it.
  * @property {string} id
  * @property {string} mode A key of MODES.
+ * @property {string | null} name What its players call it (null only for a
+ *   game saved before games had names).
  * @property {number | null} over The tick it ended, or null while it's on.
  * @property {number | null} winner The team that won, if one did.
  * @property {number} tick

@@ -98,6 +98,14 @@ button[aria-pressed="true"] { background: rgba(255, 216, 77, 0.18); border-color
 .card .error { color: var(--amber); min-height: 1.5em; margin: 0 0 10px; font-size: 13px; }
 .card .empty { margin: 0; color: var(--ink-dim); font-size: 13px; }
 
+/* The lobby's lists fold away; each heading says how many games it has. */
+.games-list { margin-top: 20px; }
+.games-list summary { cursor: pointer; }
+.games-list[open] summary { margin-bottom: 8px; }
+.games-list summary:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
+.card .games-list h2 { display: inline; margin: 0; }
+.games-list .count { color: var(--ink-dim); font: 12px var(--mono); margin-left: 4px; }
+
 .games { list-style: none; margin: 0; padding: 0; }
 .games li {
   display: flex; align-items: center; justify-content: space-between; gap: 12px;
@@ -106,6 +114,7 @@ button[aria-pressed="true"] { background: rgba(255, 216, 77, 0.18); border-color
 }
 .games li:last-child { border-bottom: 1px solid var(--panel-edge); }
 .games .who { font-size: 13px; }
+.games .title { display: block; font-weight: 600; }
 .games .when { color: var(--ink-dim); font: 12px var(--mono); margin-left: 6px; }
 .games .button { flex: none; }
 
@@ -170,6 +179,14 @@ dl { margin: 0; }
 .row { display: flex; justify-content: space-between; gap: 18px; }
 .row dt { color: var(--ink-dim); margin: 0; }
 .row dd { margin: 0; font-family: var(--mono); font-size: 12px; font-variant-numeric: tabular-nums; }
+/* What the side has to spend, on a band of its own. */
+.row.stock {
+  margin: 0 -6px; padding: 1px 6px;
+  background: rgba(255, 216, 77, 0.09);
+  border-radius: 5px 5px 0 0;
+}
+.row.stock + .row.stock { border-radius: 0 0 5px 5px; }
+.row.stock dt { color: var(--ink); }
 /* A figure worth a look: stone or dark metal enough to spend, food short of the next meal. */
 .row .marked { font-weight: 600; }
 
@@ -198,7 +215,7 @@ dl { margin: 0; }
 }
 
 /* The crew chooser: the player's units, with the chosen ones ticked. */
-#crew, #scores {
+#crew, #scores, #rename {
   width: min(460px, calc(100vw - 32px));
   max-height: calc(100dvh - 48px);
   padding: 16px;
@@ -207,10 +224,30 @@ dl { margin: 0; }
   border: 1px solid var(--panel-edge);
   border-radius: 12px;
 }
-#crew::backdrop, #scores::backdrop { background: rgba(0, 0, 0, 0.55); }
+#crew::backdrop, #scores::backdrop, #rename::backdrop { background: rgba(0, 0, 0, 0.55); }
 #crew form { display: flex; flex-direction: column; gap: 10px; max-height: calc(100dvh - 82px); }
-#crew h2, #scores h2 { margin: 0; font-size: 15px; font-weight: 600; }
-#crew .hint, #scores .hint { margin: 0; color: var(--ink-dim); font-size: 13px; }
+#crew h2, #scores h2, #rename h2 { margin: 0; font-size: 15px; font-weight: 600; }
+#crew .hint, #scores .hint, #rename .hint { margin: 0; color: var(--ink-dim); font-size: 13px; }
+
+/* Renaming the game: a line to type in, and why it won't do. */
+#rename { width: min(360px, calc(100vw - 32px)); }
+#rename form { display: flex; flex-direction: column; gap: 10px; }
+#rename input {
+  font: 14px var(--sans); color: var(--ink);
+  background: rgba(233, 237, 231, 0.07);
+  border: 1px solid var(--panel-edge); border-radius: 7px;
+  padding: 8px 10px;
+}
+#rename input:focus-visible { outline: 2px solid var(--amber); outline-offset: 1px; }
+#rename .error { margin: 0; min-height: 1.5em; color: var(--amber); font-size: 13px; }
+
+/* A small button inside a line of text, such as the game name's pencil. */
+button.inline {
+  margin-left: 6px; padding: 0 3px;
+  border: none; background: none;
+  color: var(--ink-dim); font-size: 12px; line-height: inherit;
+}
+button.inline:hover:not(:disabled) { background: none; color: var(--amber); }
 
 /* The table at a game's end: a row a side, winners first, a column a line of points. */
 #scores { width: min(760px, calc(100vw - 32px)); }

@@ -83,6 +83,7 @@ export function stateWith(buildings, units = [], seed = 1) {
   return {
     version: STATE_VERSION,
     mode: 'ffa',
+    name: 'Test game',
     seed,
     tick: 0,
     rng: 1,
