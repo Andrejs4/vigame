@@ -168,6 +168,9 @@ Run `npm start` and open http://127.0.0.1:2567.
   is in reach, and the nearest enemy otherwise; a wagon or band goes after
   it until it's close enough for close combat. Driving a wagon or band by
   hand drops its target.
+- **Keys**: a button's bold letter presses it: **T**ower, **W**agon, **P**it,
+  **F**arm and **B**and pick what to place (again to stop), **U**pgrade,
+  **C**rew and **A**ttack act on the selected building, and Escape lets go.
 - **Losing and winning**: a side whose castle falls has lost, and can give
   no more commands; its units stay and still fight. Once only one team has
   a castle (or lair) standing, it has won and the game is over: the clock
@@ -478,7 +481,7 @@ comes next.
   59 × 39 map make route-finding and fighting costlier, and nobody has
   measured how much.
 - On a phone, the 29 × 20 board is wider than the screen even at minimum
-  zoom. Pinch-to-zoom and keyboard play are not wired up.
+  zoom. Pinch-to-zoom is not wired up, and the keys are for a keyboard.
 
 ## License
 

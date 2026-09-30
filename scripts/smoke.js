@@ -535,8 +535,11 @@ async function threeBrowsers(browser, url, { full, label }) {
   await a.waitForFunction((id) => /** @type {any} */ (window).__vigame.view.buildings[id].raised === undefined, tower.id, { timeout: 60000 });
   await crewWith(a, tower, 0);
   await waitMatch(a, '#selection', /^Tower \(grade 1\) · crew \d+\/\d+ · HP/);
-  // The upgrade is work for the crew too.
-  await a.click('#upgrade');
+  // Each button with a key shows its letter in bold.
+  assert.deepEqual(await a.$$eval('#controls button[aria-keyshortcuts]', (els) => els.map((el) => el.querySelector('b')?.textContent)),
+    ['T', 'W', 'P', 'F', 'B', 'U', 'C', 'A']);
+  // The upgrade is work for the crew too. U upgrades, as the button does.
+  await a.keyboard.press('u');
   await waitMatch(a, '#selection', /^Tower \(grade 1\) · crew \d+\/\d+ · upgrading\s+\d+%/);
   await waitMatch(a, '#selection', /^Tower \(grade 2\)/, 60000);
   await b.waitForFunction((id) => /** @type {any} */ (window).__vigame.view.buildings[id].grade === 2, tower.id);
@@ -544,7 +547,7 @@ async function threeBrowsers(browser, url, { full, label }) {
   // Building far from your own buildings is refused, and the page says why.
   await a.keyboard.press('Escape');
   await lookAt(a, crimson);
-  await a.click('#build-tower');
+  await a.keyboard.press('t');
   const far = await openCell(a, [[crimson.q, crimson.r + 2], [crimson.q, crimson.r - 2], [crimson.q + 2, crimson.r - 2]]);
   await clickHex(a, far.q, far.r);
   await waitText(a, '#message', "Can't build there: too far from your buildings.");
@@ -581,7 +584,7 @@ async function threeBrowsers(browser, url, { full, label }) {
   await selectBuilding(a, site);
   await a.keyboard.press('a');
   assert.equal(await a.evaluate(() => /** @type {any} */ (window).__vigame.aiming), site.id, 'A aims, as Attack does');
-  await a.click('#crew-button');
+  await a.keyboard.press('c');
   await a.waitForSelector('#crew[open]');
   // Each unit shows its age; a mouse drag down the list ticks each row it crosses.
   assert.match(await a.locator('#crew-list .stats').first().textContent() ?? '', /· \d+ min$/);

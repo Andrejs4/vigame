@@ -93,14 +93,14 @@
 
   <div class="hud" id="controls">
     <div class="group-label">Build</div>
-    <button id="build-tower" data-kind="tower" aria-pressed="false">Tower</button>
-    <button id="build-wagon" data-kind="wagon" aria-pressed="false">Wagon</button>
-    <button id="build-pit" data-kind="pit" aria-pressed="false">Pit</button>
-    <button id="build-farm" data-kind="farm" aria-pressed="false">Farm</button>
-    <button id="build-band" data-kind="band" aria-pressed="false">Band</button>
+    <button id="build-tower" data-kind="tower" aria-pressed="false" aria-keyshortcuts="T">Tower</button>
+    <button id="build-wagon" data-kind="wagon" aria-pressed="false" aria-keyshortcuts="W">Wagon</button>
+    <button id="build-pit" data-kind="pit" aria-pressed="false" aria-keyshortcuts="P">Pit</button>
+    <button id="build-farm" data-kind="farm" aria-pressed="false" aria-keyshortcuts="F">Farm</button>
+    <button id="build-band" data-kind="band" aria-pressed="false" aria-keyshortcuts="B">Band</button>
     <div class="group-label">Selected</div>
-    <button id="upgrade" disabled>Upgrade</button>
-    <button id="crew-button" disabled>Crew…</button>
+    <button id="upgrade" disabled aria-keyshortcuts="U" title="Upgrade (U)"><b>U</b>pgrade</button>
+    <button id="crew-button" disabled aria-keyshortcuts="C" title="Choose who works here (C)"><b>C</b>rew…</button>
     <button id="return-button" disabled>Return</button>
     <button id="abort-button" disabled title="Give up a building still going up: its crew goes home, and its cost is lost">Abort</button>
     <button id="attack-button" disabled aria-pressed="false" aria-keyshortcuts="A" title="Attack (A)"><b>A</b>ttack…</button>
@@ -143,7 +143,7 @@
       gives no cover, and breaks up when it has nobody. Units in buildings
       and bands strike enemies in reach; press Attack, then an enemy
       building, to choose their target. Drag to pan, wheel to zoom; press
-      the minimap to look anywhere.
+      the minimap to look anywhere. A button's bold letter is its key.
     </details>
     <div class="legend-note">
       Pictures: <a href="https://game-icons.net" target="_blank" rel="noopener">game-icons.net</a>

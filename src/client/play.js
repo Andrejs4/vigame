@@ -67,6 +67,18 @@ function worth(line) {
 /** Stone and dark metal the HUD shows in bold: enough for a tower, and for a wagon's upgrade. */
 const PLENTY = { stone: 60, metal: 30 };
 
+/**
+ * Set a button's label with its first letter in bold: the key that presses it.
+ * @param {HTMLElement} button
+ * @param {string} label
+ */
+function keyLabel(button, label) {
+  if (button.textContent === label && button.firstChild?.nodeName === 'B') return;
+  const key = document.createElement('b');
+  key.textContent = label[0];
+  button.replaceChildren(key, label.slice(1));
+}
+
 /** Where the browser keeps whether "How to play" is open. */
 const HOW_TO_KEY = 'vigame.howToPlay';
 
@@ -435,7 +447,7 @@ export async function startGame(net, me) {
     upgradeButton.disabled = !upgradable;
     const price = upgradable && b ? upgradeCost(b) : null;
     const priced = [price?.stone ? String(price.stone) : '', price?.metal ? `${price.metal}◆` : ''].filter(Boolean);
-    upgradeButton.textContent = priced.length ? `Upgrade · ${priced.join(' + ')}` : 'Upgrade';
+    keyLabel(upgradeButton, priced.length ? `Upgrade · ${priced.join(' + ')}` : 'Upgrade');
     const crewed = Boolean(mine && b && b.type !== 'castle' && !isDugOut(b));
     crewButton.disabled = !crewed;
     returnButton.disabled = !(crewed && view && b && crewOf(view, b.id).length > 0);
@@ -844,20 +856,23 @@ export async function startGame(net, me) {
     updateHud();
   });
 
-  // A, as the Attack button (its A is bold), unless typing or in a dialog.
+  // A letter presses the button it is bold on (its aria-keyshortcuts),
+  // unless typing or in a dialog.
+  const shortcuts = new Map([...controls.querySelectorAll('button[aria-keyshortcuts]')]
+    .map((button) => [button.getAttribute('aria-keyshortcuts')?.toLowerCase(), /** @type {HTMLButtonElement} */ (button)]));
   addEventListener('keydown', (e) => {
-    if (e.key !== 'a' && e.key !== 'A') return;
+    const button = shortcuts.get(e.key.toLowerCase());
+    if (!button || button.disabled || button.hidden) return;
     if (e.repeat || e.ctrlKey || e.metaKey || e.altKey || crewDialog.open || scoresDialog.open) return;
     if (e.target instanceof Element && e.target.closest('input, select, textarea, [contenteditable]')) return;
-    if (attackButton.disabled) return;
     e.preventDefault();
-    attackButton.click();
+    button.click();
   });
 
   for (const button of buildButtons) {
     const { name, cost, metal } = BUILDING_TYPES[button.dataset.kind ?? ''];
-    button.textContent = cost ? `${name} · ${cost}` : metal ? `${name} · ${metal}◆` : name;
-    button.title = cost ? `${cost} stone` : metal ? `${metal} dark metal, near your castle` : 'Free';
+    keyLabel(button, cost ? `${name} · ${cost}` : metal ? `${name} · ${metal}◆` : name);
+    button.title = `${name} (${name[0]}): ${cost ? `${cost} stone` : metal ? `${metal} dark metal, near your castle` : 'free'}`;
     button.addEventListener('click', () => {
       const kind = button.dataset.kind ?? null;
       placing = placing === kind ? null : kind;
