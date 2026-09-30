@@ -809,6 +809,24 @@ test('building needs open, buildable ground near one of your standing buildings'
   assert.deepEqual(applyCommand(board, roaming, 0, tower(1, 0)), { ok: false, reason: 'too far from your buildings' });
 });
 
+test('a wagon upgrades for dark metal, three times, each to its hit points again and no more room', () => {
+  const board = openBoard(4);
+  const state = stateWith([{ id: 'b1', type: 'wagon', q: 2, r: 0 }], unitsIn('b1', 15, 10));
+  const { hp, upgradeMetal = 0 } = BUILDING_TYPES.wagon;
+  const upgrade = () => applyCommand(board, state, 0, { type: 'upgrade', building: 'b1' });
+  state.players[0].metal = upgradeMetal - 1;
+  assert.deepEqual(upgrade(), { ok: false, reason: 'not enough dark metal' });
+  state.players[0].metal = 3 * upgradeMetal;
+  const stone = state.players[0].stone;
+  for (const grade of [2, 3, 4]) {
+    assert.deepEqual(upgrade(), OK);
+    runUntil(board, state, () => state.buildings.b1.upgrading === undefined);
+    assert.deepEqual([state.buildings.b1.grade, state.buildings.b1.hp, capacityOf(state.buildings.b1)], [grade, hp * grade, 15]);
+  }
+  assert.deepEqual([state.players[0].metal, state.players[0].stone], [0, stone], 'dark metal only');
+  assert.deepEqual(upgrade(), { ok: false, reason: 'fully upgraded' });
+});
+
 test('an upgrade is work for the crew, and brings the next grade\'s room and hit points once done', () => {
   const board = openBoard(1);
   const state = stateWith([{ id: 'b1' }], unitsIn('b1', 10, 10));

@@ -259,6 +259,7 @@ export const REPAIR_WORK = 500;
  * @property {number} [loot] Dark metal for the side that brings it down;
  *   without it, a share of its price in dark metal (SALVAGE).
  * @property {number} [upgrade] Stone to upgrade it, times its grade before.
+ * @property {number} [upgradeMetal] Dark metal to upgrade it, the same at each grade.
  * @property {Skill} skill The skill its units use there.
  * @property {number} [work] Work, from the units inside, for each thing it
  *   yields: a castle a new unit, a pit a stone, a farm a food.
@@ -300,8 +301,10 @@ export const BUILDING_TYPES = {
     raise: 12000,
   },
   wagon: {
-    name: 'Wagon', size: 1, capacity: 15, grades: 1, hp: 300, build: true, cost: 0, metal: 15, nearCastle: true,
-    skill: 'melee', speed: 2 * TICKS_PER_SECOND, raise: 9000,
+    // Upgrades armour it: each adds its hit points again (up to four times)
+    // and no room, for the price of two wagons.
+    name: 'Wagon', size: 1, capacity: 15, perGrade: 0, grades: 4, hp: 300, build: true, cost: 0, metal: 15, nearCastle: true,
+    upgradeMetal: 30, skill: 'melee', speed: 2 * TICKS_PER_SECOND, raise: 9000,
   },
   pit: {
     name: 'Pit', size: 1, capacity: 8, grades: 1, hp: 200, build: true, cost: 0,

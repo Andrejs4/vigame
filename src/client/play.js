@@ -415,7 +415,9 @@ export async function startGame(net, me) {
     const mine = Boolean(can && b && isMine(selected));
     const upgradable = Boolean(mine && b && !isRising(b) && b.upgrading === undefined && b.grade < BUILDING_TYPES[b.type].grades);
     upgradeButton.disabled = !upgradable;
-    upgradeButton.textContent = upgradable && b && upgradeCost(b) ? `Upgrade · ${upgradeCost(b)}` : 'Upgrade';
+    const price = upgradable && b ? upgradeCost(b) : null;
+    const priced = [price?.stone ? String(price.stone) : '', price?.metal ? `${price.metal}◆` : ''].filter(Boolean);
+    upgradeButton.textContent = priced.length ? `Upgrade · ${priced.join(' + ')}` : 'Upgrade';
     const crewed = Boolean(mine && b && b.type !== 'castle' && !isDugOut(b));
     crewButton.disabled = !crewed;
     returnButton.disabled = !(crewed && view && b && crewOf(view, b.id).length > 0);

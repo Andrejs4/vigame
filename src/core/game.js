@@ -909,11 +909,12 @@ export function nearStanding(state, player, at) {
 }
 
 /**
- * Stone to upgrade a building from its grade now.
+ * What upgrading a building from its grade now costs: stone, dark metal, or both.
  * @param {Building} b
  */
 export function upgradeCost(b) {
-  return (BUILDING_TYPES[b.type].upgrade ?? 0) * b.grade;
+  const type = BUILDING_TYPES[b.type];
+  return { stone: (type.upgrade ?? 0) * b.grade, metal: type.upgradeMetal ?? 0 };
 }
 
 /**
@@ -934,8 +935,10 @@ function upgrade(state, player, cmd) {
   if (b.grade >= type.grades) return refuse('fully upgraded');
   const stock = state.players[player];
   const cost = upgradeCost(b);
-  if (stock.stone < cost) return refuse('not enough stone');
-  stock.stone -= cost;
+  if (stock.stone < cost.stone) return refuse('not enough stone');
+  if (stock.metal < cost.metal) return refuse('not enough dark metal');
+  stock.stone -= cost.stone;
+  stock.metal -= cost.metal;
   b.upgrading = 0;
   return { ok: true };
 }
