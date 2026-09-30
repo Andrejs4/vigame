@@ -308,7 +308,7 @@ export const BUILDING_TYPES = {
   },
   pit: {
     name: 'Pit', size: 1, capacity: 8, grades: 1, hp: 250, build: true, cost: 0,
-    skill: 'build', work: 9600, yields: 'stone', perDepth: 20, hpPerDepth: 150, depth: 3, through: 0.25, raise: 3000,
+    skill: 'build', work: 9600, yields: 'stone', perDepth: 40, hpPerDepth: 150, depth: 3, through: 0.25, raise: 3000,
   },
   farm: {
     name: 'Farm', size: 1, capacity: 6, grades: 1, hp: 200, build: true, cost: 30,

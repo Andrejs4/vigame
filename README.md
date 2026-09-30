@@ -107,9 +107,9 @@ Run `npm start` and open http://127.0.0.1:2567.
   way, goes home, and what it cost is lost.
 - **Pits**: the crew, up to 8, digs stone, faster the more of them and the
   better they build (an unskilled unit alone digs a stone in 48 s); every
-  20 stone the pit is a grade deeper, and 150 hit points sturdier. At depth
-  3 it is dug out and the crew goes home. Selected, it shows the stone left
-  to its next grade.
+  40 stone the pit is a grade deeper, and 150 hit points sturdier. At depth
+  3, 120 stone in all, it is dug out and the crew goes home. Selected, it
+  shows the stone left to its next grade.
 - **Food**: a unit eats 10 a minute. Every minute the castle yields enough
   for half the units it can hold, and each farm a little (10) even with
   nobody working it; a farm's crew (up to 6) grows more, faster the better
@@ -341,7 +341,7 @@ http://127.0.0.1:2567;` with the same headers.
           work: 5200,                                        // toward the next unit
           upgrading: 9000 },                                 // toward grade 2, a quarter done
     b30: { id: 'b30', owner: 0, type: 'pit', grade: 1, q: 5, r: 3, hp: 550,
-           work: 1200, dug: 47 },                            // 47 stone so far: depth 2
+           work: 1200, dug: 87 },                            // 87 stone so far: depth 2
     b31: { id: 'b31', owner: 0, type: 'wagon', grade: 1, q: 6, r: 4, hp: 280,
            path: [[7, 4], [8, 4]], since: 410, until: 430,  // rolling to 7,4
            target: 'b27', mend: 40 },                       // after b27; being mended

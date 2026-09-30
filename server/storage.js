@@ -377,7 +377,8 @@ function migrate(db) {
     `))();
   }
   if (version < 19) {
-    // A pit goes three grades deep, not five, with other hit points:
+    // A pit goes three grades deep, not five, with other hit points and
+    // more stone:
     // earlier games don't replay the same.
     db.transaction(() => db.exec(`
       DELETE FROM commands;
