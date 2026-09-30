@@ -204,10 +204,10 @@ async function selectBuilding(page, b, { touch = false } = {}) {
 
 /**
  * Confirm the crew dialog, after ticking `add` more units than it came with,
- * or only the first `only`.
+ * or only the first `only`; with the button, or `key` if given.
  * @returns {Promise<string>} The dialog's count, such as "3 of 20", when it opened.
  */
-async function confirmCrew(page, { add = 0, only = undefined, shot = '' } = {}) {
+async function confirmCrew(page, { add = 0, only = undefined, shot = '', key = '' } = {}) {
   await page.waitForSelector('#crew[open]');
   const count = await text(page, '#crew-count');
   if (only !== undefined) {
@@ -218,7 +218,9 @@ async function confirmCrew(page, { add = 0, only = undefined, shot = '' } = {}) 
   }
   for (let i = 0; i < add; i++) await page.locator('#crew-list input:not(:checked):not(:disabled)').first().check();
   if (shot) await page.screenshot({ path: join(OUT, shot) });
-  await page.click('#crew-ok');
+  // Enter or the letter that opened it confirms, as the button does.
+  if (key) await page.keyboard.press(key);
+  else await page.click('#crew-ok');
   await page.waitForSelector('#crew', { state: 'hidden' });
   return count ?? '';
 }
@@ -227,7 +229,7 @@ async function confirmCrew(page, { add = 0, only = undefined, shot = '' } = {}) 
 async function crewWith(page, b, n) {
   await selectBuilding(page, b);
   await page.click('#crew-button');
-  await confirmCrew(page, { add: n });
+  await confirmCrew(page, { add: n, key: 'c' });
   await page.waitForFunction((id) => Object.values(/** @type {any} */ (window).__vigame.view.units)
     .some((u) => u.to === id || u.in === id), b.id);
 }
@@ -564,7 +566,7 @@ async function threeBrowsers(browser, url, { full, label }) {
   // Near the castle: the crew walks two seconds a cell, four on scrub.
   const pitSpot = await openCell(a, await spotsNear(a, blue));
   await clickHex(a, pitSpot.q, pitSpot.r);
-  assert.match(await confirmCrew(a, { shot: 'crew.png' }), /^[1-8] of 8$/, 'up to half of those at home are ticked');
+  assert.match(await confirmCrew(a, { shot: 'crew.png', key: 'p' }), /^[1-8] of 8$/, 'up to half of those at home are ticked');
   await a.waitForFunction((n) => Object.keys(/** @type {any} */ (window).__vigame.view.buildings).length === n, count + 1);
   const pit = (await buildings(a)).find((x) => x.type === 'pit');
   await a.waitForFunction((id) => /** @type {any} */ (window).__vigame.view.buildings[id].work > 0, pit.id, { timeout: 30000 });
@@ -620,7 +622,7 @@ async function threeBrowsers(browser, url, { full, label }) {
   const bandSpot = await openCell(b, bandCells.map((k) => k.split(',').map(Number))
     .sort(([q1, r1], [q2, r2]) => distance({ q: q1, r: r1 }, crimson) - distance({ q: q2, r: r2 }, crimson)));
   await clickHex(b, bandSpot.q, bandSpot.r);
-  await confirmCrew(b);
+  await confirmCrew(b, { key: 'Enter' });
   await b.waitForFunction((n) => Object.keys(/** @type {any} */ (window).__vigame.view.buildings).length === n, before + 1);
   const wagon = (await buildings(b)).find((x) => x.type === 'band');
   await b.waitForFunction((id) => !Object.values(/** @type {any} */ (window).__vigame.view.units)

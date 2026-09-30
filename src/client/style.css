@@ -178,6 +178,14 @@ dl { margin: 0; }
 .row { display: flex; justify-content: space-between; gap: 18px; }
 .row dt { color: var(--ink-dim); margin: 0; }
 .row dd { margin: 0; font-family: var(--mono); font-size: 12px; font-variant-numeric: tabular-nums; }
+/* What the side has to spend, on a band of its own. */
+.row.stock {
+  margin: 0 -6px; padding: 1px 6px;
+  background: rgba(255, 216, 77, 0.09);
+  border-radius: 5px 5px 0 0;
+}
+.row.stock + .row.stock { border-radius: 0 0 5px 5px; }
+.row.stock dt { color: var(--ink); }
 /* A figure worth a look: stone or dark metal enough to spend, food short of the next meal. */
 .row .marked { font-weight: 600; }
 

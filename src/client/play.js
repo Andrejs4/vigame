@@ -515,9 +515,11 @@ export async function startGame(net, me) {
    * @param {string} options.kind The building's type, whose skill ranks the units.
    * @param {number} options.limit How many it takes.
    * @param {string | null} options.target The building, or null for a new one.
+   * @param {string} options.key The letter that confirms it, besides Enter: the
+   *   one that opened it.
    * @returns {Promise<string[] | null>} The chosen unit ids, or null if cancelled.
    */
-  function chooseCrew({ title, hint, action, kind, limit, target }) {
+  function chooseCrew({ title, hint, action, kind, limit, target, key }) {
     const seat = net.seat();
     if (!view || seat === null) return Promise.resolve(null);
     const { skill } = BUILDING_TYPES[kind];
@@ -535,6 +537,7 @@ export async function startGame(net, me) {
     crewParts.title.textContent = title;
     crewParts.hint.textContent = hint;
     crewParts.ok.textContent = action;
+    crewParts.ok.title = `${action} (Enter or ${key})`;
     crewParts.list.replaceChildren(...units.map((u) => {
       const box = document.createElement('input');
       box.type = 'checkbox';
@@ -605,6 +608,16 @@ export async function startGame(net, me) {
       pressed = false;
     };
 
+    // Enter confirms, as does the letter that opened it; Enter on a button
+    // still presses that button, and Escape cancels.
+    crewDialog.onkeydown = (e) => {
+      if (e.repeat || e.ctrlKey || e.metaKey || e.altKey) return;
+      const confirms = e.key === 'Enter' ? !(e.target instanceof HTMLButtonElement) : e.key.toLowerCase() === key.toLowerCase();
+      if (!confirms) return;
+      e.preventDefault();
+      crewParts.ok.click();
+    };
+
     crewDialog.returnValue = '';
     crewTarget = target;
     crewDialog.showModal();
@@ -672,6 +685,7 @@ export async function startGame(net, me) {
           kind,
           limit: type.capacity,
           target: null,
+          key: type.name[0],
         });
         if (!chosen) return;
         units = chosen;
@@ -896,6 +910,7 @@ export async function startGame(net, me) {
       kind: b.type,
       limit: capacityOf(b),
       target: b.id,
+      key: 'C',
     });
     if (units) give({ type: 'crew', building: b.id, units }, 'send that crew');
   });

@@ -177,6 +177,8 @@ Run `npm start` and open http://127.0.0.1:2567.
 - **Keys**: a button's bold letter presses it: **T**ower, **W**agon, **P**it,
   **F**arm and **B**and pick what to place (again to stop), **U**pgrade,
   **C**rew and **A**ttack act on the selected building, and Escape lets go.
+  Choosing a crew, Enter sends it, as does the letter that opened the
+  chooser again (C, or the letter of the building being placed).
 - **Losing and winning**: a side whose castle falls has lost, and can give
   no more commands; its units stay and still fight. Once only one team has
   a castle (or lair) standing, it has won and the game is over: the clock
