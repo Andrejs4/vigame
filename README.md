@@ -104,7 +104,11 @@ Run `npm start` and open http://127.0.0.1:2567.
   home. Select one of your buildings and press **Crew…** for a list of your
   units, each with its level, skill and age in minutes ("12m"): tick up to
   what it holds (with a mouse, drag down the list to tick or untick a run
-  of them). **Level** and **Nearest** reorder the list, highest level or
+  of them). The skill shown is the one the building wants: building for
+  a pit, farming for a farm, and ranged attack for a tower, wagon or band,
+  with close combat beside it (a crew strikes at range, and in close
+  combat only an enemy right next to it). The skill's button, **Level**
+  and **Nearest** reorder the list, best at that skill, highest level or
   closest to the building first, and **Default** puts it back (those
   ticked, then those at home, the best at the work first); the ticks stay
   as they are. Those you untick go home; those you tick

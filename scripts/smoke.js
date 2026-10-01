@@ -634,6 +634,11 @@ async function threeBrowsers(browser, url, { full, label }) {
   // same units stay ticked.
   const tickedIds = () => a.$$eval('#crew-list input:checked', (els) => els.map((e) => /** @type {HTMLInputElement} */ (e).value).sort());
   const tickedBefore = await tickedIds();
+  // A pit wants building: its button says so, and puts the best builders first.
+  assert.equal(await text(a, '#crew-sort-skill'), 'Building');
+  await a.click('#crew-sort-skill');
+  const skills = await a.$$eval('#crew-list .stats', (els) => els.map((e) => Number(/· Building (\d+) ·/.exec(e.textContent ?? '')?.[1])));
+  assert.deepEqual(skills, [...skills].sort((x, y) => y - x), 'best builders first');
   await a.click('#crew-sort [data-sort="level"]');
   const levels = await a.$$eval('#crew-list .stats', (els) => els.map((e) => Number(/^Lv (\d+)/.exec(e.textContent ?? '')?.[1])));
   assert.deepEqual(levels, [...levels].sort((x, y) => y - x), 'highest level first');
@@ -667,6 +672,11 @@ async function threeBrowsers(browser, url, { full, label }) {
   const bandSpot = await openCell(b, bandCells.map((k) => k.split(',').map(Number))
     .sort(([q1, r1], [q2, r2]) => distance({ q: q1, r: r1 }, crimson) - distance({ q: q2, r: r2 }, crimson)));
   await clickHex(b, bandSpot.q, bandSpot.r);
+  // A band wants ranged attack, with close combat beside it.
+  await b.waitForSelector('#crew[open]');
+  assert.equal(await text(b, '#crew-sort-skill'), 'Ranged attack');
+  assert.match(await b.locator('#crew-list .stats').first().textContent() ?? '', /· Ranged attack \d+ ·/);
+  assert.match(await b.locator('#crew-list .where').first().textContent() ?? '', /· Close combat \d+$/);
   await confirmCrew(b, { key: 'Enter' });
   await b.waitForFunction((n) => Object.keys(/** @type {any} */ (window).__vigame.view.buildings).length === n, before + 1);
   const wagon = (await buildings(b)).find((x) => x.type === 'band');

@@ -277,7 +277,12 @@ export const REPAIR_WORK = 500;
  *   without it, a share of its price in dark metal (SALVAGE).
  * @property {number} [upgrade] Stone to upgrade it, times its grade before.
  * @property {number} [upgradeMetal] Dark metal to upgrade it, the same at each grade.
- * @property {Skill} skill The skill its units use there.
+ * @property {Skill} skill The skill its units use there: the one their work
+ *   trains, or for a crew that fights, its main one, ranged attack (a unit
+ *   strikes at range, and in close combat only an enemy right next to it).
+ *   The crew chooser ranks units by it.
+ * @property {Skill} [extra] Another skill its crew uses, shown beside `skill`
+ *   when choosing one: close combat, for the crews that fight.
  * @property {number} [work] Work, from the units inside, for each thing it
  *   yields: a castle a new unit, a pit a stone, a farm a food.
  * @property {'unit' | 'stone' | 'food'} [yields]
@@ -314,14 +319,14 @@ export const BUILDING_TYPES = {
     skill: 'breeding', work: 24000, yields: 'unit', idleWork: 10, raise: 36000,
   },
   tower: {
-    name: 'Tower', size: 1, capacity: 20, grades: 3, hp: 500, build: true, cost: 60, upgrade: 60, reach: 2, skill: 'ranged',
+    name: 'Tower', size: 1, capacity: 20, grades: 3, hp: 500, build: true, cost: 60, upgrade: 60, reach: 2, skill: 'ranged', extra: 'melee',
     raise: 12000,
   },
   wagon: {
     // Upgrades armour it: each adds its hit points again (up to four times)
     // and no room, for the price of two wagons.
     name: 'Wagon', size: 1, capacity: 15, perGrade: 0, grades: 4, hp: 300, build: true, cost: 0, metal: 15, nearCastle: true,
-    upgradeMetal: 30, skill: 'melee', speed: 2 * TICKS_PER_SECOND, raise: 9000,
+    upgradeMetal: 30, skill: 'ranged', extra: 'melee', speed: 2 * TICKS_PER_SECOND, raise: 9000,
   },
   pit: {
     name: 'Pit', size: 1, capacity: 8, grades: 1, hp: 250, build: true, cost: 0,
@@ -349,6 +354,6 @@ export const BUILDING_TYPES = {
   },
   band: {
     name: 'Band', size: 1, capacity: 30, grades: 1, hp: 0, build: true, cost: 0,
-    skill: 'melee', speed: WALK_TICKS, band: true,
+    skill: 'ranged', extra: 'melee', speed: WALK_TICKS, band: true,
   },
 };

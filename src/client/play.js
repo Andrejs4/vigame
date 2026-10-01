@@ -549,7 +549,7 @@ export async function startGame(net, me) {
   function chooseCrew({ title, hint, action, kind, limit, target, key, site }) {
     const seat = net.seat();
     if (!view || seat === null) return Promise.resolve(null);
-    const { skill } = BUILDING_TYPES[kind];
+    const { skill, extra } = BUILDING_TYPES[kind];
     const home = castleOf(view, seat)?.id;
     const units = Object.values(view.units).filter((u) => u.owner === seat);
     /** @param {typeof units[number]} a @param {typeof units[number]} b */
@@ -581,7 +581,7 @@ export async function startGame(net, me) {
       stats.textContent = `Lv ${u.level} · ${SKILLS[skill]} ${u.skills[skill]} · ${age}m`;
       const where = document.createElement('span');
       where.className = 'where';
-      where.textContent = whereIs(u, target);
+      where.textContent = extra ? `${whereIs(u, target)} · ${SKILLS[extra]} ${u.skills[extra]}` : whereIs(u, target);
       const label = document.createElement('label');
       label.append(box, name, stats, where);
       const li = document.createElement('li');
@@ -596,6 +596,7 @@ export async function startGame(net, me) {
     /** @type {Record<string, typeof units>} */
     const orders = {
       default: [...units],
+      skill: [...units].sort(better),
       level: [...units].sort((a, b) => b.level - a.level || better(a, b)),
       near: [...units].sort((a, b) => distance(placeOf(a), site) - distance(placeOf(b), site) || better(a, b)),
     };
@@ -604,6 +605,9 @@ export async function startGame(net, me) {
       crewParts.list.scrollTop = 0;
       for (const button of crewParts.sorts) button.setAttribute('aria-pressed', String(button.dataset.sort === name));
     };
+    const bySkill = /** @type {HTMLButtonElement} */ (document.getElementById('crew-sort-skill'));
+    bySkill.textContent = SKILLS[skill];
+    bySkill.title = `Best at ${SKILLS[skill].toLowerCase()} first`;
     for (const button of crewParts.sorts) button.onclick = () => order(button.dataset.sort ?? 'default');
     order('default');
     const sync = () => {
