@@ -101,7 +101,10 @@ Run `npm start` and open http://127.0.0.1:2567.
   (390 at first, then 1.032 times as much each), so for the same work it
   stands about three times as high, 58 when an ordinary unit is 20, and
   reaches 100 about when an ordinary one would be 34. The crew chooser
-  shows a hero's age in gold. Every skill counts: breeding speeds
+  shows a hero's age in gold, and the status panel says when one of yours
+  dies ("Hero Hugh Baker died in combat.", "3 heroes died from hunger."):
+  of hunger if it went at a meal while your side was starving, else in
+  combat. Every skill counts: breeding speeds
   the castle's births, building digging and mending, farming the harvest,
   running walking, and ranged attack and close combat the damage and kill
   chance of a unit's strikes.

@@ -14,7 +14,7 @@ import { GAME_NAME_MAX, cleanGameName } from '../core/player.js';
 import { BUILDING_TYPES, POINTS, SKILLS, TICKS_PER_SECOND, UNIT_LIMIT } from '../core/rules.js';
 import { getJson, serverBase } from './api.js';
 import { Camera } from './camera.js';
-import { Effects } from './effects.js';
+import { Effects, fallenHeroes, fallenHeroesNote } from './effects.js';
 import { Minimap } from './minimap.js';
 import { BoardRenderer, COUNT_ZOOM } from './render.js';
 import { Sounds, soundsFor } from './sounds.js';
@@ -223,6 +223,9 @@ export async function startGame(net, me) {
       recenter();
     }
     const fresh = effects.update(view, next, performance.now());
+    // The player's heroes who died meanwhile, said where refusals are.
+    const lost = fallenHeroesNote(fallenHeroes(view, next, net.seat()));
+    if (lost) flash(lost);
     for (const { name, pan } of soundsFor({ prev: view, next, fresh, seat: net.seat(), where: panOf })) sounds.play(name, pan);
     if (view) letGo(view, next, fresh);
     view = next;
