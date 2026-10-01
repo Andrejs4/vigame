@@ -1,6 +1,6 @@
 /**
  * The lobby: the player's own games under way, games waiting for a player,
- * other people's under way (to watch), the last few finished (to see their
+ * other people's under way (to watch), the finished ones (to see their
  * points again), and starting a new one. Opening a game goes to
  * `?game=<id>`, the same address an invitation link has.
  */
@@ -12,9 +12,6 @@ import { showLogin } from './login.js';
 
 /** How often the lists refresh while the lobby is open. */
 const REFRESH_MS = 5000;
-
-/** How many finished games the lobby lists. */
-const RECENT_DONE = 5;
 
 /** How many of other people's games under way the lobby lists. */
 const ONGOING_SHOWN = 10;
@@ -152,8 +149,8 @@ export function showLobby(token, me, { notice } = {}) {
     fill('open', others.filter((g) => g.seats.some((s) => s === null)), 'Join');
     // Every seat taken, most recently active first: opening one watches it.
     fill('playing', others.filter((g) => g.seats.every((s) => s !== null)).slice(0, ONGOING_SHOWN), 'Watch');
-    // Anyone's, most recent first: opening one shows its table of points.
-    fill('done', games.filter((g) => g.over !== null).slice(0, RECENT_DONE), 'Scores');
+    // Anyone's, all of them, most recent first: opening one shows its table of points.
+    fill('done', games.filter((g) => g.over !== null), 'Scores');
   }
 
   nameOut.textContent = me.name;
