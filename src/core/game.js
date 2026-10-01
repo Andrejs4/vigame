@@ -41,7 +41,7 @@ import { tileAt } from './board.js';
 import { gameName, unitName } from './names.js';
 import { GAME_NAME_MAX, cleanGameName } from './player.js';
 import {
-  BUILDING_TYPES, BUILD_RANGE, DARK_LORD, LORD_HP, SHARED_STOCK, HORDE_MAX, HORDE_PERIOD, HORDE_START, POINTS, RAIDERS, SALVAGE, RAID_CHANCE, RAID_CLEAR, RAID_MAX, RAID_PERIOD, RAID_ROAM, START_METAL, DEFAULT_MODE, MAX_PLAYERS, MODES, COMBAT_PERIOD, DEPART_GAP, FOOD_PER_UNIT, KILL_EVEN, KILL_MAX, KILL_STEP, KILL_XP, MELEE_DAMAGE, MELEE_RANGE,
+  BUILDING_TYPES, BUILD_RANGE, DARK_LORD, HERO_LEVEL_GROWTH, HERO_LEVEL_XP, HERO_SHARE, LORD_HP, SHARED_STOCK, HORDE_MAX, HORDE_PERIOD, HORDE_START, POINTS, RAIDERS, SALVAGE, RAID_CHANCE, RAID_CLEAR, RAID_MAX, RAID_PERIOD, RAID_ROAM, START_METAL, DEFAULT_MODE, MAX_PLAYERS, MODES, COMBAT_PERIOD, DEPART_GAP, FOOD_PER_UNIT, KILL_EVEN, KILL_MAX, KILL_STEP, KILL_XP, MELEE_DAMAGE, MELEE_RANGE,
   RANGED_DAMAGE, RANGED_RANGE, REPAIR_WORK, FOOD_PERIOD, FOOD_STORE, HUNGER_PULL, LEVEL_GROWTH,
   LEVEL_RATE, LEVEL_XP, MAX_HUNGER, MAX_LEVEL, SIDES, SKILLS, SKILL_RATE, SKILL_XP, START_STONE, START_UNITS, STARVE_CHANCE,
   UNIT_LIMIT, WAGON_PATIENCE, WALK_TICKS, WORK_BASE,
@@ -84,6 +84,7 @@ import {
  * @property {number} born The tick it was born, for its age: set once, so
  *   growing older sends nobody anything.
  * @property {number} xp Experience toward the next level.
+ * @property {true} [hero] A hero, from birth: its levels cost less (HERO_LEVEL_XP).
  * @property {Record<Skill, number>} skills Each from 0 up to `level`.
  * @property {Record<Skill, number>} practice Experience toward each skill's
  *   next level, up to SKILL_XP.
@@ -151,23 +152,32 @@ import {
  */
 
 /** Bump when GameState changes shape, and teach `checkState` the new one. */
-export const STATE_VERSION = 11;
+export const STATE_VERSION = 12;
 
 const SKILL_NAMES = /** @type {Skill[]} */ (Object.keys(SKILLS));
 
 /**
- * Experience each level takes to leave, by level. Worked out once, by
- * multiplication only, so it comes out the same on every machine.
+ * Experience each level takes to leave, by level, for an ordinary unit and
+ * for a hero. Worked out once, by multiplication only, so they come out the
+ * same on every machine.
+ * @param {number} first
+ * @param {number} growth
  */
-const LEVEL_TABLE = [0, LEVEL_XP];
-for (let level = 2; level < MAX_LEVEL; level++) LEVEL_TABLE.push(Math.round(LEVEL_TABLE[level - 1] * LEVEL_GROWTH));
+function levelTable(first, growth) {
+  const table = [0, first];
+  for (let level = 2; level < MAX_LEVEL; level++) table.push(Math.round(table[level - 1] * growth));
+  return table;
+}
+const LEVEL_TABLE = levelTable(LEVEL_XP, LEVEL_GROWTH);
+const HERO_TABLE = levelTable(HERO_LEVEL_XP, HERO_LEVEL_GROWTH);
 
 /**
  * Experience a unit needs to go from this level to the next; Infinity at the top.
  * @param {number} level
+ * @param {boolean} [hero]
  */
-export function levelXp(level) {
-  return LEVEL_TABLE[level] ?? Infinity;
+export function levelXp(level, hero = false) {
+  return (hero ? HERO_TABLE : LEVEL_TABLE)[level] ?? Infinity;
 }
 
 /**
@@ -305,6 +315,7 @@ function newUnit(state, owner, building) {
   const id = newId(state, 'u');
   const name = unitName(() => random(state));
   state.units[id] = { id, owner, name, level: 1, born: state.tick, xp: 0, skills: noSkills(), practice: noSkills(), in: building };
+  if (random(state) < HERO_SHARE) state.units[id].hero = true;
   return id;
 }
 
@@ -333,8 +344,8 @@ function practise(u, skill, bonus = 0) {
  */
 function gainXp(u, xp) {
   u.xp += xp;
-  while (u.level < MAX_LEVEL && u.xp >= levelXp(u.level)) {
-    u.xp -= levelXp(u.level);
+  while (u.level < MAX_LEVEL && u.xp >= levelXp(u.level, u.hero)) {
+    u.xp -= levelXp(u.level, u.hero);
     u.level += 1;
   }
   if (u.level === MAX_LEVEL) u.xp = 0;
@@ -1960,10 +1971,11 @@ export function checkState(board, raw) {
     counts[u.owner] += 1;
     if (typeof u.name !== 'string' || !u.name || u.name.length > 40) fail(`unit ${id}: bad name`);
     if (!isCount(u.born, state.tick + 1)) fail(`unit ${id}: bad born`);
+    if (u.hero !== undefined && u.hero !== true) fail(`unit ${id}: bad hero`);
     if (!Number.isInteger(u.level) || u.level < 1 || u.level > MAX_LEVEL) {
       fail(`unit ${id}: bad level`);
     } else {
-      if (!isCount(u.xp, u.level === MAX_LEVEL ? 1 : levelXp(u.level))) fail(`unit ${id}: bad xp`);
+      if (!isCount(u.xp, u.level === MAX_LEVEL ? 1 : levelXp(u.level, u.hero))) fail(`unit ${id}: bad xp`);
       if (!isSkillSet(u.skills, u.level + 1)) fail(`unit ${id}: bad skills`);
       if (!isSkillSet(u.practice, SKILL_XP + 1)) fail(`unit ${id}: bad practice`);
     }

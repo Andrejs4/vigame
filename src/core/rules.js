@@ -121,6 +121,16 @@ export const MAX_LEVEL = 100;
  */
 export const LEVEL_XP = 1200;
 export const LEVEL_GROWTH = 1.1;
+/**
+ * Heroes: a unit is one, from birth, with a HERO_SHARE chance (the first
+ * units too). Its levels cost HERO_LEVEL_XP at first, then HERO_LEVEL_GROWTH
+ * times as much each, so for the same work it stands about three times as
+ * high as an ordinary unit, whenever you look: 12 to its 5, 27 to its 10, 58
+ * to its 20. It reaches MAX_LEVEL about when an ordinary unit would be 34.
+ */
+export const HERO_SHARE = 0.1;
+export const HERO_LEVEL_XP = 390;
+export const HERO_LEVEL_GROWTH = 1.032;
 export const SKILL_XP = 150;
 /**
  * Points a skill gets for each tick of work, or strike, with it: 1 unless

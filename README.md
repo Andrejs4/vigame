@@ -96,7 +96,12 @@ Run `npm start` and open http://127.0.0.1:2567.
   building, ranged and close combat, and a killing blow most). A skill
   can't pass the unit's level; it climbs faster than the level, then waits
   for it. Each level takes 1.1 times the work of the one before, so the
-  last ones are all but out of reach. Every skill counts: breeding speeds
+  last ones are all but out of reach. About one unit in ten, the first
+  ones too, is born a **hero**: its levels start cheaper and grow gentler
+  (390 at first, then 1.032 times as much each), so for the same work it
+  stands about three times as high, 58 when an ordinary unit is 20, and
+  reaches 100 about when an ordinary one would be 34. The crew chooser
+  shows a hero's age in gold. Every skill counts: breeding speeds
   the castle's births, building digging and mending, farming the harvest,
   running walking, and ranged attack and close combat the damage and kill
   chance of a unit's strikes.
@@ -107,9 +112,10 @@ Run `npm start` and open http://127.0.0.1:2567.
   of them). The skill shown is the one the building wants: building for
   a pit, farming for a farm, and ranged attack for a tower, wagon or band,
   with close combat beside it (a crew strikes at range, and in close
-  combat only an enemy right next to it). The skill's button, **Level**
-  and **Nearest** reorder the list, best at that skill, highest level or
-  closest to the building first, and **Default** puts it back (those
+  combat only an enemy right next to it). The skill's button (**Attack**
+  for the crews that fight), **Hero**, **Level** and **Nearest** reorder
+  the list: best at that skill, heroes, highest level or closest to the
+  building first. **Default** puts it back (those
   ticked, then those at home, the best at the work first); the ticks stay
   as they are. Those you untick go home; those you tick
   come from wherever they are, one after another, two seconds a cell on open

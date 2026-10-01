@@ -145,6 +145,33 @@ test('work trains its skill up to the unit\'s level, and the level, each more sl
   assert.deepEqual([u.level, u.xp], [MAX_LEVEL, 0], 'the top level is the last');
 });
 
+test('about one unit in ten is a hero, whose levels cost less: three times as high for the same work', () => {
+  // The first units of twenty games: heroes among them, about one in ten.
+  const units = Array.from({ length: 20 }, (_, i) => Object.values(newGame(createBoard({ ...BOARD_OPTIONS, seed: 100 + i })).units)).flat();
+  const heroes = units.filter((u) => u.hero).length;
+  assert.ok(heroes > units.length * 0.05 && heroes < units.length * 0.2, `${heroes} heroes of ${units.length}`);
+  assert.ok(units.every((u) => u.hero === undefined || u.hero === true));
+
+  // What a hero reaches with the experience that takes an ordinary unit to a level.
+  const reached = (/** @type {boolean} */ hero, /** @type {number} */ xp) => {
+    let level = 1;
+    while (level < MAX_LEVEL && xp >= levelXp(level, hero)) xp -= levelXp(level++, hero);
+    return level;
+  };
+  const toLevel = (/** @type {number} */ level) => Array.from({ length: level - 1 }, (_, i) => levelXp(i + 1)).reduce((a, b) => a + b, 0);
+  assert.deepEqual([5, 10, 20].map((level) => reached(true, toLevel(level))), [12, 27, 58]);
+  assert.equal(reached(true, toLevel(34)), MAX_LEVEL, 'and stops at the top');
+
+  // A hero levels up on its own table as it works.
+  const board = openBoard(4);
+  const state = stateWith([{ id: 'b1', type: 'castle' }, { id: 'b2', type: 'pit', q: 3, r: 0 }], unitsIn('b2', 1, 10));
+  state.units.u10.hero = true;
+  run(board, state, Math.ceil(levelXp(1, true) / LEVEL_RATE.build));
+  assert.equal(state.units.u10.level, 2, 'sooner than LEVEL_XP');
+  state.units.u10.hero = /** @type {any} */ (false);
+  assert.deepEqual(checkState(board, state), ['unit u10: bad hero']);
+});
+
 // --- crews ---------------------------------------------------------------------
 
 test('a crew leaves one per tick, walks a cell in two seconds, and goes inside', () => {

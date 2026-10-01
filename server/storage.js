@@ -22,7 +22,7 @@
 import Database from 'better-sqlite3';
 
 /** Bump when the tables change, and add the upgrade step to `migrate`. */
-const SCHEMA_VERSION = 20;
+const SCHEMA_VERSION = 21;
 
 /**
  * @typedef {{ id: string, seed: number, state: unknown, seq: number, seats: Array<string | null>,
@@ -415,6 +415,15 @@ function migrate(db) {
       if (!has) db.exec('ALTER TABLE games ADD COLUMN creator TEXT REFERENCES players (pid)');
       db.exec('PRAGMA user_version = 20');
     })();
+  }
+  if (version < 21) {
+    // Some units are heroes, rolled as they are born, which moves every
+    // later roll: earlier games don't replay the same.
+    db.transaction(() => db.exec(`
+      DELETE FROM commands;
+      DELETE FROM games;
+      PRAGMA user_version = 21;
+    `))();
   }
 }
 

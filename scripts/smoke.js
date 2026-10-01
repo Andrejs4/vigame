@@ -639,6 +639,12 @@ async function threeBrowsers(browser, url, { full, label }) {
   await a.click('#crew-sort-skill');
   const skills = await a.$$eval('#crew-list .stats', (els) => els.map((e) => Number(/· Building (\d+) ·/.exec(e.textContent ?? '')?.[1])));
   assert.deepEqual(skills, [...skills].sort((x, y) => y - x), 'best builders first');
+  // Heroes first, their ages in gold.
+  await a.click('#crew-sort [data-sort="hero"]');
+  const heroes = await a.$$eval('#crew-list .stats', (els) => els.map((e) => Boolean(e.querySelector('.hero'))));
+  assert.deepEqual(heroes, [...heroes].sort((x, y) => Number(y) - Number(x)), 'heroes first');
+  assert.equal(heroes.filter(Boolean).length, await a.evaluate(() => Object.values(/** @type {any} */ (window).__vigame.view.units)
+    .filter((u) => u.owner === 0 && u.hero).length), 'every hero of hers marked');
   await a.click('#crew-sort [data-sort="level"]');
   const levels = await a.$$eval('#crew-list .stats', (els) => els.map((e) => Number(/^Lv (\d+)/.exec(e.textContent ?? '')?.[1])));
   assert.deepEqual(levels, [...levels].sort((x, y) => y - x), 'highest level first');
@@ -674,7 +680,7 @@ async function threeBrowsers(browser, url, { full, label }) {
   await clickHex(b, bandSpot.q, bandSpot.r);
   // A band wants ranged attack, with close combat beside it.
   await b.waitForSelector('#crew[open]');
-  assert.equal(await text(b, '#crew-sort-skill'), 'Ranged attack');
+  assert.equal(await text(b, '#crew-sort-skill'), 'Attack');
   assert.match(await b.locator('#crew-list .stats').first().textContent() ?? '', /· Ranged attack \d+ ·/);
   assert.match(await b.locator('#crew-list .where').first().textContent() ?? '', /· Close combat \d+$/);
   await confirmCrew(b, { key: 'Enter' });

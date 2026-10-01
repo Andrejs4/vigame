@@ -578,7 +578,14 @@ export async function startGame(net, me) {
       const stats = document.createElement('span');
       stats.className = 'stats';
       const age = Math.max(0, Math.floor((view.tick - (u.born ?? view.tick)) / (60 * TICKS_PER_SECOND)));
-      stats.textContent = `Lv ${u.level} · ${SKILLS[skill]} ${u.skills[skill]} · ${age}m`;
+      // A hero's age shows in gold: it levels up about three times as high.
+      const years = document.createElement('span');
+      years.textContent = `${age}m`;
+      if (u.hero) {
+        years.className = 'hero';
+        years.title = 'A hero: levels up faster than the rest';
+      }
+      stats.append(`Lv ${u.level} · ${SKILLS[skill]} ${u.skills[skill]} · `, years);
       const where = document.createElement('span');
       where.className = 'where';
       where.textContent = extra ? `${whereIs(u, target)} · ${SKILLS[extra]} ${u.skills[extra]}` : whereIs(u, target);
@@ -597,6 +604,7 @@ export async function startGame(net, me) {
     const orders = {
       default: [...units],
       skill: [...units].sort(better),
+      hero: [...units].sort((a, b) => Number(Boolean(b.hero)) - Number(Boolean(a.hero)) || b.level - a.level || better(a, b)),
       level: [...units].sort((a, b) => b.level - a.level || better(a, b)),
       near: [...units].sort((a, b) => distance(placeOf(a), site) - distance(placeOf(b), site) || better(a, b)),
     };
@@ -606,7 +614,8 @@ export async function startGame(net, me) {
       for (const button of crewParts.sorts) button.setAttribute('aria-pressed', String(button.dataset.sort === name));
     };
     const bySkill = /** @type {HTMLButtonElement} */ (document.getElementById('crew-sort-skill'));
-    bySkill.textContent = SKILLS[skill];
+    // A crew that fights is chosen for its attack: close combat comes too late.
+    bySkill.textContent = skill === 'ranged' ? 'Attack' : SKILLS[skill];
     bySkill.title = `Best at ${SKILLS[skill].toLowerCase()} first`;
     for (const button of crewParts.sorts) button.onclick = () => order(button.dataset.sort ?? 'default');
     order('default');
