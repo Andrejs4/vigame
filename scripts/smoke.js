@@ -768,9 +768,20 @@ async function threeBrowsers(browser, url, { full, label }) {
   await frames(a);
   await a.screenshot({ path: join(OUT, 'game-blue.png') });
 
-  // Bēla reloads: same seat, same game, no login. Then she goes to the lobby,
-  // finds the game among hers, and opens it again.
-  await b.reload();
+  // Bēla steps away, so the game pauses with her band still on its way:
+  // Ann's board then stands still, and is not redrawn frame after frame.
+  const gameUrl = b.url();
+  await b.goto('about:blank');
+  await waitMatch(a, '#time', /paused/);
+  await a.waitForTimeout(300);
+  const stillFrom = await a.evaluate(() => /** @type {any} */ (window).__vigame.draws);
+  await a.waitForTimeout(500);
+  const redrawn = await a.evaluate(() => /** @type {any} */ (window).__vigame.draws) - stillFrom;
+  assert.ok(redrawn <= 1, `a paused board was redrawn ${redrawn} times in half a second`);
+
+  // Bēla comes back: same seat, same game, no login. Then she goes to the
+  // lobby, finds the game among hers, and opens it again.
+  await b.goto(gameUrl);
   await inGame(b);
   assert.equal(await b.locator('#login').isHidden(), true);
   await waitText(b, '#seat', 'Bēla · Crimson');

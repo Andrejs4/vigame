@@ -165,6 +165,14 @@ export async function startGame(net, me) {
   let occ = null;
   /** Whether anything is on the move, so the board must be redrawn every frame. */
   let moving = false;
+  /**
+   * Whether the last frame drew things on the move. Only while the clock
+   * runs: paused, a unit halfway along a path stays where it is, so the
+   * board is still, and a frame after the clock stops draws it there.
+   */
+  let animating = false;
+  /** Boards drawn, for the smoke check that a still board isn't redrawn. */
+  let draws = 0;
   /** Hits, falls and deaths, worked out from each update and the one before. */
   const effects = new Effects();
   /** Whether an effect played last frame, so the frame after the last one clears it. */
@@ -1186,8 +1194,11 @@ export async function startGame(net, me) {
     minimap.paint(time);
     const played = playing;
     playing = effects.playing(time);
-    if (!needsDraw && !moving && !playing && !played) return;
+    const animated = animating;
+    animating = moving && net.running();
+    if (!needsDraw && !animating && !animated && !playing && !played) return;
     needsDraw = false;
+    draws += 1;
     renderer.draw({ camera, view, clock: net.clock(), selected, highlights, hover, peers, effects, now: time });
     minimap.frameView(camera, viewW, viewH);
   }
@@ -1225,6 +1236,7 @@ export async function startGame(net, me) {
       get peers() { return peers; },
       get minimap() { return minimap; },
       get facingLeft() { return [...renderer.facingLeft]; },
+      get draws() { return draws; },
       effects,
       tokens,
       sounds,
