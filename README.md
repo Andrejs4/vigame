@@ -101,7 +101,11 @@ Run `npm start` and open http://127.0.0.1:2567.
   (390 at first, then 1.032 times as much each), so for the same work it
   stands about three times as high, 58 when an ordinary unit is 20, and
   reaches 100 about when an ordinary one would be 34. The crew chooser
-  shows a hero's age in gold, and the status panel says when one of yours
+  shows a hero's age in gold. Select your castle and press **Heroes…**
+  (in Crew's place, as the castle has no crew) for yours alive now, highest
+  level first, with where each is and every skill's level, as "Att 15lvl"
+  (ranged attack; then close combat, building, farming, breeding and
+  running). The status panel says when one of yours
   dies ("Hero Hugh Baker died in combat.", "3 heroes died from hunger."):
   of hunger if it went at a meal while your side was starving, else in
   combat. Every skill counts: breeding speeds
@@ -212,9 +216,11 @@ Run `npm start` and open http://127.0.0.1:2567.
   hand drops its target.
 - **Keys**: a button's bold letter presses it: **T**ower, **W**agon, **P**it,
   **F**arm and **B**and pick what to place (again to stop), **U**pgrade,
-  **C**rew and **A**ttack act on the selected building, and Escape lets go.
+  **C**rew and **A**ttack act on the selected building, **H**eroes on your
+  castle, and Escape lets go.
   Choosing a crew, Enter sends it, as does the letter that opened the
-  chooser again (C, or the letter of the building being placed).
+  chooser again (C, or the letter of the building being placed); H closes
+  the heroes list.
 - **Losing and winning**: a side whose castle falls has lost, and can give
   no more commands; its units stay and still fight. Once only one team has
   a castle (or lair) standing, it has won and the game is over: the clock

@@ -119,6 +119,8 @@
     <div class="group-label">Selected</div>
     <button id="upgrade" disabled aria-keyshortcuts="U" title="Upgrade (U)"><b>U</b>pgrade</button>
     <button id="crew-button" disabled aria-keyshortcuts="C" title="Choose who works here (C)"><b>C</b>rew…</button>
+    <!-- In the crew button's place while your castle is selected: it has no crew, as everyone at home is. -->
+    <button id="heroes-button" hidden aria-keyshortcuts="H" title="Your heroes, highest level first (H)"><b>H</b>eroes…</button>
     <button id="return-button" disabled>Return</button>
     <button id="abort-button" disabled title="Give up a building still going up: its crew goes home, and its cost is lost">Abort</button>
     <button id="attack-button" disabled aria-pressed="false" aria-keyshortcuts="A" title="Attack (A)"><b>A</b>ttack…</button>
@@ -153,7 +155,7 @@
       the better they breed, the sooner. Build near your standing buildings:
       the crew you pick raises it once they get there, and meanwhile it has
       half its hit points and shelters nobody. Select a building and press Crew to choose who works there; Return
-      sends them home. A pit's crew digs stone, which pays for towers, farms
+      sends them home. Your castle's Heroes lists your heroes. A pit's crew digs stone, which pays for towers, farms
       and upgrades; farms grow food. Every minute your units eat; short
       meals make them hungry, and at full hunger they may starve. Select a
       wagon or band, then click a cell, to move it; it carries its crew. A
@@ -188,6 +190,18 @@
       <span id="crew-count"></span>
       <button id="crew-cancel" value="cancel">Cancel</button>
       <button id="crew-ok" value="ok" class="primary">Send</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="heroes" aria-labelledby="heroes-title">
+  <form method="dialog">
+    <h2 id="heroes-title">Heroes</h2>
+    <p class="hint" id="heroes-hint"></p>
+    <ul class="crew-list heroes-list" id="heroes-list"></ul>
+    <div class="crew-foot">
+      <span id="heroes-count"></span>
+      <button value="close" class="primary">Close</button>
     </div>
   </form>
 </dialog>

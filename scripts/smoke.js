@@ -205,10 +205,11 @@ async function selectBuilding(page, b, { touch = false } = {}) {
 
 /**
  * Confirm the crew dialog, after ticking `add` more units than it came with,
- * or only the first `only`; with the button, or `key` if given.
+ * or only the first `only`, and pressing the order button `sort` if given;
+ * with the button, or `key` if given.
  * @returns {Promise<string>} The dialog's count, such as "3 of 20", when it opened.
  */
-async function confirmCrew(page, { add = 0, only = undefined, shot = '', key = '' } = {}) {
+async function confirmCrew(page, { add = 0, only = undefined, shot = '', key = '', sort = '' } = {}) {
   await page.waitForSelector('#crew[open]');
   const count = await text(page, '#crew-count');
   if (only !== undefined) {
@@ -219,7 +220,9 @@ async function confirmCrew(page, { add = 0, only = undefined, shot = '', key = '
   }
   for (let i = 0; i < add; i++) await page.locator('#crew-list input:not(:checked):not(:disabled)').first().check();
   if (shot) await page.screenshot({ path: join(OUT, shot) });
-  // Enter or the letter that opened it confirms, as the button does.
+  if (sort) await page.click(`#crew-sort [data-sort="${sort}"]`);
+  // Enter or the letter that opened it confirms, as the button does (and
+  // the chooser stays shut, though an order button has the focus).
   if (key) await page.keyboard.press(key);
   else await page.click('#crew-ok');
   await page.waitForSelector('#crew', { state: 'hidden' });
@@ -230,7 +233,7 @@ async function confirmCrew(page, { add = 0, only = undefined, shot = '', key = '
 async function crewWith(page, b, n) {
   await selectBuilding(page, b);
   await page.click('#crew-button');
-  await confirmCrew(page, { add: n, key: 'c' });
+  await confirmCrew(page, { add: n, key: 'c', sort: 'level' });
   await page.waitForFunction((id) => Object.values(/** @type {any} */ (window).__vigame.view.units)
     .some((u) => u.to === id || u.in === id), b.id);
 }
@@ -562,7 +565,7 @@ async function threeBrowsers(browser, url, { full, label }) {
   await waitMatch(a, '#selection', /^Tower \(grade 1\) · crew \d+\/\d+ · HP/);
   // Each button with a key shows its letter in bold.
   assert.deepEqual(await a.$$eval('#controls button[aria-keyshortcuts]', (els) => els.map((el) => el.querySelector('b')?.textContent)),
-    ['T', 'W', 'P', 'F', 'B', 'U', 'C', 'A']);
+    ['T', 'W', 'P', 'F', 'B', 'U', 'C', 'H', 'A']);
   // The upgrade is work for the crew too. U upgrades, as the button does.
   await a.keyboard.press('u');
   await waitMatch(a, '#selection', /^Tower \(grade 1\) · crew \d+\/\d+ · upgrading\s+\d+%/);
@@ -668,6 +671,28 @@ async function threeBrowsers(browser, url, { full, label }) {
     const v = /** @type {any} */ (window).__vigame;
     return [v.selected, v.aiming, v.crewTarget];
   }), [null, null, null], 'the page let go of the pit');
+
+  // Her castle has no crew: Heroes takes the button's place, listing her
+  // heroes alive now, highest level first, with every skill's level. H
+  // closes it again, and it stays closed.
+  await selectBuilding(a, await castleOf(a, 0));
+  assert.ok(await a.isHidden('#crew-button'), 'no Crew for a castle');
+  await a.keyboard.press('h');
+  await a.waitForSelector('#heroes[open]');
+  const listed = await a.$$eval('#heroes-list li:not(.none)', (els) => els.map((e) => ({
+    level: Number(/^Lv (\d+) · \d+m$/.exec(e.querySelector('.stats')?.textContent ?? '')?.[1]),
+    skills: e.querySelector('.skills')?.textContent ?? '',
+  })));
+  const herCount = await a.evaluate(() => Object.values(/** @type {any} */ (window).__vigame.view.units)
+    .filter((u) => u.owner === 0 && u.hero).length);
+  assert.equal(listed.length, herCount, 'every hero of hers listed');
+  if (!herCount) assert.equal(await a.locator('#heroes-list .none').count(), 1, 'none yet, it says');
+  assert.deepEqual(listed.map((h) => h.level), listed.map((h) => h.level).sort((x, y) => y - x), 'highest level first');
+  for (const { skills } of listed) assert.match(skills, /^Att \d+lvlMel \d+lvlBld \d+lvlFrm \d+lvlBrd \d+lvlRun \d+lvl$/);
+  await a.screenshot({ path: join(OUT, 'heroes.png') });
+  await a.keyboard.press('h');
+  await a.waitForSelector('#heroes', { state: 'hidden', timeout: 3000 });
+  await a.keyboard.press('Escape');
 
   // Bēla forms a band next to her castle (who goes is chosen as it forms),
   // then leads it; its members go along inside.

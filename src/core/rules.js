@@ -105,6 +105,13 @@ export const SKILLS = {
 
 /** @typedef {keyof typeof SKILLS} Skill */
 
+/**
+ * Each skill's short name, for a line of them all (the Heroes list), in the
+ * order shown there: fighting first.
+ * @type {Record<Skill, string>}
+ */
+export const SKILL_SHORT = { ranged: 'Att', melee: 'Mel', build: 'Bld', farming: 'Frm', breeding: 'Brd', running: 'Run' };
+
 /** The highest level a unit can reach. */
 export const MAX_LEVEL = 100;
 

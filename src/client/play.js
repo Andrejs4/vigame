@@ -11,7 +11,7 @@ import {
   raiseWork, seatsOf, sharesStock, shortOf, sideOf, upgradeCost,
 } from '../core/game.js';
 import { GAME_NAME_MAX, cleanGameName } from '../core/player.js';
-import { BUILDING_TYPES, POINTS, SKILLS, TICKS_PER_SECOND, UNIT_LIMIT } from '../core/rules.js';
+import { BUILDING_TYPES, POINTS, SKILL_SHORT, SKILLS, TICKS_PER_SECOND, UNIT_LIMIT } from '../core/rules.js';
 import { getJson, serverBase } from './api.js';
 import { Camera } from './camera.js';
 import { Effects, fallenHeroes, fallenHeroesNote } from './effects.js';
@@ -115,6 +115,7 @@ export async function startGame(net, me) {
   const seatButton = /** @type {HTMLButtonElement} */ (document.getElementById('seat-button'));
   const upgradeButton = /** @type {HTMLButtonElement} */ (document.getElementById('upgrade'));
   const crewButton = /** @type {HTMLButtonElement} */ (document.getElementById('crew-button'));
+  const heroesButton = /** @type {HTMLButtonElement} */ (document.getElementById('heroes-button'));
   const returnButton = /** @type {HTMLButtonElement} */ (document.getElementById('return-button'));
   const abortButton = /** @type {HTMLButtonElement} */ (document.getElementById('abort-button'));
   const attackButton = /** @type {HTMLButtonElement} */ (document.getElementById('attack-button'));
@@ -124,6 +125,9 @@ export async function startGame(net, me) {
   const gameId = new URLSearchParams(location.search).get('game') ?? '';
   const crewDialog = /** @type {HTMLDialogElement} */ (document.getElementById('crew'));
   const renameDialog = /** @type {HTMLDialogElement} */ (document.getElementById('rename'));
+  const heroesDialog = /** @type {HTMLDialogElement} */ (document.getElementById('heroes'));
+  const heroesList = /** @type {HTMLElement} */ (document.getElementById('heroes-list'));
+  const heroesCount = /** @type {HTMLElement} */ (document.getElementById('heroes-count'));
   const renameButton = /** @type {HTMLButtonElement} */ (document.getElementById('rename-button'));
   const renameInput = /** @type {HTMLInputElement} */ (document.getElementById('rename-input'));
   const renameError = /** @type {HTMLElement} */ (document.getElementById('rename-error'));
@@ -478,6 +482,10 @@ export async function startGame(net, me) {
     keyLabel(upgradeButton, priced.length ? `Upgrade · ${priced.join(' + ')}` : 'Upgrade');
     const crewed = Boolean(mine && b && b.type !== 'castle' && !isDugOut(b));
     crewButton.disabled = !crewed;
+    // Your castle has no crew (everyone at home is in it): Heroes takes its place.
+    const castle = Boolean(b && b.type === 'castle' && isMine(selected));
+    crewButton.hidden = castle;
+    heroesButton.hidden = !castle;
     returnButton.disabled = !(crewed && view && b && crewOf(view, b.id).length > 0);
     abortButton.disabled = !(mine && b && isRising(b));
     attackButton.disabled = !mine;
@@ -533,6 +541,60 @@ export async function startGame(net, me) {
   }
 
   /**
+   * A unit's age, in whole minutes of the game's time.
+   * @param {{ born?: number }} u
+   */
+  function minutesOld(u) {
+    return view ? Math.max(0, Math.floor((view.tick - (u.born ?? view.tick)) / (60 * TICKS_PER_SECOND))) : 0;
+  }
+
+  /**
+   * Show the player's heroes alive now, highest level first, to read: each
+   * with its level, age and whereabouts as the crew chooser has them, and
+   * every skill's level.
+   */
+  function showHeroes() {
+    const seat = net.seat();
+    if (!view || seat === null) return;
+    const units = Object.values(view.units).filter((u) => u.owner === seat);
+    const heroes = units.filter((u) => u.hero).sort((a, b) => b.level - a.level || a.name.localeCompare(b.name));
+    const skills = /** @type {[import('../core/rules.js').Skill, string][]} */ (Object.entries(SKILL_SHORT));
+    heroesList.replaceChildren(...heroes.map((u) => {
+      const name = document.createElement('span');
+      name.textContent = u.name;
+      const years = document.createElement('span');
+      years.className = 'hero';
+      years.textContent = `${minutesOld(u)}m`;
+      const stats = document.createElement('span');
+      stats.className = 'stats';
+      stats.append(`Lv ${u.level} · `, years);
+      const where = document.createElement('span');
+      where.className = 'where';
+      where.textContent = whereIs(u, null);
+      const levels = document.createElement('span');
+      levels.className = 'skills';
+      levels.append(...skills.map(([skill, short]) => {
+        const level = document.createElement('span');
+        level.textContent = `${short} ${u.skills[skill]}lvl`;
+        level.title = SKILLS[skill];
+        return level;
+      }));
+      const li = document.createElement('li');
+      li.append(name, stats, where, levels);
+      return li;
+    }));
+    if (!heroes.length) {
+      const none = document.createElement('li');
+      none.className = 'none';
+      none.textContent = 'None yet: about one unit in ten is born a hero.';
+      heroesList.append(none);
+    }
+    heroesCount.textContent = `${heroes.length} of your ${units.length} units`;
+    heroesDialog.showModal();
+    heroesList.scrollTop = 0;
+  }
+
+  /**
    * Let the player choose a crew: a list of their units, with the current
    * crew ticked, or for a new building the ones at home best at its work, up
    * to half of those at home, so the castle keeps some to breed.
@@ -580,10 +642,9 @@ export async function startGame(net, me) {
       name.textContent = u.name;
       const stats = document.createElement('span');
       stats.className = 'stats';
-      const age = Math.max(0, Math.floor((view.tick - (u.born ?? view.tick)) / (60 * TICKS_PER_SECOND)));
       // A hero's age shows in gold: it levels up about three times as high.
       const years = document.createElement('span');
-      years.textContent = `${age}m`;
+      years.textContent = `${minutesOld(u)}m`;
       if (u.hero) {
         years.className = 'hero';
         years.title = 'A hero: levels up faster than the rest';
@@ -941,7 +1002,7 @@ export async function startGame(net, me) {
 
   addEventListener('keydown', (e) => {
     // Escape in the crew chooser closes just the chooser.
-    if (e.key !== 'Escape' || crewDialog.open || scoresDialog.open || renameDialog.open || (!placing && !selected && !aiming)) return;
+    if (e.key !== 'Escape' || crewDialog.open || heroesDialog.open || scoresDialog.open || renameDialog.open || (!placing && !selected && !aiming)) return;
     aiming = null;
     placing = null;
     selected = null;
@@ -950,13 +1011,15 @@ export async function startGame(net, me) {
   });
 
   // A letter presses the button it is bold on (its aria-keyshortcuts),
-  // unless typing or in a dialog.
+  // unless typing or in a dialog, or a dialog just took it to close (it
+  // shuts before the key gets here, so it must not open again).
   const shortcuts = new Map([...controls.querySelectorAll('button[aria-keyshortcuts]')]
     .map((button) => [button.getAttribute('aria-keyshortcuts')?.toLowerCase(), /** @type {HTMLButtonElement} */ (button)]));
   addEventListener('keydown', (e) => {
     const button = shortcuts.get(e.key.toLowerCase());
     if (!button || button.disabled || button.hidden) return;
-    if (e.repeat || e.ctrlKey || e.metaKey || e.altKey || crewDialog.open || scoresDialog.open || renameDialog.open) return;
+    if (e.defaultPrevented || e.repeat || e.ctrlKey || e.metaKey || e.altKey) return;
+    if (crewDialog.open || heroesDialog.open || scoresDialog.open || renameDialog.open) return;
     if (e.target instanceof Element && e.target.closest('input, select, textarea, [contenteditable]')) return;
     e.preventDefault();
     button.click();
@@ -1028,6 +1091,16 @@ export async function startGame(net, me) {
       site: b,
     });
     if (units) give({ type: 'crew', building: b.id, units }, 'send that crew');
+  });
+
+  // The heroes list: H, as well as Enter or Escape, closes it again.
+  /** @type {HTMLElement} */ (document.getElementById('heroes-hint')).textContent = `Yours alive now, highest level first, with each skill's level: ${
+    Object.entries(SKILL_SHORT).map(([skill, short]) => `${short} ${SKILLS[/** @type {import('../core/rules.js').Skill} */ (skill)].toLowerCase()}`).join(', ')}.`;
+  heroesButton.addEventListener('click', showHeroes);
+  heroesDialog.addEventListener('keydown', (e) => {
+    if (e.key.toLowerCase() !== 'h' || e.repeat || e.ctrlKey || e.metaKey || e.altKey) return;
+    e.preventDefault();
+    heroesDialog.close();
   });
 
   attackButton.addEventListener('click', () => {
