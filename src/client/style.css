@@ -120,6 +120,7 @@ button[aria-pressed="true"] { background: rgba(255, 216, 77, 0.18); border-color
 .games .title { display: block; font-weight: 600; }
 .games .when { color: var(--ink-dim); font: 12px var(--mono); margin-left: 6px; }
 .games .button { flex: none; }
+.games .actions { display: flex; gap: 8px; flex: none; }
 
 /* --- the game ------------------------------------------------------------- */
 

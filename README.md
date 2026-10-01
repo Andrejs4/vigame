@@ -36,8 +36,11 @@ Run `npm start` and open http://127.0.0.1:2567.
   **Release seat** frees a seat for a spectator to take.
 - **Too many games**: New game is refused while three games you started
   wait for a player, or while you hold a seat in three games under way;
-  the lobby then lists those games, with a button to go back to each.
-  Finished games don't count.
+  finished games, and games nobody has touched for three days, don't
+  count. The lobby then lists those games, each with a button to go back
+  to it and, where it can, one to clear it: **Delete** a game you started
+  that nobody else plays (for good, room and all), or **Leave** one you
+  hold a seat in, which frees the seat for the next to come.
 - **Game names**: a new game gets a name from a list that sets its mood
   (Pit party, Last stand, Ogre ballet, …), which the lobby and the status
   panel show. Any player still in it may rename it with **✎** next to the
@@ -454,7 +457,9 @@ HTTP API:
 | `POST /api/me` | Who a token belongs to: `{ token }` gives `{ pid, name }`, or `null` if it hasn't signed in. |
 | `GET /api/challenge` | A sum to answer when signing in: `{ id, question }`. Each one answers once and lasts 10 minutes. |
 | `POST /api/players` | Signs in (or renames): `{ token, name, challenge, answer }` gives `{ pid, name }`. `400` for a bad token or name, `403` for a wrong answer. |
-| `POST /api/games` | Starts a game with a random map: `{ token, mode?, players? }` of a signed-in player (`mode` `coop`, `easy`, `shared` or `ffa`, `players` 1 to 8; by default a cooperation game for one) gives `201 { id }`; `401` if not signed in, `400` for a bad mode or number; `409 { error, games }` while the player has too many games on the go (three of theirs waiting for a player, or seats in three under way), with those games as `GET /api/games` lists them. |
+| `POST /api/games` | Starts a game with a random map: `{ token, mode?, players? }` of a signed-in player (`mode` `coop`, `easy`, `shared` or `ffa`, `players` 1 to 8; by default a cooperation game for one) gives `201 { id }`; `401` if not signed in, `400` for a bad mode or number; `409 { error, games }` while the player has too many games on the go (three of theirs waiting for a player, or seats in three under way), with those games as `GET /api/games` lists them, each with `clear`: `'delete'`, `'leave'` or `null`. |
+| `POST /api/games/:id/delete` | `{ token }`: deletes a game under way that the player started and nobody else holds a seat in, closing its room if open; `403` if they didn't start it, `409` if someone else plays it or it is over. |
+| `POST /api/games/:id/leave` | `{ token }`: gives up the player's seat in a game under way, through its room if open; `409` if they hold none or it is over. |
 | `GET /api/games` | The 50 most recently active games, for the lobby, with their name, mode and who holds each seat: `{ pid, name }` or `null`. |
 | `GET /api/games/:id` | One game: its seed, latest snapshot and seats. |
 | `GET /api/games/:id/commands` | Its command log, with each command's tick. |

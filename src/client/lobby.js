@@ -78,7 +78,10 @@ function row(game, action) {
   open.className = 'button';
   open.href = gameHref(game.id);
   open.textContent = action;
-  li.append(who, open);
+  const actions = document.createElement('span');
+  actions.className = 'actions';
+  actions.append(open);
+  li.append(who, actions);
   return li;
 }
 
@@ -161,6 +164,35 @@ export function showLobby(token, me, { notice } = {}) {
 
   const limit = /** @type {HTMLElement} */ (document.getElementById('lobby-limit'));
   limit.hidden = true;
+
+  /**
+   * A button that takes a game off the player's hands, after asking: deletes
+   * one of theirs nobody else plays, or gives up their seat in one.
+   * @param {import('./api.js').GameSummary} game
+   * @param {'delete' | 'leave'} how
+   */
+  function clearButton(game, how) {
+    const button = document.createElement('button');
+    const name = game.name ?? 'this game';
+    button.textContent = how === 'delete' ? 'Delete' : 'Leave';
+    button.title = how === 'delete' ? 'Delete it for good: nobody else plays it' : 'Give up your seat, for someone else to take';
+    button.onclick = async () => {
+      const ask = how === 'delete' ? `Delete “${name}” for good?` : `Leave “${name}”? Your seat goes to whoever comes next.`;
+      if (!confirm(ask)) return;
+      button.disabled = true;
+      try {
+        const res = await post(`api/games/${encodeURIComponent(game.id)}/${how}`, { token });
+        if (!res.ok) throw new Error(await reason(res));
+        limit.hidden = true;
+        say(how === 'delete' ? `Deleted “${name}”.` : `Left “${name}”.`);
+        refresh();
+      } catch (e) {
+        say(`Could not ${how === 'delete' ? 'delete' : 'leave'} “${name}” (${/** @type {Error} */ (e).message}).`);
+        button.disabled = false;
+      }
+    };
+    return button;
+  }
   newButton.onclick = async () => {
     newButton.disabled = true;
     limit.hidden = true;
@@ -172,7 +204,11 @@ export function showLobby(token, me, { notice } = {}) {
         /** @type {HTMLElement} */ (document.getElementById('lobby-limit-text')).textContent = error;
         const isMine = (/** @type {import('./api.js').GameSummary} */ g) => g.seats.some((s) => s?.pid === me.pid);
         /** @type {HTMLElement} */ (document.getElementById('lobby-limit-games')).replaceChildren(
-          ...(/** @type {import('./api.js').GameSummary[]} */ (games)).map((g) => row(g, isMine(g) ? 'Open' : 'Join')));
+          ...(/** @type {Array<import('./api.js').GameSummary & { clear: 'delete' | 'leave' | null }>} */ (games)).map((g) => {
+            const li = row(g, isMine(g) ? 'Open' : 'Join');
+            if (g.clear) li.querySelector('.actions')?.prepend(clearButton(g, g.clear));
+            return li;
+          }));
         limit.hidden = false;
         newButton.disabled = false;
         return;

@@ -14,8 +14,8 @@ let server;
 /** @type {string} */
 let base;
 
-const TOKENS = { a: 'a'.repeat(32), b: 'b'.repeat(32) };
-const PIDS = { a: playerId(TOKENS.a), b: playerId(TOKENS.b) };
+const TOKENS = { a: 'a'.repeat(32), b: 'b'.repeat(32), c: 'c'.repeat(32) };
+const PIDS = { a: playerId(TOKENS.a), b: playerId(TOKENS.b), c: playerId(TOKENS.c) };
 
 before(async () => {
   const quiet = () => {};
@@ -23,20 +23,25 @@ before(async () => {
   base = server.url.replace(/\/$/, '');
   server.storage.savePlayer(PIDS.a, 'Ann');
   server.storage.savePlayer(PIDS.b, 'Bēla');
+  server.storage.savePlayer(PIDS.c, 'Cai');
 });
 
 after(() => server.close());
 
 /**
- * Start a game over HTTP, the way the page does.
- * @param {string} token
- * @param {number} [players]
+ * POST JSON, the way the page does.
+ * @param {string} path
+ * @param {unknown} body
  */
-function start(token, players = 2) {
-  return fetch(`${base}/api/games`, {
-    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ token, players }),
-  });
+function post(path, body) {
+  return fetch(`${base}${path}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
 }
+
+/**
+ * Start a game for two over HTTP.
+ * @param {string} token
+ */
+const start = (token) => post('/api/games', { token, players: 2 });
 
 test('three games waiting, or seats in three under way, send a player back to them', async () => {
   /** @type {string[]} */
@@ -52,6 +57,7 @@ test('three games waiting, or seats in three under way, send a player back to th
   assert.match(body.error, /^You have 3 games of yours waiting for a player\./);
   assert.deepEqual(body.games.map((/** @type {any} */ g) => g.id).sort(), [...ids].sort());
   assert.ok(body.games.every((/** @type {any} */ g) => GAME_NAMES.includes(g.name) && !('creator' in g)), 'named, as the lobby lists them');
+  assert.ok(body.games.every((/** @type {any} */ g) => g.clear === 'delete'), 'hers, nobody else in them: she may delete them');
   assert.equal((await start(TOKENS.b)).status, 201, 'others may still start games');
   // Who started a game is kept, and shown nowhere.
   const listed = await (await fetch(`${base}/api/games`)).json();
@@ -70,9 +76,32 @@ test('three games waiting, or seats in three under way, send a player back to th
   const why = await seated.json();
   assert.match(why.error, /^You have a seat in 3 games under way\./);
   assert.deepEqual(why.games.map((/** @type {any} */ g) => g.id).sort(), [...ids].sort());
+  assert.ok(why.games.every((/** @type {any} */ g) => g.clear === 'leave'), 'Ann\'s games: Bēla may leave them');
 
   // A game that is over doesn't count.
   const saved = server.storage.loadGame(ids[2]);
   server.storage.saveSnapshot(ids[2], { state: { .../** @type {any} */ (saved?.state), over: 10 }, seq: 0 });
   assert.equal((await start(TOKENS.b)).status, 201);
+});
+
+test('a player deletes a game of theirs that nobody else plays, or leaves one, to start another', async () => {
+  /** @type {string[]} */
+  const ids = [];
+  for (let i = 0; i < 3; i++) ids.push((await (await start(TOKENS.c)).json()).id);
+  assert.equal((await start(TOKENS.c)).status, 409);
+  const act = (/** @type {string} */ id, /** @type {string} */ what, token = TOKENS.c) => post(`/api/games/${id}/${what}`, { token });
+
+  assert.equal((await act(ids[0], 'delete', TOKENS.a)).status, 403, 'not hers to delete');
+  assert.equal((await act(ids[0], 'delete', 'x'.repeat(32))).status, 401);
+  assert.equal((await act('nope', 'delete')).status, 404);
+  assert.deepEqual(await (await act(ids[0], 'delete')).json(), { ok: true });
+  assert.equal((await fetch(`${base}/api/games/${ids[0]}`)).status, 404, 'gone');
+  assert.equal((await start(TOKENS.c)).status, 201, 'room for another');
+
+  // Once someone else sits in one, Cai may only leave it, and only a seat he holds.
+  server.storage.saveSeats(ids[1], [PIDS.c, PIDS.a]);
+  assert.deepEqual(await (await act(ids[1], 'delete')).json(), { error: 'someone else plays it' });
+  assert.deepEqual(await (await act(ids[1], 'leave')).json(), { ok: true });
+  assert.deepEqual(server.storage.loadGame(ids[1])?.seats, [null, PIDS.a]);
+  assert.deepEqual(await (await act(ids[1], 'leave')).json(), { error: 'you have no seat there' });
 });

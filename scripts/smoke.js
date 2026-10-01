@@ -726,6 +726,13 @@ async function threeBrowsers(browser, url, { full, label }) {
   await waitMatch(lost, '#lobby-limit-text', /^You have 3 games of yours waiting for a player\./);
   assert.equal(await lost.locator('#lobby-limit-games li a', { hasText: 'Join' }).count(), 3);
   if (label === 'direct') await lost.screenshot({ path: join(OUT, 'lobby-limit.png') });
+  // Nobody else plays them, so each has Delete; Lou deletes the first, after
+  // confirming, and the lobby says so.
+  assert.equal(await lost.locator('#lobby-limit-games li button', { hasText: 'Delete' }).count(), 3);
+  lost.once('dialog', (dialog) => dialog.accept());
+  await lost.locator('#lobby-limit-games li button', { hasText: 'Delete' }).first().click();
+  await waitMatch(lost, '#lobby-notice', /^Deleted “.+”\.$/);
+  assert.equal(await lost.locator('#lobby-limit').isHidden(), true);
   assert.equal(new URL(lost.url()).search, '', 'still in the lobby');
   // Lou finds Ann and Bēla's game among those under way, folded away until
   // opened, and watches it from there.

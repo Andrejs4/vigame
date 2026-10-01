@@ -7,10 +7,12 @@
  *   GET  /api/challenge         a sum to answer when signing in -> { id, question }
  *   POST /api/players           sign in: { token, name, challenge, answer } -> { pid, name }
  *   POST /api/me                who a token belongs to: { token } -> { pid, name }, or null
- *   POST /api/games             start a game: { token } -> 201 { id }
+ *   POST /api/games             start a game: { token } -> 201 { id }, or 409 with too many on the go
  *   GET  /api/games             recently active games, with who holds each seat (the lobby)
  *   GET  /api/games/:id         one game's snapshot and seats
  *   GET  /api/games/:id/commands  its command log (history, replays)
+ *   POST /api/games/:id/delete  delete a game you started that nobody else plays: { token }
+ *   POST /api/games/:id/leave   give up your seat in a game under way: { token }
  *   /monitor                    Colyseus monitor, only with a monitor password
  *   /playground                 Colyseus playground, only in dev mode
  *   /matchmake/…                Colyseus matchmaking (joinOrCreate etc.)
@@ -32,7 +34,7 @@ import { newGame } from '../src/core/game.js';
 import { cleanPlayerName } from '../src/core/player.js';
 import { DEFAULT_MODE, DEFAULT_PLAYERS, MAX_PLAYERS, MIN_PLAYERS, MODES, TICKS_PER_SECOND } from '../src/core/rules.js';
 import { createChallenges } from './challenge.js';
-import { gameRoom, isToken, playerId, signedIn } from './room.js';
+import { gameRoom, isToken, liveRoom, playerId, signedIn } from './room.js';
 import { openStorage } from './storage.js';
 
 /**
@@ -67,26 +69,45 @@ export function startGame(storage, { seed = randomInt(1, 2 ** 31), mode = DEFAUL
 /** How many games a player may have on the go before starting another. */
 export const GAMES_PER_PLAYER = 3;
 
+/** A game nobody has played, joined or left for this long no longer counts. */
+export const IDLE_MS = 3 * 24 * 60 * 60 * 1000;
+
 /**
  * Whether a player has too many games on the go to start another: `limit`
- * of their own waiting for a player, or `limit` they hold a seat in. If so,
- * why, and those games, so they can go back to one.
- * @template {{ creator: string | null, seats: Array<string | null> }} G
+ * of their own waiting for a player, or `limit` they hold a seat in, not
+ * counting games idle for IDLE_MS. If so, why, and those games, so they can
+ * go back to one, or clear it (`clearing`).
+ * @template {{ creator: string | null, seats: Array<string | null>, updatedAt: number }} G
  * @param {G[]} games The player's games under way (`gamesUnderWayOf`).
  * @param {string} pid
  * @param {number} limit
+ * @param {number} now
  * @returns {{ error: string, games: G[] } | null}
  */
-export function tooManyGames(games, pid, limit) {
-  const waiting = games.filter((g) => g.creator === pid && g.seats.includes(null));
-  const seated = games.filter((g) => g.seats.includes(pid));
+export function tooManyGames(games, pid, limit, now) {
+  const fresh = games.filter((g) => now - g.updatedAt < IDLE_MS);
+  const waiting = fresh.filter((g) => g.creator === pid && g.seats.includes(null));
+  const seated = fresh.filter((g) => g.seats.includes(pid));
   const why = [
     ...(waiting.length >= limit ? [`${waiting.length} games of yours waiting for a player`] : []),
     ...(seated.length >= limit ? [`a seat in ${seated.length} games under way`] : []),
   ];
   if (!why.length) return null;
-  const shown = games.filter((g) => (waiting.length >= limit && waiting.includes(g)) || (seated.length >= limit && seated.includes(g)));
-  return { error: `You have ${why.join(', and ')}. Go back to one of them before starting another:`, games: shown };
+  const shown = fresh.filter((g) => (waiting.length >= limit && waiting.includes(g)) || (seated.length >= limit && seated.includes(g)));
+  return { error: `You have ${why.join(', and ')}. Go back to one of them, or clear one, before starting another:`, games: shown };
+}
+
+/**
+ * How a player can take a game under way off their hands: delete it, if
+ * they started it and nobody else holds a seat; else leave it, if they hold
+ * one; or neither.
+ * @param {{ creator: string | null, seats: Array<string | null> }} game
+ * @param {string} pid
+ * @returns {'delete' | 'leave' | null}
+ */
+export function clearing(game, pid) {
+  if (game.creator === pid && game.seats.every((s) => s === null || s === pid)) return 'delete';
+  return game.seats.includes(pid) ? 'leave' : null;
 }
 
 /**
@@ -173,10 +194,11 @@ export async function startGameServer({
         }
         if (mode === 'ffa' && players < 2) return void res.status(400).json({ error: 'free for all needs two players' });
         const creator = playerId(req.body.token);
-        const crowded = tooManyGames(storage.gamesUnderWayOf(creator), creator, gamesPerPlayer);
+        const crowded = tooManyGames(storage.gamesUnderWayOf(creator), creator, gamesPerPlayer, Date.now());
         if (crowded) {
-          // Who started each stays on the server.
-          const games = crowded.games.map(({ creator: _creator, ...g }) => g);
+          // Who started each stays on the server; the player learns only
+          // what they may do with it.
+          const games = crowded.games.map(({ creator: _creator, ...g }) => ({ ...g, clear: clearing({ creator: _creator, seats: g.seats }, creator) }));
           return void res.status(409).json({ error: crowded.error, games: seatNames(games) });
         }
         res.status(201).json({ id: startGame(storage, { mode, players, creator }) });
@@ -201,7 +223,44 @@ export async function startGameServer({
       app.get('/api/games/:id', (req, res) => {
         const saved = GAME_ID.test(req.params.id) ? storage.loadGame(req.params.id) : null;
         if (!saved) return void res.status(404).json({ error: 'no such game' });
-        res.json(saved);
+        const { creator: _creator, ...shown } = saved;
+        res.json(shown);
+      });
+      /**
+       * A game under way that a signed-in player asks to clear, or why not.
+       * @param {any} req
+       * @param {any} res
+       */
+      const clearable = (req, res) => {
+        if (!signedIn(storage, req.body?.token)) return void res.status(401).json({ error: 'sign in first' });
+        const saved = GAME_ID.test(req.params.id) ? storage.loadGame(req.params.id) : null;
+        if (!saved) return void res.status(404).json({ error: 'no such game' });
+        if (/** @type {any} */ (saved.state)?.over !== undefined) return void res.status(409).json({ error: 'that game is over' });
+        return { saved, pid: playerId(req.body.token) };
+      };
+      // Delete a game the player started, which nobody else plays: its room,
+      // if open, closes, and the game and its commands are gone.
+      app.post('/api/games/:id/delete', (req, res) => {
+        const asked = clearable(req, res);
+        if (!asked) return;
+        const { saved, pid } = asked;
+        if (saved.creator !== pid) return void res.status(403).json({ error: 'not a game you started' });
+        if (clearing(saved, pid) !== 'delete') return void res.status(409).json({ error: 'someone else plays it' });
+        liveRoom(saved.id)?.abandon();
+        storage.deleteGame(saved.id);
+        res.json({ ok: true });
+      });
+      // Give up the player's seat in a game, through its room if it is open,
+      // so everyone there sees it free.
+      app.post('/api/games/:id/leave', (req, res) => {
+        const asked = clearable(req, res);
+        if (!asked) return;
+        const { saved, pid } = asked;
+        if (!saved.seats.includes(pid)) return void res.status(409).json({ error: 'you have no seat there' });
+        const room = liveRoom(saved.id);
+        if (room) room.releaseSeat(pid);
+        else storage.saveSeats(saved.id, saved.seats.map((s) => (s === pid ? null : s)));
+        res.json({ ok: true });
       });
       // Who holds each seat, by name: for the table at a game's end, which
       // names players who have left as well as those still here.

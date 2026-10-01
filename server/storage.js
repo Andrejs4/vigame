@@ -26,7 +26,8 @@ const SCHEMA_VERSION = 20;
 
 /**
  * @typedef {{ id: string, seed: number, state: unknown, seq: number, seats: Array<string | null>,
- *   createdAt: number, updatedAt: number }} SavedGame
+ *   creator: string | null, createdAt: number, updatedAt: number }} SavedGame
+ *   `creator`: the player who started it, which players aren't shown.
  * @typedef {{ seq: number, tick: number, player: number, command: unknown, at: number }} SavedCommand
  * @typedef {{ pid: string, name: string, createdAt: number, updatedAt: number }} SavedPlayer
  */
@@ -52,6 +53,8 @@ export function openStorage(file = ':memory:') {
   const updateSnapshot = db.prepare('UPDATE games SET state = ?, seq = ?, updated_at = ? WHERE id = ?');
   const updateSeats = db.prepare('UPDATE games SET seats = ?, updated_at = ? WHERE id = ?');
   const touchGame = db.prepare('UPDATE games SET updated_at = ? WHERE id = ?');
+  const deleteCommands = db.prepare('DELETE FROM commands WHERE game_id = ?');
+  const deleteGameRow = db.prepare('DELETE FROM games WHERE id = ?');
   const insertCommand = db.prepare(`
     INSERT INTO commands (game_id, seq, tick, player, command, at)
     VALUES (@id, (SELECT COALESCE(MAX(seq), 0) + 1 FROM commands WHERE game_id = @id), @tick, @player, @command, @now)
@@ -101,10 +104,20 @@ export function openStorage(file = ':memory:') {
         state: parse(row.state),
         seq: row.seq,
         seats: parseSeats(row.seats),
+        creator: row.creator ?? null,
         createdAt: row.created_at,
         updatedAt: row.updated_at,
       };
     },
+
+    /**
+     * Delete a game and its commands, for good.
+     * @param {string} id
+     */
+    deleteGame: db.transaction((/** @type {string} */ id) => {
+      deleteCommands.run(id);
+      if (deleteGameRow.run(id).changes !== 1) throw new Error(`no game "${id}"`);
+    }),
 
     /**
      * Append an accepted command to the log.

@@ -11,13 +11,29 @@ import { openStorage } from '../server/storage.js';
 /** Storage doesn't look inside states; any JSON does. */
 const STATE = { version: 1, seed: 7, tick: 0, units: {} };
 
+test('a game keeps who started it, and a deleted game goes with its commands', () => {
+  const storage = openStorage();
+  storage.savePlayer('p1', 'Ann');
+  storage.createGame({ id: 'g1', seed: 7, state: STATE, seats: ['p1', null], creator: 'p1' });
+  storage.createGame({ id: 'g2', seed: 8, state: STATE, seats: [null, 'p1'] });
+  storage.createGame({ id: 'g3', seed: 9, state: STATE, seats: [null, null] });
+  assert.equal(storage.loadGame('g1')?.creator, 'p1');
+  assert.deepEqual(storage.gamesUnderWayOf('p1').map((g) => [g.id, g.creator]).sort(), [['g1', 'p1'], ['g2', null]], 'started, or sat in');
+  storage.recordCommand('g1', { tick: 1, player: 0, command: { type: 'upgrade', building: 'b1' } });
+  storage.deleteGame('g1');
+  assert.equal(storage.loadGame('g1'), null);
+  assert.deepEqual(storage.listCommands('g1'), []);
+  assert.throws(() => storage.deleteGame('g1'), /no game/);
+  storage.close();
+});
+
 test('a game is stored and read back, and its commands logged in order with their ticks', () => {
   const storage = openStorage();
   storage.createGame({ id: 'g1', seed: 7, state: STATE, seats: [null, null] });
 
   const saved = storage.loadGame('g1');
   assert.deepEqual({ ...saved, createdAt: 0, updatedAt: 0 }, {
-    id: 'g1', seed: 7, state: STATE, seq: 0, seats: [null, null], createdAt: 0, updatedAt: 0,
+    id: 'g1', seed: 7, state: STATE, seq: 0, seats: [null, null], creator: null, createdAt: 0, updatedAt: 0,
   });
   assert.equal(storage.loadGame('nope'), null);
 
