@@ -24,7 +24,8 @@ Lorc: <http://lorcblog.blogspot.com>. Delapouite: <https://delapouite.com>.
 
 ## Vigame's own pictures
 
-Pictures made for Vigame by its author (Andrejs4 on GitHub) are under the
+Pictures made for Vigame by its author, Andrejs Petrovs (Andrejs4 on
+GitHub), are under the
 [Creative Commons Attribution-ShareAlike 4.0](https://creativecommons.org/licenses/by-sa/4.0/)
 licence (CC BY-SA 4.0): anyone may use and change them, crediting the author,
 and share what they make of them under the same terms. Each goes in a table
