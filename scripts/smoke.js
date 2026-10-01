@@ -705,11 +705,28 @@ async function threeBrowsers(browser, url, { full, label }) {
   assert.equal(await c.locator('#build-tower').isDisabled(), true);
 
   // A link to a game that doesn't exist lands in the lobby, which says so.
-  // (Chromium logs the refused join request itself as a console error.)
-  const lost = await newPlayer(browser, `${url}?game=nope`, `${label}-lost`, 'Lou', undefined, /^Failed to load resource: .* 521\b/);
+  // (Chromium logs the refused join request itself as a console error, and
+  // below, the refused New game.)
+  const lost = await newPlayer(browser, `${url}?game=nope`, `${label}-lost`, 'Lou', undefined, /^Failed to load resource: .* (521|409)\b/);
   await inLobby(lost);
   await waitText(lost, '#lobby-notice', 'There is no game at that address.');
   assert.equal(new URL(lost.url()).search, '', 'the address is the lobby again');
+  // Lou leaves three games of his waiting for a player; New game then says
+  // so, and lists them to go back to.
+  await lost.evaluate(async () => {
+    const token = localStorage.getItem('vigame.token');
+    for (let i = 0; i < 3; i++) {
+      const res = await fetch('api/games', {
+        method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ token, players: 2 }),
+      });
+      if (res.status !== 201) throw new Error(`game ${i}: ${res.status}`);
+    }
+  });
+  await lost.click('#lobby-new');
+  await waitMatch(lost, '#lobby-limit-text', /^You have 3 games of yours waiting for a player\./);
+  assert.equal(await lost.locator('#lobby-limit-games li a', { hasText: 'Join' }).count(), 3);
+  if (label === 'direct') await lost.screenshot({ path: join(OUT, 'lobby-limit.png') });
+  assert.equal(new URL(lost.url()).search, '', 'still in the lobby');
   // Lou finds Ann and Bēla's game among those under way, folded away until
   // opened, and watches it from there.
   assert.equal(await lost.locator('#lobby-playing-section[open]').count(), 0);

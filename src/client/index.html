@@ -61,6 +61,10 @@
       <option value="8">8</option>
     </select>
     <button id="lobby-new" class="primary">New game</button>
+    <div id="lobby-limit" hidden>
+      <p class="error" id="lobby-limit-text" role="alert"></p>
+      <ul class="games" id="lobby-limit-games"></ul>
+    </div>
     <details class="games-list" id="lobby-mine-section" open>
       <summary><h2>Your games <span class="count" id="lobby-mine-count"></span></h2></summary>
       <ul class="games" id="lobby-mine"></ul>

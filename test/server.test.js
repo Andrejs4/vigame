@@ -11,7 +11,7 @@ import assert from 'node:assert/strict';
 import { matchMaker } from '@colyseus/core';
 import { Client } from '@colyseus/sdk';
 
-import { startGameServer } from '../server/app.js';
+import { startGameServer, tooManyGames } from '../server/app.js';
 import { playerId, replay, restoreGame } from '../server/room.js';
 import { BOARD_OPTIONS, createBoard } from '../src/core/board.js';
 import { advance, castleOf, checkState, nearStanding, newGame, occupancy, publicView } from '../src/core/game.js';
@@ -38,6 +38,8 @@ before(async () => {
     port: 0,
     monitorPassword: MONITOR_PASSWORD,
     tickRate: TICK_RATE,
+    // These tests start many games for one player; test/limit.test.js keeps the limit.
+    gamesPerPlayer: Infinity,
     logger: { debug() {}, info() {}, trace() {}, warn: quiet, error: quiet },
   });
   base = server.url.replace(/\/$/, '');
@@ -64,6 +66,21 @@ async function startGame() {
   assert.equal(res.status, 201);
   return /** @type {string} */ ((await res.json()).id);
 }
+
+test('a player may start a game unless three of theirs wait for a player, or they sit in three under way', () => {
+  const game = (/** @type {string} */ id, /** @type {string | null} */ creator, /** @type {Array<string | null>} */ seats) => ({ id, creator, seats });
+  const mine = [game('w1', 'p', ['p', null]), game('w2', 'p', [null, null]), game('s1', 'q', ['q', 'p'])];
+  assert.equal(tooManyGames(mine, 'p', 3), null, 'two waiting, two seats');
+  const waiting = tooManyGames([...mine, game('w3', 'p', [null])], 'p', 3);
+  assert.deepEqual(waiting?.games.map((g) => g.id), ['w1', 'w2', 'w3']);
+  assert.match(waiting?.error ?? '', /^You have 3 games of yours waiting for a player\./);
+  const seated = tooManyGames([...mine, game('s2', 'q', ['p', 'q'])], 'p', 3);
+  assert.deepEqual(seated?.games.map((g) => g.id), ['w1', 's1', 's2'], 'the games they sit in');
+  assert.match(seated?.error ?? '', /^You have a seat in 3 games under way\./);
+  const both = tooManyGames([...mine, game('w3', 'p', ['p'])].map((g) => (g.id === 'w3' ? { ...g, seats: ['p', null] } : g)), 'p', 3);
+  assert.deepEqual(both?.games.map((g) => g.id), ['w1', 'w2', 's1', 'w3']);
+  assert.match(both?.error ?? '', /waiting for a player, and a seat in 3 games/);
+});
 
 /** A sign-in challenge, and its answer. */
 async function challenge() {

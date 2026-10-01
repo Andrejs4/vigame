@@ -57,11 +57,36 @@ const GAME_ID = /^[\w-]{1,64}$/;
  * @param {{ seed?: number, mode?: string, players?: number }} [options]
  * @returns {string} The new game's id.
  */
-export function startGame(storage, { seed = randomInt(1, 2 ** 31), mode = DEFAULT_MODE, players = DEFAULT_PLAYERS } = {}) {
+export function startGame(storage, { seed = randomInt(1, 2 ** 31), mode = DEFAULT_MODE, players = DEFAULT_PLAYERS, creator = null } = {}) {
   const id = randomBytes(6).toString('base64url');
   const state = newGame(createBoard({ ...BOARD_OPTIONS, seed, players }), { mode });
-  storage.createGame({ id, seed, state, seats: Array.from({ length: players }, () => null) });
+  storage.createGame({ id, seed, state, seats: Array.from({ length: players }, () => null), creator });
   return id;
+}
+
+/** How many games a player may have on the go before starting another. */
+export const GAMES_PER_PLAYER = 3;
+
+/**
+ * Whether a player has too many games on the go to start another: `limit`
+ * of their own waiting for a player, or `limit` they hold a seat in. If so,
+ * why, and those games, so they can go back to one.
+ * @template {{ creator: string | null, seats: Array<string | null> }} G
+ * @param {G[]} games The player's games under way (`gamesUnderWayOf`).
+ * @param {string} pid
+ * @param {number} limit
+ * @returns {{ error: string, games: G[] } | null}
+ */
+export function tooManyGames(games, pid, limit) {
+  const waiting = games.filter((g) => g.creator === pid && g.seats.includes(null));
+  const seated = games.filter((g) => g.seats.includes(pid));
+  const why = [
+    ...(waiting.length >= limit ? [`${waiting.length} games of yours waiting for a player`] : []),
+    ...(seated.length >= limit ? [`a seat in ${seated.length} games under way`] : []),
+  ];
+  if (!why.length) return null;
+  const shown = games.filter((g) => (waiting.length >= limit && waiting.includes(g)) || (seated.length >= limit && seated.includes(g)));
+  return { error: `You have ${why.join(', and ')}. Go back to one of them before starting another:`, games: shown };
 }
 
 /**
@@ -76,6 +101,8 @@ export function startGame(storage, { seed = randomInt(1, 2 ** 31), mode = DEFAUL
  * @param {boolean} [options.handleSignals=false] Shut down gracefully on SIGINT/SIGTERM.
  * @param {object} [options.logger] Where Colyseus logs; console by default.
  * @param {number} [options.tickRate] Game ticks per real second. Tests speed it up.
+ * @param {number} [options.gamesPerPlayer] See `tooManyGames`; the tests that
+ *   start many games for one player lift it.
  */
 export async function startGameServer({
   port = 2567,
@@ -87,6 +114,7 @@ export async function startGameServer({
   handleSignals = false,
   logger,
   tickRate = TICKS_PER_SECOND,
+  gamesPerPlayer = GAMES_PER_PLAYER,
 } = {}) {
   const storage = openStorage(db);
   const challenges = createChallenges();
@@ -144,19 +172,31 @@ export async function startGameServer({
           return void res.status(400).json({ error: `players must be ${MIN_PLAYERS} to ${MAX_PLAYERS}` });
         }
         if (mode === 'ffa' && players < 2) return void res.status(400).json({ error: 'free for all needs two players' });
-        res.status(201).json({ id: startGame(storage, { mode, players }) });
+        const creator = playerId(req.body.token);
+        const crowded = tooManyGames(storage.gamesUnderWayOf(creator), creator, gamesPerPlayer);
+        if (crowded) {
+          // Who started each stays on the server.
+          const games = crowded.games.map(({ creator: _creator, ...g }) => g);
+          return void res.status(409).json({ error: crowded.error, games: seatNames(games) });
+        }
+        res.status(201).json({ id: startGame(storage, { mode, players, creator }) });
       });
-      app.get('/api/games', (_req, res) => {
+      /**
+       * Games as the lobby lists them, with each seat's holder by name.
+       * @template {{ seats: Array<string | null> }} G
+       * @param {G[]} games
+       */
+      const seatNames = (games) => {
         /** @type {Map<string, string>} */
         const names = new Map();
         const nameOf = (/** @type {string} */ pid) => {
           if (!names.has(pid)) names.set(pid, storage.loadPlayer(pid)?.name ?? '');
           return names.get(pid);
         };
-        res.set('cache-control', 'no-store').json(storage.listGames().map((g) => ({
-          ...g,
-          seats: g.seats.map((pid) => (pid ? { pid, name: nameOf(pid) } : null)),
-        })));
+        return games.map((g) => ({ ...g, seats: g.seats.map((pid) => (pid ? { pid, name: nameOf(pid) } : null)) }));
+      };
+      app.get('/api/games', (_req, res) => {
+        res.set('cache-control', 'no-store').json(seatNames(storage.listGames()));
       });
       app.get('/api/games/:id', (req, res) => {
         const saved = GAME_ID.test(req.params.id) ? storage.loadGame(req.params.id) : null;

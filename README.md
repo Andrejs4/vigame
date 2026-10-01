@@ -34,6 +34,10 @@ Run `npm start` and open http://127.0.0.1:2567.
   someone. Players who join take the seats in order (Blue, Crimson, Green,
   Gold, Teal, Orange, Rose, Silver); once they are full, visitors watch.
   **Release seat** frees a seat for a spectator to take.
+- **Too many games**: New game is refused while three games you started
+  wait for a player, or while you hold a seat in three games under way;
+  the lobby then lists those games, with a button to go back to each.
+  Finished games don't count.
 - **Game names**: a new game gets a name from a list that sets its mood
   (Pit party, Last stand, Ogre ballet, …), which the lobby and the status
   panel show. Any player still in it may rename it with **✎** next to the
@@ -450,14 +454,15 @@ HTTP API:
 | `POST /api/me` | Who a token belongs to: `{ token }` gives `{ pid, name }`, or `null` if it hasn't signed in. |
 | `GET /api/challenge` | A sum to answer when signing in: `{ id, question }`. Each one answers once and lasts 10 minutes. |
 | `POST /api/players` | Signs in (or renames): `{ token, name, challenge, answer }` gives `{ pid, name }`. `400` for a bad token or name, `403` for a wrong answer. |
-| `POST /api/games` | Starts a game with a random map: `{ token, mode?, players? }` of a signed-in player (`mode` `coop`, `easy`, `shared` or `ffa`, `players` 1 to 8; by default a cooperation game for one) gives `201 { id }`; `401` if not signed in, `400` for a bad mode or number. |
+| `POST /api/games` | Starts a game with a random map: `{ token, mode?, players? }` of a signed-in player (`mode` `coop`, `easy`, `shared` or `ffa`, `players` 1 to 8; by default a cooperation game for one) gives `201 { id }`; `401` if not signed in, `400` for a bad mode or number; `409 { error, games }` while the player has too many games on the go (three of theirs waiting for a player, or seats in three under way), with those games as `GET /api/games` lists them. |
 | `GET /api/games` | The 50 most recently active games, for the lobby, with their name, mode and who holds each seat: `{ pid, name }` or `null`. |
 | `GET /api/games/:id` | One game: its seed, latest snapshot and seats. |
 | `GET /api/games/:id/commands` | Its command log, with each command's tick. |
 | `GET /api/games/:id/seats` | Who holds each seat: `{ pid, name }`, or `null` for a free one. |
 
-The database has three tables: `games` (each game's seed, seats, and a
-snapshot of its state, saved every ten seconds and when its room closes),
+The database has three tables: `games` (each game's seed, seats, who
+started it and when (neither shown to players), and a snapshot of its
+state, saved every ten seconds and when its room closes),
 `commands` (every accepted command with its tick, in order, never changed)
 and `players` (each signed-in player's public id and name; never the token).
 A room reopening a game loads its snapshot and replays the commands logged

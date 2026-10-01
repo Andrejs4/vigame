@@ -159,10 +159,24 @@ export function showLobby(token, me, { notice } = {}) {
   refresh();
   const timer = setInterval(refresh, REFRESH_MS);
 
+  const limit = /** @type {HTMLElement} */ (document.getElementById('lobby-limit'));
+  limit.hidden = true;
   newButton.onclick = async () => {
     newButton.disabled = true;
+    limit.hidden = true;
     try {
       const res = await post('api/games', { token, mode: modeSelect.value, players: Number(playersSelect.value) });
+      // Too many games on the go: the server says which, to go back to.
+      if (res.status === 409) {
+        const { error, games } = await res.json();
+        /** @type {HTMLElement} */ (document.getElementById('lobby-limit-text')).textContent = error;
+        const isMine = (/** @type {import('./api.js').GameSummary} */ g) => g.seats.some((s) => s?.pid === me.pid);
+        /** @type {HTMLElement} */ (document.getElementById('lobby-limit-games')).replaceChildren(
+          ...(/** @type {import('./api.js').GameSummary[]} */ (games)).map((g) => row(g, isMine(g) ? 'Open' : 'Join')));
+        limit.hidden = false;
+        newButton.disabled = false;
+        return;
+      }
       if (!res.ok) throw new Error(await reason(res));
       const { id } = await res.json();
       location.search = gameHref(id);

@@ -107,6 +107,9 @@ button[aria-pressed="true"] { background: rgba(255, 216, 77, 0.18); border-color
 .games-list .count { color: var(--ink-dim); font: 12px var(--mono); margin-left: 4px; }
 
 .games { list-style: none; margin: 0; padding: 0; }
+/* Why New game was refused, over the games to go back to. */
+#lobby-limit { margin-top: 12px; }
+#lobby-limit .error { margin: 0 0 6px; min-height: 0; }
 .games li {
   display: flex; align-items: center; justify-content: space-between; gap: 12px;
   padding: 8px 0;
