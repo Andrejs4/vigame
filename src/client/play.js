@@ -4,7 +4,7 @@
  * player's clicks on as commands.
  */
 
-import { axialToPixel, bounds, key, pixelToAxial } from '../core/hex.js';
+import { axialToPixel, bounds, distance, key, pixelToAxial } from '../core/hex.js';
 import { BOARD_OPTIONS, TERRAIN, createBoard, tileAt } from '../core/board.js';
 import {
   buildCost, capacityOf, castleOf, crewOf, depthOf, foodStore, fullMeal, inBuildRange, isDugOut, isRising, maxHp, occupancy, pointsOf, purseOf,
@@ -134,6 +134,7 @@ export async function startGame(net, me) {
     list: /** @type {HTMLElement} */ (document.getElementById('crew-list')),
     count: /** @type {HTMLElement} */ (document.getElementById('crew-count')),
     ok: /** @type {HTMLButtonElement} */ (document.getElementById('crew-ok')),
+    sorts: /** @type {HTMLButtonElement[]} */ ([...document.querySelectorAll('#crew-sort button')]),
   };
   const buildButtons = /** @type {HTMLButtonElement[]} */ ([...document.querySelectorAll('button[data-kind]')]);
   const message = /** @type {HTMLElement} */ (document.getElementById('message'));
@@ -541,9 +542,11 @@ export async function startGame(net, me) {
    * @param {string | null} options.target The building, or null for a new one.
    * @param {string} options.key The letter that confirms it, besides Enter: the
    *   one that opened it.
+   * @param {{ q: number, r: number }} options.site Where the crew goes, for the
+   *   Nearest order.
    * @returns {Promise<string[] | null>} The chosen unit ids, or null if cancelled.
    */
-  function chooseCrew({ title, hint, action, kind, limit, target, key }) {
+  function chooseCrew({ title, hint, action, kind, limit, target, key, site }) {
     const seat = net.seat();
     if (!view || seat === null) return Promise.resolve(null);
     const { skill } = BUILDING_TYPES[kind];
@@ -562,6 +565,9 @@ export async function startGame(net, me) {
     crewParts.hint.textContent = hint;
     crewParts.ok.textContent = action;
     crewParts.ok.title = `${action} (Enter or ${key})`;
+    /** Each unit's row, by id. */
+    /** @type {Map<string, HTMLElement>} */
+    const rows = new Map();
     crewParts.list.replaceChildren(...units.map((u) => {
       const box = document.createElement('input');
       box.type = 'checkbox';
@@ -572,7 +578,7 @@ export async function startGame(net, me) {
       const stats = document.createElement('span');
       stats.className = 'stats';
       const age = Math.max(0, Math.floor((view.tick - (u.born ?? view.tick)) / (60 * TICKS_PER_SECOND)));
-      stats.textContent = `Lv ${u.level} · ${SKILLS[skill]} ${u.skills[skill]} · ${age} min`;
+      stats.textContent = `Lv ${u.level} · ${SKILLS[skill]} ${u.skills[skill]} · ${age}m`;
       const where = document.createElement('span');
       where.className = 'where';
       where.textContent = whereIs(u, target);
@@ -580,8 +586,26 @@ export async function startGame(net, me) {
       label.append(box, name, stats, where);
       const li = document.createElement('li');
       li.append(label);
+      rows.set(u.id, li);
       return li;
     }));
+
+    // The default order, or by level, or by how far each is from the site.
+    // A reorder moves the rows themselves, so every tick stays as it was.
+    const placeOf = (/** @type {typeof units[number]} */ u) => (u.in && view.buildings[u.in]) || u;
+    /** @type {Record<string, typeof units>} */
+    const orders = {
+      default: [...units],
+      level: [...units].sort((a, b) => b.level - a.level || better(a, b)),
+      near: [...units].sort((a, b) => distance(placeOf(a), site) - distance(placeOf(b), site) || better(a, b)),
+    };
+    const order = (/** @type {string} */ name) => {
+      crewParts.list.append(.../** @type {HTMLElement[]} */ (orders[name].map((u) => rows.get(u.id))));
+      crewParts.list.scrollTop = 0;
+      for (const button of crewParts.sorts) button.setAttribute('aria-pressed', String(button.dataset.sort === name));
+    };
+    for (const button of crewParts.sorts) button.onclick = () => order(button.dataset.sort ?? 'default');
+    order('default');
     const sync = () => {
       crewParts.count.textContent = `${chosen.size} of ${limit}`;
       for (const box of crewParts.list.querySelectorAll('input')) box.disabled = !box.checked && chosen.size >= limit;
@@ -645,6 +669,8 @@ export async function startGame(net, me) {
     crewDialog.returnValue = '';
     crewTarget = target;
     crewDialog.showModal();
+    // The first unit, not the first order button, so Enter sends the crew.
+    crewParts.list.querySelector('input')?.focus({ preventScroll: true });
     return new Promise((resolve) => {
       crewDialog.addEventListener('close', () => {
         crewTarget = null;
@@ -722,6 +748,7 @@ export async function startGame(net, me) {
           limit: type.capacity,
           target: null,
           key: type.name[0],
+          site: at,
         });
         if (!chosen) return;
         units = chosen;
@@ -982,6 +1009,7 @@ export async function startGame(net, me) {
       limit: capacityOf(b),
       target: b.id,
       key: 'C',
+      site: b,
     });
     if (units) give({ type: 'crew', building: b.id, units }, 'send that crew');
   });

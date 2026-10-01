@@ -102,9 +102,12 @@ Run `npm start` and open http://127.0.0.1:2567.
   chance of a unit's strikes.
 - **Crews**: units walk only when they're given to a building's crew or sent
   home. Select one of your buildings and press **Crew…** for a list of your
-  units, each with its level, skill and age in minutes: tick up to what it
-  holds (with a mouse, drag down the list to tick or untick a run of
-  them). Those you untick go home; those you tick
+  units, each with its level, skill and age in minutes ("12m"): tick up to
+  what it holds (with a mouse, drag down the list to tick or untick a run
+  of them). **Level** and **Nearest** reorder the list, highest level or
+  closest to the building first, and **Default** puts it back (those
+  ticked, then those at home, the best at the work first); the ticks stay
+  as they are. Those you untick go home; those you tick
   come from wherever they are, one after another, two seconds a cell on open
   ground and four on scrub, less the better they run. Water is impassable.
   **Return** sends the whole crew home. A unit left with nowhere to go (its

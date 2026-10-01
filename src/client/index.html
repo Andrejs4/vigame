@@ -175,6 +175,12 @@
   <form method="dialog">
     <h2 id="crew-title">Crew</h2>
     <p class="hint" id="crew-hint"></p>
+    <div class="crew-sort" id="crew-sort" role="group" aria-label="Order">
+      <span>Order</span>
+      <button type="button" data-sort="default" aria-pressed="true" title="Those ticked first, then those at home, the best at the work first">Default</button>
+      <button type="button" data-sort="level" aria-pressed="false" title="Highest level first">Level</button>
+      <button type="button" data-sort="near" aria-pressed="false" title="Closest to the building first">Nearest</button>
+    </div>
     <ul class="crew-list" id="crew-list"></ul>
     <div class="crew-foot">
       <span id="crew-count"></span>

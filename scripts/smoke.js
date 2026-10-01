@@ -617,7 +617,7 @@ async function threeBrowsers(browser, url, { full, label }) {
   await a.keyboard.press('c');
   await a.waitForSelector('#crew[open]');
   // Each unit shows its age; a mouse drag down the list ticks each row it crosses.
-  assert.match(await a.locator('#crew-list .stats').first().textContent() ?? '', /· \d+ min$/);
+  assert.match(await a.locator('#crew-list .stats').first().textContent() ?? '', /· \d+m$/);
   assert.equal(await text(a, '#crew-count'), '1 of 8');
   const ids = await a.$$eval('#crew-list input:not(:checked)', (els) => els.slice(0, 3).map((e) => /** @type {HTMLInputElement} */ (e).value));
   const rowOf = (/** @type {string} */ id) => a.locator(`#crew-list input[value="${id}"]`).locator('xpath=..').boundingBox();
@@ -630,6 +630,26 @@ async function threeBrowsers(browser, url, { full, label }) {
   const ticked = await a.$$eval('#crew-list input:checked', (els) => els.map((e) => /** @type {HTMLInputElement} */ (e).value));
   assert.ok(ids.every((id) => ticked.includes(id)), `the drag ticked ${ticked} rather than ${ids}`);
   assert.equal(await text(a, '#crew-count'), '4 of 8');
+  // Ordered by level, then by nearness to the pit, the rows move and the
+  // same units stay ticked.
+  const tickedIds = () => a.$$eval('#crew-list input:checked', (els) => els.map((e) => /** @type {HTMLInputElement} */ (e).value).sort());
+  const tickedBefore = await tickedIds();
+  await a.click('#crew-sort [data-sort="level"]');
+  const levels = await a.$$eval('#crew-list .stats', (els) => els.map((e) => Number(/^Lv (\d+)/.exec(e.textContent ?? '')?.[1])));
+  assert.deepEqual(levels, [...levels].sort((x, y) => y - x), 'highest level first');
+  await a.click('#crew-sort [data-sort="near"]');
+  const reach = await a.$$eval('#crew-list input', (els) => {
+    const v = /** @type {any} */ (window).__vigame;
+    const site = v.view.buildings[v.crewTarget];
+    return els.map((e) => {
+      const u = v.view.units[/** @type {HTMLInputElement} */ (e).value];
+      const at = (u.in && v.view.buildings[u.in]) || u;
+      return (Math.abs(at.q - site.q) + Math.abs(at.r - site.r) + Math.abs(at.q + at.r - site.q - site.r)) / 2;
+    });
+  });
+  assert.deepEqual(reach, [...reach].sort((x, y) => x - y), 'closest first');
+  assert.equal(await a.getAttribute('#crew-sort [data-sort="near"]', 'aria-pressed'), 'true');
+  assert.deepEqual(await tickedIds(), tickedBefore, 'the ticks stay');
   assert.deepEqual(await a.evaluate(() => /** @type {any} */ (window).__vigame.net.send({ type: 'abort', building: /** @type {any} */ (window).__vigame.crewTarget })), { ok: true });
   await a.waitForSelector('#crew', { state: 'hidden' });
   await waitText(a, '#message', 'Your pit is gone.');
