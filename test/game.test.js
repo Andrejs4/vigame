@@ -7,7 +7,7 @@ import {
   depthOf, fullMeal, isRising, killChance, maxHp, pointsOf, seatsOf, starveChance,
 } from '../src/core/game.js';
 import {
-  BUILDING_TYPES, COMBAT_PERIOD, DARK_LORD, HORDE_PERIOD, HORDE_START, RAIDERS, RAID_PERIOD, SALVAGE, FOOD_PER_UNIT, FOOD_PERIOD, KILL_XP, LEVEL_RATE, RANGED_DAMAGE, LEVEL_XP, MAX_HUNGER, MAX_LEVEL, SKILL_RATE, SKILL_XP, START_UNITS, UNIT_LIMIT, WAGON_PATIENCE,
+  BUILDING_TYPES, COMBAT_PERIOD, DARK_LORD, HORDE_PERIOD, HORDE_START, RAIDERS, RAID_PERIOD, RAID_PER_PLAYER, SALVAGE, FOOD_PER_UNIT, FOOD_PERIOD, KILL_XP, LEVEL_RATE, RANGED_DAMAGE, LEVEL_XP, MAX_HUNGER, MAX_LEVEL, SKILL_RATE, SKILL_XP, START_UNITS, UNIT_LIMIT, WAGON_PATIENCE,
   WALK_TICKS, WORK_BASE,
 } from '../src/core/rules.js';
 import { distance } from '../src/core/hex.js';
@@ -606,6 +606,27 @@ test('raiders turn up now and then; bringing one down yields dark metal', () => 
   assert.equal(state.players[0].metal, metal + /** @type {number} */ (BUILDING_TYPES.raider.loot));
 });
 
+test('raiders come up to two for each player, tougher than they were', () => {
+  assert.deepEqual([BUILDING_TYPES.raider.hp, BUILDING_TYPES.raider.attack?.damage], [500, 20]);
+  // Alone against the Dark Lord, with two raiders out already far away, no
+  // third comes (there used to be room for three).
+  const board = createBoard({ ...BOARD_OPTIONS, seed: 3, players: 1 });
+  const game = newGame(board);
+  const wild = game.players.findIndex((p) => p.side === RAIDERS);
+  const standing = Object.values(game.buildings);
+  for (const t of board.list.filter((c) => c.passable && standing.every((b) => distance(b, c) > 8)).slice(0, RAID_PER_PLAYER)) {
+    const id = `b${game.nextId++}`;
+    game.buildings[id] = { id, owner: wild, type: 'raider', grade: 1, q: t.q, r: t.r, hp: BUILDING_TYPES.raider.hp };
+  }
+  assert.deepEqual(checkState(board, game), []);
+  let most = 0;
+  for (let i = 0; i < 4 * RAID_PERIOD; i++) {
+    advance(board, game);
+    most = Math.max(most, Object.values(game.buildings).filter((b) => b.owner === wild).length);
+  }
+  assert.equal(most, RAID_PER_PLAYER);
+});
+
 test('in cooperation the Dark Lord\'s lair sends out ever bigger waves of ghouls and ogres', () => {
   // A castle out of the lair's reach, so neither brings the other down first.
   const board = openBoard(9);
@@ -934,10 +955,11 @@ test('building needs open, buildable ground near one of your standing buildings'
   assert.deepEqual(applyCommand(board, roaming, 0, tower(1, 0)), { ok: false, reason: 'too far from your buildings' });
 });
 
-test('a wagon upgrades for dark metal, three times, each to its hit points again and no more room', () => {
+test('a wagon upgrades for dark metal, three times, each for more hit points and no more room', () => {
   const board = openBoard(4);
   const state = stateWith([{ id: 'b1', type: 'wagon', q: 2, r: 0 }], unitsIn('b1', 15, 10));
-  const { hp, upgradeMetal = 0 } = BUILDING_TYPES.wagon;
+  const { hp, hpPerGrade = 0, upgradeMetal = 0 } = BUILDING_TYPES.wagon;
+  assert.deepEqual([hp, hpPerGrade, upgradeMetal], [300, 500, 50]);
   const upgrade = () => applyCommand(board, state, 0, { type: 'upgrade', building: 'b1' });
   state.players[0].metal = upgradeMetal - 1;
   assert.deepEqual(upgrade(), { ok: false, reason: 'not enough dark metal' });
@@ -946,7 +968,7 @@ test('a wagon upgrades for dark metal, three times, each to its hit points again
   for (const grade of [2, 3, 4]) {
     assert.deepEqual(upgrade(), OK);
     runUntil(board, state, () => state.buildings.b1.upgrading === undefined);
-    assert.deepEqual([state.buildings.b1.grade, state.buildings.b1.hp, capacityOf(state.buildings.b1)], [grade, hp * grade, 15]);
+    assert.deepEqual([state.buildings.b1.grade, state.buildings.b1.hp, capacityOf(state.buildings.b1)], [grade, hp + hpPerGrade * (grade - 1), 15]);
   }
   assert.deepEqual([state.players[0].metal, state.players[0].stone], [0, stone], 'dark metal only');
   assert.deepEqual(upgrade(), { ok: false, reason: 'fully upgraded' });

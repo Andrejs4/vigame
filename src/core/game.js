@@ -41,7 +41,7 @@ import { tileAt } from './board.js';
 import { gameName, unitName } from './names.js';
 import { GAME_NAME_MAX, cleanGameName } from './player.js';
 import {
-  BUILDING_TYPES, BUILD_RANGE, DARK_LORD, HERO_LEVEL_GROWTH, HERO_LEVEL_XP, HERO_SHARE, LORD_HP, SHARED_STOCK, HORDE_MAX, HORDE_PERIOD, HORDE_START, POINTS, RAIDERS, SALVAGE, RAID_CHANCE, RAID_CLEAR, RAID_MAX, RAID_PERIOD, RAID_ROAM, START_METAL, DEFAULT_MODE, MAX_PLAYERS, MODES, COMBAT_PERIOD, DEPART_GAP, FOOD_PER_UNIT, KILL_EVEN, KILL_MAX, KILL_STEP, KILL_XP, MELEE_DAMAGE, MELEE_RANGE,
+  BUILDING_TYPES, BUILD_RANGE, DARK_LORD, HERO_LEVEL_GROWTH, HERO_LEVEL_XP, HERO_SHARE, LORD_HP, SHARED_STOCK, HORDE_MAX, HORDE_PERIOD, HORDE_START, POINTS, RAIDERS, SALVAGE, RAID_CHANCE, RAID_CLEAR, RAID_PER_PLAYER, RAID_PERIOD, RAID_ROAM, START_METAL, DEFAULT_MODE, MAX_PLAYERS, MODES, COMBAT_PERIOD, DEPART_GAP, FOOD_PER_UNIT, KILL_EVEN, KILL_MAX, KILL_STEP, KILL_XP, MELEE_DAMAGE, MELEE_RANGE,
   RANGED_DAMAGE, RANGED_RANGE, REPAIR_WORK, FOOD_PERIOD, FOOD_STORE, HUNGER_PULL, LEVEL_GROWTH,
   LEVEL_RATE, LEVEL_XP, MAX_HUNGER, MAX_LEVEL, SIDES, SKILLS, SKILL_RATE, SKILL_XP, START_STONE, START_UNITS, STARVE_CHANCE,
   UNIT_LIMIT, WAGON_PATIENCE, WALK_TICKS, WORK_BASE,
@@ -415,7 +415,8 @@ export function maxHp(state, b) {
   const type = BUILDING_TYPES[b.type];
   const deep = (type.hpPerDepth ?? 0) * depthOf(b);
   const lord = type.scales ? lordScale(state) * (LORD_HP[state.mode] ?? 1) : 1;
-  const full = Math.round((type.hp * b.grade + deep) * lord);
+  const { hp, hpPerGrade = hp } = type;
+  const full = Math.round((hp + hpPerGrade * (b.grade - 1) + deep) * lord);
   return isRising(b) ? Math.ceil(full / 2) : full;
 }
 
@@ -1196,7 +1197,7 @@ function raid(board, state) {
   const wild = state.players.find((p) => SIDES[p.side]?.wild);
   if (!wild) return;
   const raiders = Object.values(state.buildings).filter((b) => b.owner === wild.id).length;
-  if (raiders >= RAID_MAX + seatsOf(state) || random(state) >= RAID_CHANCE) return;
+  if (raiders >= RAID_PER_PLAYER * seatsOf(state) || random(state) >= RAID_CHANCE) return;
   const taken = occupancy(state).buildingAt;
   const lives = Object.values(state.buildings).filter((b) => BUILDING_TYPES[b.type].life);
   for (let tries = 0; tries < 20; tries++) {
@@ -1620,9 +1621,10 @@ function raise(state, occ) {
       b.hp = /** @type {number} */ (b.hp) + maxHp(state, b) - half;
       tally.built += 1;
     } else {
+      const before = maxHp(state, b);
       delete b.upgrading;
       b.grade += 1;
-      b.hp = /** @type {number} */ (b.hp) + BUILDING_TYPES[b.type].hp;
+      b.hp = /** @type {number} */ (b.hp) + maxHp(state, b) - before;
       tally.upgrades += b.grade;
     }
   }

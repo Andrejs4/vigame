@@ -418,7 +418,8 @@ function migrate(db) {
   }
   if (version < 21) {
     // Some units are heroes, rolled as they are born, which moves every
-    // later roll: earlier games don't replay the same.
+    // later roll; raiders and wagon upgrades are tougher: earlier games
+    // don't replay the same.
     db.transaction(() => db.exec(`
       DELETE FROM commands;
       DELETE FROM games;

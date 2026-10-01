@@ -174,8 +174,8 @@ Run `npm start` and open http://127.0.0.1:2567.
   quarter of an hour). At 100%, every unit may starve at each meal: about
   5% at level 1, 0.6% at level 50, never at 100.
 - **Upgrade** the selected building: the castle for 200 stone × its grade,
-  a tower for 60 × its grade, a wagon for 30 dark metal (the price of two
-  wagons) up to three times. Then its crew works on it, as on a new building,
+  a tower for 60 × its grade, a wagon for 50 dark metal up to three
+  times. Then its crew works on it, as on a new building,
   instead of their usual work, which trains their building skill: each grade
   takes as long again as the one before (a tower as long as raising it, a
   castle three times that). Once done, it holds as many units again (a
@@ -221,18 +221,17 @@ Run `npm start` and open http://127.0.0.1:2567.
   stops, commands are refused, the page says who won, and the lobby lists
   the game as finished.
 - **Raiders** turn up in every game: wandering hostile wagons, against
-  everyone, that strike whatever comes within 2 cells (10 a strike, level
-  20). Every minute and a
-  half one may appear on open ground away from the castles, up to 2 plus
-  one per player. The side that brings one down gets 10 dark metal: the
+  everyone, with 500 hit points, that strike whatever comes within 2
+  cells (20 a strike, level 20). Every minute and a half one may appear
+  on open ground away from the castles, up to 2 per player. The side that brings one down gets 10 dark metal: the
   only way to get it, and what wagons are built with.
 - **Wagons** are buildings that move. Select one, then click a cell to drive
   it there, two seconds a cell; its crew, up to 15, rides along inside. Wagons can't
   pass through other buildings, each other included: a blocked wagon waits,
   then looks for another way, and stops if there is none. Whoever brings a
   wagon down (another player, the Dark Lord, raiders) gets half its price in
-  dark metal, 7 for 15. An upgrade armours a wagon: each of three adds its
-  300 hit points again (up to 1200), but no room.
+  dark metal, 7 for 15. An upgrade armours a wagon: each of three adds 500
+  hit points to its 300 (800, 1300, 1800), but no room.
 - **Bands** are groups of up to 30 units that move like wagons, for free.
   Placing one asks who goes. A band holds no cell, so it passes anything of
   yours and blocks nothing; it has no hit points and gives no cover, and it

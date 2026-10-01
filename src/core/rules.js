@@ -202,13 +202,13 @@ export const KILL_STEP = 1.06;
 /**
  * Raiders. Every RAID_PERIOD, with a RAID_CHANCE chance, a raider appears on
  * open ground at least RAID_CLEAR cells from any castle or lair, while there
- * are fewer than RAID_MAX plus one per player. It wanders at random and
+ * are fewer than RAID_PER_PLAYER for each player. It wanders at random and
  * strikes whatever comes near; bringing one down yields its `loot` of dark
  * metal to the side that struck the blow.
  */
 export const RAID_PERIOD = 90 * TICKS_PER_SECOND;
 export const RAID_CHANCE = 0.6;
-export const RAID_MAX = 2;
+export const RAID_PER_PLAYER = 2;
 export const RAID_CLEAR = 6;
 /** How far a raider wanders at a time, in cells. */
 export const RAID_ROAM = 4;
@@ -264,7 +264,9 @@ export const REPAIR_WORK = 500;
  *   holds this many or more.
  * @property {number} grades Highest grade.
  * @property {number} [perGrade] Units each grade after the first adds to its room.
- * @property {number} hp Hit points at grade 1; each grade adds as many again.
+ * @property {number} hp Hit points at grade 1; each grade adds as many again,
+ *   or `hpPerGrade` if it has that.
+ * @property {number} [hpPerGrade] Hit points each grade after the first adds.
  *   At none left, the building collapses at once, and whoever was inside is
  *   left standing on its cell. A band has none: it protects nobody.
  * @property {boolean} [band] A band: a group of units, free, that moves like
@@ -333,10 +335,9 @@ export const BUILDING_TYPES = {
     raise: 12000,
   },
   wagon: {
-    // Upgrades armour it: each adds its hit points again (up to four times)
-    // and no room, for the price of two wagons.
-    name: 'Wagon', size: 1, capacity: 15, perGrade: 0, grades: 4, hp: 300, build: true, cost: 0, metal: 15, nearCastle: true,
-    upgradeMetal: 30, skill: 'ranged', extra: 'melee', speed: 2 * TICKS_PER_SECOND, raise: 9000,
+    // Upgrades armour it: each adds 500 hit points (three times) and no room.
+    name: 'Wagon', size: 1, capacity: 15, perGrade: 0, grades: 4, hp: 300, hpPerGrade: 500, build: true, cost: 0, metal: 15, nearCastle: true,
+    upgradeMetal: 50, skill: 'ranged', extra: 'melee', speed: 2 * TICKS_PER_SECOND, raise: 9000,
   },
   pit: {
     name: 'Pit', size: 1, capacity: 8, grades: 1, hp: 250, build: true, cost: 0,
@@ -351,8 +352,8 @@ export const BUILDING_TYPES = {
     skill: 'melee', life: true, attack: { damage: 40, skill: 60, reach: 4 }, scales: true,
   },
   raider: {
-    name: 'Raider', size: 1, capacity: 0, grades: 1, hp: 300, build: false, cost: 0,
-    skill: 'melee', speed: 3 * TICKS_PER_SECOND, attack: { damage: 10, skill: 20, reach: 2 }, loot: 10,
+    name: 'Raider', size: 1, capacity: 0, grades: 1, hp: 500, build: false, cost: 0,
+    skill: 'melee', speed: 3 * TICKS_PER_SECOND, attack: { damage: 20, skill: 20, reach: 2 }, loot: 10,
   },
   ghoul: {
     name: 'Ghoul', size: 1, capacity: 0, grades: 1, hp: 1200, build: false, cost: 0,
