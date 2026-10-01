@@ -582,6 +582,7 @@ export async function startGame(net, me) {
         return level;
       }));
       const li = document.createElement('li');
+      li.dataset.unit = u.id;
       li.append(name, stats, where, levels);
       return li;
     }));

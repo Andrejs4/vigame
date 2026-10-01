@@ -642,12 +642,23 @@ async function threeBrowsers(browser, url, { full, label }) {
   await a.click('#crew-sort-skill');
   const skills = await a.$$eval('#crew-list .stats', (els) => els.map((e) => Number(/· Building (\d+) ·/.exec(e.textContent ?? '')?.[1])));
   assert.deepEqual(skills, [...skills].sort((x, y) => y - x), 'best builders first');
-  // Heroes first, their ages in gold.
+  // Heroes first, their ages in gold. The list holds the units there were
+  // as it opened, so each row is checked against its own unit: one born
+  // since isn't in it, and one gone since is skipped.
   await a.click('#crew-sort [data-sort="hero"]');
-  const heroes = await a.$$eval('#crew-list .stats', (els) => els.map((e) => Boolean(e.querySelector('.hero'))));
+  const rows = await a.$$eval('#crew-list label', (els) => els.map((e) => ({
+    id: /** @type {HTMLInputElement} */ (e.querySelector('input')).value,
+    marked: Boolean(e.querySelector('.stats .hero')),
+  })));
+  const heroes = rows.map((row) => row.marked);
   assert.deepEqual(heroes, [...heroes].sort((x, y) => Number(y) - Number(x)), 'heroes first');
-  assert.equal(heroes.filter(Boolean).length, await a.evaluate(() => Object.values(/** @type {any} */ (window).__vigame.view.units)
-    .filter((u) => u.owner === 0 && u.hero).length), 'every hero of hers marked');
+  const isHero = await a.evaluate((ids) => ids.map((id) => {
+    const u = /** @type {any} */ (window).__vigame.view.units[id];
+    return u ? Boolean(u.hero) : null;
+  }), rows.map((row) => row.id));
+  rows.forEach((row, i) => {
+    if (isHero[i] !== null) assert.equal(row.marked, isHero[i], `unit ${row.id} marked as a hero is`);
+  });
   await a.click('#crew-sort [data-sort="level"]');
   const levels = await a.$$eval('#crew-list .stats', (els) => els.map((e) => Number(/^Lv (\d+)/.exec(e.textContent ?? '')?.[1])));
   assert.deepEqual(levels, [...levels].sort((x, y) => y - x), 'highest level first');
@@ -677,16 +688,28 @@ async function threeBrowsers(browser, url, { full, label }) {
   // closes it again, and it stays closed.
   await selectBuilding(a, await castleOf(a, 0));
   assert.ok(await a.isHidden('#crew-button'), 'no Crew for a castle');
+  // Units are born meanwhile: those there before it opened must be in it.
+  const opened = await a.evaluate(() => /** @type {any} */ (window).__vigame.view.tick);
   await a.keyboard.press('h');
   await a.waitForSelector('#heroes[open]');
   const listed = await a.$$eval('#heroes-list li:not(.none)', (els) => els.map((e) => ({
+    id: /** @type {HTMLElement} */ (e).dataset.unit,
     level: Number(/^Lv *(\d+) · \d+m$/.exec(e.querySelector('.stats')?.textContent ?? '')?.[1]),
     skills: e.querySelector('.skills')?.textContent ?? '',
   })));
-  const herCount = await a.evaluate(() => Object.values(/** @type {any} */ (window).__vigame.view.units)
-    .filter((u) => u.owner === 0 && u.hero).length);
-  assert.equal(listed.length, herCount, 'every hero of hers listed');
-  if (!herCount) assert.equal(await a.locator('#heroes-list .none').count(), 1, 'none yet, it says');
+  // Each listed unit is a hero of hers (unless gone since), and each of
+  // hers born before it opened is listed.
+  const heroIds = listed.map((h) => h.id);
+  const { fits, earlier } = await a.evaluate(({ tick, ids }) => {
+    const units = /** @type {any} */ (window).__vigame.view.units;
+    return {
+      fits: ids.map((id) => (units[id] ? units[id].owner === 0 && Boolean(units[id].hero) : null)),
+      earlier: Object.values(units).filter((u) => u.owner === 0 && u.hero && u.born <= tick).map((u) => u.id),
+    };
+  }, { tick: opened, ids: heroIds });
+  assert.ok(fits.every((fit) => fit !== false), `only her heroes listed: ${heroIds}`);
+  assert.ok(earlier.every((id) => heroIds.includes(id)), `every hero of hers listed: ${earlier} in ${heroIds}`);
+  if (!heroIds.length) assert.equal(await a.locator('#heroes-list .none').count(), 1, 'none yet, it says');
   assert.deepEqual(listed.map((h) => h.level), listed.map((h) => h.level).sort((x, y) => y - x), 'highest level first');
   // Each level takes three places, "Lv  8" to "Lv100", so the skills line up.
   const skillLine = new RegExp(`^${['Att', 'Mel', 'Bld', 'Frm', 'Brd', 'Run'].map((s) => `${s} Lv[ \\d]{2}\\d`).join('')}$`);
