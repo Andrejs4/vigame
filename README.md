@@ -103,9 +103,9 @@ Run `npm start` and open http://127.0.0.1:2567.
   reaches 100 about when an ordinary one would be 34. The crew chooser
   shows a hero's age in gold. Select your castle and press **Heroes…**
   (in Crew's place, as the castle has no crew) for yours alive now, highest
-  level first, with where each is and every skill's level, as "Att 15lvl"
+  level first, with where each is and every skill's level, as "Att Lv 15"
   (ranged attack; then close combat, building, farming, breeding and
-  running). The status panel says when one of yours
+  running), each level padded to line up ("Lv  8", "Lv100"). The status panel says when one of yours
   dies ("Hero Hugh Baker died in combat.", "3 heroes died from hunger."):
   of hunger if it went at a meal while your side was starving, else in
   combat. Every skill counts: breeding speeds

@@ -551,7 +551,8 @@ export async function startGame(net, me) {
   /**
    * Show the player's heroes alive now, highest level first, to read: each
    * with its level, age and whereabouts as the crew chooser has them, and
-   * every skill's level.
+   * every skill's level. Levels take three places ("Lv  8", "Lv 15",
+   * "Lv100"), so the skills line up from row to row.
    */
   function showHeroes() {
     const seat = net.seat();
@@ -559,6 +560,7 @@ export async function startGame(net, me) {
     const units = Object.values(view.units).filter((u) => u.owner === seat);
     const heroes = units.filter((u) => u.hero).sort((a, b) => b.level - a.level || a.name.localeCompare(b.name));
     const skills = /** @type {[import('../core/rules.js').Skill, string][]} */ (Object.entries(SKILL_SHORT));
+    const lv = (/** @type {number} */ n) => `Lv${String(n).padStart(3)}`;
     heroesList.replaceChildren(...heroes.map((u) => {
       const name = document.createElement('span');
       name.textContent = u.name;
@@ -567,7 +569,7 @@ export async function startGame(net, me) {
       years.textContent = `${minutesOld(u)}m`;
       const stats = document.createElement('span');
       stats.className = 'stats';
-      stats.append(`Lv ${u.level} · `, years);
+      stats.append(`${lv(u.level)} · `, years);
       const where = document.createElement('span');
       where.className = 'where';
       where.textContent = whereIs(u, null);
@@ -575,7 +577,7 @@ export async function startGame(net, me) {
       levels.className = 'skills';
       levels.append(...skills.map(([skill, short]) => {
         const level = document.createElement('span');
-        level.textContent = `${short} ${u.skills[skill]}lvl`;
+        level.textContent = `${short} ${lv(u.skills[skill])}`;
         level.title = SKILLS[skill];
         return level;
       }));

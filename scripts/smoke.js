@@ -680,7 +680,7 @@ async function threeBrowsers(browser, url, { full, label }) {
   await a.keyboard.press('h');
   await a.waitForSelector('#heroes[open]');
   const listed = await a.$$eval('#heroes-list li:not(.none)', (els) => els.map((e) => ({
-    level: Number(/^Lv (\d+) · \d+m$/.exec(e.querySelector('.stats')?.textContent ?? '')?.[1]),
+    level: Number(/^Lv *(\d+) · \d+m$/.exec(e.querySelector('.stats')?.textContent ?? '')?.[1]),
     skills: e.querySelector('.skills')?.textContent ?? '',
   })));
   const herCount = await a.evaluate(() => Object.values(/** @type {any} */ (window).__vigame.view.units)
@@ -688,7 +688,9 @@ async function threeBrowsers(browser, url, { full, label }) {
   assert.equal(listed.length, herCount, 'every hero of hers listed');
   if (!herCount) assert.equal(await a.locator('#heroes-list .none').count(), 1, 'none yet, it says');
   assert.deepEqual(listed.map((h) => h.level), listed.map((h) => h.level).sort((x, y) => y - x), 'highest level first');
-  for (const { skills } of listed) assert.match(skills, /^Att \d+lvlMel \d+lvlBld \d+lvlFrm \d+lvlBrd \d+lvlRun \d+lvl$/);
+  // Each level takes three places, "Lv  8" to "Lv100", so the skills line up.
+  const skillLine = new RegExp(`^${['Att', 'Mel', 'Bld', 'Frm', 'Brd', 'Run'].map((s) => `${s} Lv[ \\d]{2}\\d`).join('')}$`);
+  for (const { skills } of listed) assert.match(skills, skillLine);
   await a.screenshot({ path: join(OUT, 'heroes.png') });
   await a.keyboard.press('h');
   await a.waitForSelector('#heroes', { state: 'hidden', timeout: 3000 });

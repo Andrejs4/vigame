@@ -296,7 +296,9 @@ button.inline:hover:not(:disabled) { background: none; color: var(--amber); }
 }
 .heroes-list .where, .heroes-list .skills { grid-column: 1 / -1; }
 .heroes-list .skills { display: flex; flex-wrap: wrap; column-gap: 12px; font: 12px var(--mono); color: var(--ink-dim); }
-.heroes-list .skills span { white-space: nowrap; cursor: help; }
+/* Levels are padded with spaces to line up, which the page must keep. */
+.heroes-list .stats { white-space: pre; }
+.heroes-list .skills span { white-space: pre; cursor: help; }
 .heroes-list .none { display: block; color: var(--ink-dim); font-size: 13px; }
 .crew-foot { display: flex; align-items: center; gap: 8px; }
 .crew-foot span { flex: 1; color: var(--ink-dim); font-size: 13px; }
