@@ -61,6 +61,10 @@
       <option value="8">8</option>
     </select>
     <button id="lobby-new" class="primary">New game</button>
+    <div id="lobby-limit" hidden>
+      <p class="error" id="lobby-limit-text" role="alert"></p>
+      <ul class="games" id="lobby-limit-games"></ul>
+    </div>
     <details class="games-list" id="lobby-mine-section" open>
       <summary><h2>Your games <span class="count" id="lobby-mine-count"></span></h2></summary>
       <ul class="games" id="lobby-mine"></ul>
@@ -115,6 +119,8 @@
     <div class="group-label">Selected</div>
     <button id="upgrade" disabled aria-keyshortcuts="U" title="Upgrade (U)"><b>U</b>pgrade</button>
     <button id="crew-button" disabled aria-keyshortcuts="C" title="Choose who works here (C)"><b>C</b>rew…</button>
+    <!-- In the crew button's place while your castle is selected: it has no crew, as everyone at home is. -->
+    <button id="heroes-button" hidden aria-keyshortcuts="H" title="Your heroes, highest level first (H)"><b>H</b>eroes…</button>
     <button id="return-button" disabled>Return</button>
     <button id="abort-button" disabled title="Give up a building still going up: its crew goes home, and its cost is lost">Abort</button>
     <button id="attack-button" disabled aria-pressed="false" aria-keyshortcuts="A" title="Attack (A)"><b>A</b>ttack…</button>
@@ -149,7 +155,7 @@
       the better they breed, the sooner. Build near your standing buildings:
       the crew you pick raises it once they get there, and meanwhile it has
       half its hit points and shelters nobody. Select a building and press Crew to choose who works there; Return
-      sends them home. A pit's crew digs stone, which pays for towers, farms
+      sends them home. Your castle's Heroes lists your heroes. A pit's crew digs stone, which pays for towers, farms
       and upgrades; farms grow food. Every minute your units eat; short
       meals make them hungry, and at full hunger they may starve. Select a
       wagon or band, then click a cell, to move it; it carries its crew. A
@@ -171,11 +177,31 @@
   <form method="dialog">
     <h2 id="crew-title">Crew</h2>
     <p class="hint" id="crew-hint"></p>
+    <div class="crew-sort" id="crew-sort" role="group" aria-label="Order">
+      <span>Order</span>
+      <button type="button" data-sort="default" aria-pressed="true" title="Those ticked first, then those at home, the best at the work first">Default</button>
+      <button type="button" data-sort="skill" aria-pressed="false" id="crew-sort-skill">Skill</button>
+      <button type="button" data-sort="hero" aria-pressed="false" title="Heroes first, who level up faster; then the highest level">Hero</button>
+      <button type="button" data-sort="level" aria-pressed="false" title="Highest level first">Level</button>
+      <button type="button" data-sort="near" aria-pressed="false" title="Closest to the building first">Nearest</button>
+    </div>
     <ul class="crew-list" id="crew-list"></ul>
     <div class="crew-foot">
       <span id="crew-count"></span>
       <button id="crew-cancel" value="cancel">Cancel</button>
       <button id="crew-ok" value="ok" class="primary">Send</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="heroes" aria-labelledby="heroes-title">
+  <form method="dialog">
+    <h2 id="heroes-title">Heroes</h2>
+    <p class="hint" id="heroes-hint"></p>
+    <ul class="crew-list heroes-list" id="heroes-list"></ul>
+    <div class="crew-foot">
+      <span id="heroes-count"></span>
+      <button value="close" class="primary">Close</button>
     </div>
   </form>
 </dialog>

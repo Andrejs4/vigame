@@ -1,6 +1,6 @@
 /**
  * The lobby: the player's own games under way, games waiting for a player,
- * other people's under way (to watch), the last few finished (to see their
+ * other people's under way (to watch), the finished ones (to see their
  * points again), and starting a new one. Opening a game goes to
  * `?game=<id>`, the same address an invitation link has.
  */
@@ -12,9 +12,6 @@ import { showLogin } from './login.js';
 
 /** How often the lists refresh while the lobby is open. */
 const REFRESH_MS = 5000;
-
-/** How many finished games the lobby lists. */
-const RECENT_DONE = 5;
 
 /** How many of other people's games under way the lobby lists. */
 const ONGOING_SHOWN = 10;
@@ -78,7 +75,10 @@ function row(game, action) {
   open.className = 'button';
   open.href = gameHref(game.id);
   open.textContent = action;
-  li.append(who, open);
+  const actions = document.createElement('span');
+  actions.className = 'actions';
+  actions.append(open);
+  li.append(who, actions);
   return li;
 }
 
@@ -149,8 +149,8 @@ export function showLobby(token, me, { notice } = {}) {
     fill('open', others.filter((g) => g.seats.some((s) => s === null)), 'Join');
     // Every seat taken, most recently active first: opening one watches it.
     fill('playing', others.filter((g) => g.seats.every((s) => s !== null)).slice(0, ONGOING_SHOWN), 'Watch');
-    // Anyone's, most recent first: opening one shows its table of points.
-    fill('done', games.filter((g) => g.over !== null).slice(0, RECENT_DONE), 'Scores');
+    // Anyone's, all of them, most recent first: opening one shows its table of points.
+    fill('done', games.filter((g) => g.over !== null), 'Scores');
   }
 
   nameOut.textContent = me.name;
@@ -159,10 +159,57 @@ export function showLobby(token, me, { notice } = {}) {
   refresh();
   const timer = setInterval(refresh, REFRESH_MS);
 
+  const limit = /** @type {HTMLElement} */ (document.getElementById('lobby-limit'));
+  limit.hidden = true;
+
+  /**
+   * A button that takes a game off the player's hands, after asking: deletes
+   * one of theirs nobody else plays, or gives up their seat in one.
+   * @param {import('./api.js').GameSummary} game
+   * @param {'delete' | 'leave'} how
+   */
+  function clearButton(game, how) {
+    const button = document.createElement('button');
+    const name = game.name ?? 'this game';
+    button.textContent = how === 'delete' ? 'Delete' : 'Leave';
+    button.title = how === 'delete' ? 'Delete it for good: nobody else plays it' : 'Give up your seat, for someone else to take';
+    button.onclick = async () => {
+      const ask = how === 'delete' ? `Delete “${name}” for good?` : `Leave “${name}”? Your seat goes to whoever comes next.`;
+      if (!confirm(ask)) return;
+      button.disabled = true;
+      try {
+        const res = await post(`api/games/${encodeURIComponent(game.id)}/${how}`, { token });
+        if (!res.ok) throw new Error(await reason(res));
+        limit.hidden = true;
+        say(how === 'delete' ? `Deleted “${name}”.` : `Left “${name}”.`);
+        refresh();
+      } catch (e) {
+        say(`Could not ${how === 'delete' ? 'delete' : 'leave'} “${name}” (${/** @type {Error} */ (e).message}).`);
+        button.disabled = false;
+      }
+    };
+    return button;
+  }
   newButton.onclick = async () => {
     newButton.disabled = true;
+    limit.hidden = true;
     try {
       const res = await post('api/games', { token, mode: modeSelect.value, players: Number(playersSelect.value) });
+      // Too many games on the go: the server says which, to go back to.
+      if (res.status === 409) {
+        const { error, games } = await res.json();
+        /** @type {HTMLElement} */ (document.getElementById('lobby-limit-text')).textContent = error;
+        const isMine = (/** @type {import('./api.js').GameSummary} */ g) => g.seats.some((s) => s?.pid === me.pid);
+        /** @type {HTMLElement} */ (document.getElementById('lobby-limit-games')).replaceChildren(
+          ...(/** @type {Array<import('./api.js').GameSummary & { clear: 'delete' | 'leave' | null }>} */ (games)).map((g) => {
+            const li = row(g, isMine(g) ? 'Open' : 'Join');
+            if (g.clear) li.querySelector('.actions')?.prepend(clearButton(g, g.clear));
+            return li;
+          }));
+        limit.hidden = false;
+        newButton.disabled = false;
+        return;
+      }
       if (!res.ok) throw new Error(await reason(res));
       const { id } = await res.json();
       location.search = gameHref(id);

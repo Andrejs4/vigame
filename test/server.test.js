@@ -11,7 +11,7 @@ import assert from 'node:assert/strict';
 import { matchMaker } from '@colyseus/core';
 import { Client } from '@colyseus/sdk';
 
-import { startGameServer } from '../server/app.js';
+import { IDLE_MS, clearing, startGameServer, tooManyGames } from '../server/app.js';
 import { playerId, replay, restoreGame } from '../server/room.js';
 import { BOARD_OPTIONS, createBoard } from '../src/core/board.js';
 import { advance, castleOf, checkState, nearStanding, newGame, occupancy, publicView } from '../src/core/game.js';
@@ -38,6 +38,8 @@ before(async () => {
     port: 0,
     monitorPassword: MONITOR_PASSWORD,
     tickRate: TICK_RATE,
+    // These tests start many games for one player; test/limit.test.js keeps the limit.
+    gamesPerPlayer: Infinity,
     logger: { debug() {}, info() {}, trace() {}, warn: quiet, error: quiet },
   });
   base = server.url.replace(/\/$/, '');
@@ -64,6 +66,28 @@ async function startGame() {
   assert.equal(res.status, 201);
   return /** @type {string} */ ((await res.json()).id);
 }
+
+test('a player may start a game unless three of theirs wait for a player, or they sit in three under way', () => {
+  const now = 1e12;
+  const game = (/** @type {string} */ id, /** @type {string | null} */ creator, /** @type {Array<string | null>} */ seats) => ({ id, creator, seats, updatedAt: now - 1000 });
+  const mine = [game('w1', 'p', ['p', null]), game('w2', 'p', [null, null]), game('s1', 'q', ['q', 'p'])];
+  const tooManyGamesNow = (/** @type {ReturnType<typeof game>[]} */ games, /** @type {string} */ pid, /** @type {number} */ limit) => tooManyGames(games, pid, limit, now);
+  assert.equal(tooManyGamesNow(mine, 'p', 3), null, 'two waiting, two seats');
+  assert.equal(tooManyGamesNow([...mine, { ...game('w3', 'p', [null]), updatedAt: now - IDLE_MS }], 'p', 3), null, 'one idle for days does not count');
+  const waiting = tooManyGamesNow([...mine, game('w3', 'p', [null])], 'p', 3);
+  assert.deepEqual(waiting?.games.map((g) => g.id), ['w1', 'w2', 'w3']);
+  assert.match(waiting?.error ?? '', /^You have 3 games of yours waiting for a player\./);
+  const seated = tooManyGamesNow([...mine, game('s2', 'q', ['p', 'q'])], 'p', 3);
+  assert.deepEqual(seated?.games.map((g) => g.id), ['w1', 's1', 's2'], 'the games they sit in');
+  assert.match(seated?.error ?? '', /^You have a seat in 3 games under way\./);
+  const both = tooManyGamesNow([...mine, game('w3', 'p', ['p'])].map((g) => (g.id === 'w3' ? { ...g, seats: ['p', null] } : g)), 'p', 3);
+  assert.deepEqual(both?.games.map((g) => g.id), ['w1', 'w2', 's1', 'w3']);
+  assert.match(both?.error ?? '', /waiting for a player, and a seat in 3 games/);
+  // What each can do with one: delete their own that nobody else plays, else leave it.
+  assert.deepEqual(['w1', 'w2', 's1'].map((id) => clearing(/** @type {any} */ (mine.find((g) => g.id === id)), 'p')), ['delete', 'delete', 'leave']);
+  assert.equal(clearing(game('x', 'p', ['p', 'q']), 'p'), 'leave', 'someone else plays it');
+  assert.equal(clearing(game('x', 'p', ['q', null]), 'p'), null, 'started, but not sitting in, a game someone plays');
+});
 
 /** A sign-in challenge, and its answer. */
 async function challenge() {
@@ -597,6 +621,28 @@ test('a player waiting for the others may rename the game, and the lobby shows i
   assert.deepEqual(await blue.send({ type: 'rename', name: 'x'.repeat(30) }), { ok: false, reason: 'a name is 1 to 24 letters, digits and spaces' });
   assert.deepEqual(await blue.send({ type: 'upgrade', building: 'b1' }), { ok: false, reason: 'the game is paused' }, 'other commands wait for the clock');
   await blue.leave();
+});
+
+test('leaving a game from the lobby frees the seat in its open room too', async () => {
+  const id = await startGame();
+  const room = await join(id, TOKENS.a);
+  await until(() => room.state.seats[0] === playerId(TOKENS.a));
+  assert.deepEqual(await (await post(`/api/games/${id}/leave`, { token: TOKENS.a })).json(), { ok: true });
+  await until(() => room.state.seats[0] === '');
+  assert.deepEqual(server.storage.loadGame(id)?.seats, [null, null]);
+  await leaveAll(room);
+});
+
+test('deleting a game closes its open room, which saves nothing more of it', async () => {
+  const id = await startGame();
+  const room = await join(id, TOKENS.a);
+  const sentAway = new Promise((res) => room.onLeave(res));
+  const before = logged.length;
+  assert.deepEqual(await (await post(`/api/games/${id}/delete`, { token: TOKENS.a })).json(), { ok: true });
+  await sentAway;
+  await roomClosed(room.roomId);
+  assert.equal(server.storage.loadGame(id), null);
+  assert.deepEqual(logged.slice(before), [], 'no failed save of the deleted game');
 });
 
 test('the page transport plays through the server and follows it', async () => {

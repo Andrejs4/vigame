@@ -105,6 +105,13 @@ export const SKILLS = {
 
 /** @typedef {keyof typeof SKILLS} Skill */
 
+/**
+ * Each skill's short name, for a line of them all (the Heroes list), in the
+ * order shown there: fighting first.
+ * @type {Record<Skill, string>}
+ */
+export const SKILL_SHORT = { ranged: 'Att', melee: 'Mel', build: 'Bld', farming: 'Frm', breeding: 'Brd', running: 'Run' };
+
 /** The highest level a unit can reach. */
 export const MAX_LEVEL = 100;
 
@@ -121,6 +128,16 @@ export const MAX_LEVEL = 100;
  */
 export const LEVEL_XP = 1200;
 export const LEVEL_GROWTH = 1.1;
+/**
+ * Heroes: a unit is one, from birth, with a HERO_SHARE chance (the first
+ * units too). Its levels cost HERO_LEVEL_XP at first, then HERO_LEVEL_GROWTH
+ * times as much each, so for the same work it stands about three times as
+ * high as an ordinary unit, whenever you look: 12 to its 5, 27 to its 10, 58
+ * to its 20. It reaches MAX_LEVEL about when an ordinary unit would be 34.
+ */
+export const HERO_SHARE = 0.1;
+export const HERO_LEVEL_XP = 390;
+export const HERO_LEVEL_GROWTH = 1.032;
 export const SKILL_XP = 150;
 /**
  * Points a skill gets for each tick of work, or strike, with it: 1 unless
@@ -192,13 +209,13 @@ export const KILL_STEP = 1.06;
 /**
  * Raiders. Every RAID_PERIOD, with a RAID_CHANCE chance, a raider appears on
  * open ground at least RAID_CLEAR cells from any castle or lair, while there
- * are fewer than RAID_MAX plus one per player. It wanders at random and
+ * are fewer than RAID_PER_PLAYER for each player. It wanders at random and
  * strikes whatever comes near; bringing one down yields its `loot` of dark
  * metal to the side that struck the blow.
  */
 export const RAID_PERIOD = 90 * TICKS_PER_SECOND;
 export const RAID_CHANCE = 0.6;
-export const RAID_MAX = 2;
+export const RAID_PER_PLAYER = 2;
 export const RAID_CLEAR = 6;
 /** How far a raider wanders at a time, in cells. */
 export const RAID_ROAM = 4;
@@ -254,7 +271,9 @@ export const REPAIR_WORK = 500;
  *   holds this many or more.
  * @property {number} grades Highest grade.
  * @property {number} [perGrade] Units each grade after the first adds to its room.
- * @property {number} hp Hit points at grade 1; each grade adds as many again.
+ * @property {number} hp Hit points at grade 1; each grade adds as many again,
+ *   or `hpPerGrade` if it has that.
+ * @property {number} [hpPerGrade] Hit points each grade after the first adds.
  *   At none left, the building collapses at once, and whoever was inside is
  *   left standing on its cell. A band has none: it protects nobody.
  * @property {boolean} [band] A band: a group of units, free, that moves like
@@ -277,7 +296,12 @@ export const REPAIR_WORK = 500;
  *   without it, a share of its price in dark metal (SALVAGE).
  * @property {number} [upgrade] Stone to upgrade it, times its grade before.
  * @property {number} [upgradeMetal] Dark metal to upgrade it, the same at each grade.
- * @property {Skill} skill The skill its units use there.
+ * @property {Skill} skill The skill its units use there: the one their work
+ *   trains, or for a crew that fights, its main one, ranged attack (a unit
+ *   strikes at range, and in close combat only an enemy right next to it).
+ *   The crew chooser ranks units by it.
+ * @property {Skill} [extra] Another skill its crew uses, shown beside `skill`
+ *   when choosing one: close combat, for the crews that fight.
  * @property {number} [work] Work, from the units inside, for each thing it
  *   yields: a castle a new unit, a pit a stone, a farm a food.
  * @property {'unit' | 'stone' | 'food'} [yields]
@@ -314,14 +338,13 @@ export const BUILDING_TYPES = {
     skill: 'breeding', work: 24000, yields: 'unit', idleWork: 10, raise: 36000,
   },
   tower: {
-    name: 'Tower', size: 1, capacity: 20, grades: 3, hp: 500, build: true, cost: 60, upgrade: 60, reach: 2, skill: 'ranged',
+    name: 'Tower', size: 1, capacity: 20, grades: 3, hp: 500, build: true, cost: 60, upgrade: 60, reach: 2, skill: 'ranged', extra: 'melee',
     raise: 12000,
   },
   wagon: {
-    // Upgrades armour it: each adds its hit points again (up to four times)
-    // and no room, for the price of two wagons.
-    name: 'Wagon', size: 1, capacity: 15, perGrade: 0, grades: 4, hp: 300, build: true, cost: 0, metal: 15, nearCastle: true,
-    upgradeMetal: 30, skill: 'melee', speed: 2 * TICKS_PER_SECOND, raise: 9000,
+    // Upgrades armour it: each adds 500 hit points (three times) and no room.
+    name: 'Wagon', size: 1, capacity: 15, perGrade: 0, grades: 4, hp: 300, hpPerGrade: 500, build: true, cost: 0, metal: 15, nearCastle: true,
+    upgradeMetal: 50, skill: 'ranged', extra: 'melee', speed: 2 * TICKS_PER_SECOND, raise: 9000,
   },
   pit: {
     name: 'Pit', size: 1, capacity: 8, grades: 1, hp: 250, build: true, cost: 0,
@@ -336,8 +359,8 @@ export const BUILDING_TYPES = {
     skill: 'melee', life: true, attack: { damage: 40, skill: 60, reach: 4 }, scales: true,
   },
   raider: {
-    name: 'Raider', size: 1, capacity: 0, grades: 1, hp: 300, build: false, cost: 0,
-    skill: 'melee', speed: 3 * TICKS_PER_SECOND, attack: { damage: 10, skill: 20, reach: 2 }, loot: 10,
+    name: 'Raider', size: 1, capacity: 0, grades: 1, hp: 500, build: false, cost: 0,
+    skill: 'melee', speed: 3 * TICKS_PER_SECOND, attack: { damage: 20, skill: 20, reach: 2 }, loot: 10,
   },
   ghoul: {
     name: 'Ghoul', size: 1, capacity: 0, grades: 1, hp: 1200, build: false, cost: 0,
@@ -349,6 +372,6 @@ export const BUILDING_TYPES = {
   },
   band: {
     name: 'Band', size: 1, capacity: 30, grades: 1, hp: 0, build: true, cost: 0,
-    skill: 'melee', speed: WALK_TICKS, band: true,
+    skill: 'ranged', extra: 'melee', speed: WALK_TICKS, band: true,
   },
 };

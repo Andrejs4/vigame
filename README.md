@@ -25,8 +25,8 @@ Run `npm start` and open http://127.0.0.1:2567.
   logged in across visits.
 - **The lobby** lists your games under way, games with a free seat, other
   people's under way with every seat taken (**Watch** opens one as an
-  observer), and the last five finished (anyone's; **Scores** opens one at
-  its table of points). Each list folds away; the last two start folded,
+  observer), and the finished ones (anyone's; **Scores** opens one at its
+  table of points). Each list folds away; the last two start folded,
   and the browser keeps them as you leave them. **New game**
   starts one for 1 to 8 players (1 by default, against the Dark Lord), on a map that grows with
   them (29 × 20 cells for two, 59 × 39 for eight), castles in a ring
@@ -34,6 +34,13 @@ Run `npm start` and open http://127.0.0.1:2567.
   someone. Players who join take the seats in order (Blue, Crimson, Green,
   Gold, Teal, Orange, Rose, Silver); once they are full, visitors watch.
   **Release seat** frees a seat for a spectator to take.
+- **Too many games**: New game is refused while three games you started
+  wait for a player, or while you hold a seat in three games under way;
+  finished games, and games nobody has touched for three days, don't
+  count. The lobby then lists those games, each with a button to go back
+  to it and, where it can, one to clear it: **Delete** a game you started
+  that nobody else plays (for good, room and all), or **Leave** one you
+  hold a seat in, which frees the seat for the next to come.
 - **Game names**: a new game gets a name from a list that sets its mood
   (Pit party, Last stand, Ogre ballet, …), which the lobby and the status
   panel show. Any player still in it may rename it with **✎** next to the
@@ -89,15 +96,35 @@ Run `npm start` and open http://127.0.0.1:2567.
   building, ranged and close combat, and a killing blow most). A skill
   can't pass the unit's level; it climbs faster than the level, then waits
   for it. Each level takes 1.1 times the work of the one before, so the
-  last ones are all but out of reach. Every skill counts: breeding speeds
+  last ones are all but out of reach. About one unit in ten, the first
+  ones too, is born a **hero**: its levels start cheaper and grow gentler
+  (390 at first, then 1.032 times as much each), so for the same work it
+  stands about three times as high, 58 when an ordinary unit is 20, and
+  reaches 100 about when an ordinary one would be 34. The crew chooser
+  shows a hero's age in gold. Select your castle and press **Heroes…**
+  (in Crew's place, as the castle has no crew) for yours alive now, highest
+  level first, with where each is and every skill's level, as "Att Lv 15"
+  (ranged attack; then close combat, building, farming, breeding and
+  running), each level padded to line up ("Lv  8", "Lv100"). The status panel says when one of yours
+  dies ("Hero Hugh Baker died in combat.", "3 heroes died from hunger."):
+  of hunger if it went at a meal while your side was starving, else in
+  combat. Every skill counts: breeding speeds
   the castle's births, building digging and mending, farming the harvest,
   running walking, and ranged attack and close combat the damage and kill
   chance of a unit's strikes.
 - **Crews**: units walk only when they're given to a building's crew or sent
   home. Select one of your buildings and press **Crew…** for a list of your
-  units, each with its level, skill and age in minutes: tick up to what it
-  holds (with a mouse, drag down the list to tick or untick a run of
-  them). Those you untick go home; those you tick
+  units, each with its level, skill and age in minutes ("12m"): tick up to
+  what it holds (with a mouse, drag down the list to tick or untick a run
+  of them). The skill shown is the one the building wants: building for
+  a pit, farming for a farm, and ranged attack for a tower, wagon or band,
+  with close combat beside it (a crew strikes at range, and in close
+  combat only an enemy right next to it). The skill's button (**Attack**
+  for the crews that fight), **Hero**, **Level** and **Nearest** reorder
+  the list: best at that skill, heroes, highest level or closest to the
+  building first. **Default** puts it back (those
+  ticked, then those at home, the best at the work first); the ticks stay
+  as they are. Those you untick go home; those you tick
   come from wherever they are, one after another, two seconds a cell on open
   ground and four on scrub, less the better they run. Water is impassable.
   **Return** sends the whole crew home. A unit left with nowhere to go (its
@@ -151,8 +178,8 @@ Run `npm start` and open http://127.0.0.1:2567.
   quarter of an hour). At 100%, every unit may starve at each meal: about
   5% at level 1, 0.6% at level 50, never at 100.
 - **Upgrade** the selected building: the castle for 200 stone × its grade,
-  a tower for 60 × its grade, a wagon for 30 dark metal (the price of two
-  wagons) up to three times. Then its crew works on it, as on a new building,
+  a tower for 60 × its grade, a wagon for 50 dark metal up to three
+  times. Then its crew works on it, as on a new building,
   instead of their usual work, which trains their building skill: each grade
   takes as long again as the one before (a tower as long as raising it, a
   castle three times that). Once done, it holds as many units again (a
@@ -189,27 +216,28 @@ Run `npm start` and open http://127.0.0.1:2567.
   hand drops its target.
 - **Keys**: a button's bold letter presses it: **T**ower, **W**agon, **P**it,
   **F**arm and **B**and pick what to place (again to stop), **U**pgrade,
-  **C**rew and **A**ttack act on the selected building, and Escape lets go.
+  **C**rew and **A**ttack act on the selected building, **H**eroes on your
+  castle, and Escape lets go.
   Choosing a crew, Enter sends it, as does the letter that opened the
-  chooser again (C, or the letter of the building being placed).
+  chooser again (C, or the letter of the building being placed); H closes
+  the heroes list.
 - **Losing and winning**: a side whose castle falls has lost, and can give
   no more commands; its units stay and still fight. Once only one team has
   a castle (or lair) standing, it has won and the game is over: the clock
   stops, commands are refused, the page says who won, and the lobby lists
   the game as finished.
 - **Raiders** turn up in every game: wandering hostile wagons, against
-  everyone, that strike whatever comes within 2 cells (10 a strike, level
-  20). Every minute and a
-  half one may appear on open ground away from the castles, up to 2 plus
-  one per player. The side that brings one down gets 10 dark metal: the
+  everyone, with 500 hit points, that strike whatever comes within 2
+  cells (20 a strike, level 20). Every minute and a half one may appear
+  on open ground away from the castles, up to 2 per player. The side that brings one down gets 10 dark metal: the
   only way to get it, and what wagons are built with.
 - **Wagons** are buildings that move. Select one, then click a cell to drive
   it there, two seconds a cell; its crew, up to 15, rides along inside. Wagons can't
   pass through other buildings, each other included: a blocked wagon waits,
   then looks for another way, and stops if there is none. Whoever brings a
   wagon down (another player, the Dark Lord, raiders) gets half its price in
-  dark metal, 7 for 15. An upgrade armours a wagon: each of three adds its
-  300 hit points again (up to 1200), but no room.
+  dark metal, 7 for 15. An upgrade armours a wagon: each of three adds 500
+  hit points to its 300 (800, 1300, 1800), but no room.
 - **Bands** are groups of up to 30 units that move like wagons, for free.
   Placing one asks who goes. A band holds no cell, so it passes anything of
   yours and blocks nothing; it has no hit points and gives no cover, and it
@@ -450,14 +478,17 @@ HTTP API:
 | `POST /api/me` | Who a token belongs to: `{ token }` gives `{ pid, name }`, or `null` if it hasn't signed in. |
 | `GET /api/challenge` | A sum to answer when signing in: `{ id, question }`. Each one answers once and lasts 10 minutes. |
 | `POST /api/players` | Signs in (or renames): `{ token, name, challenge, answer }` gives `{ pid, name }`. `400` for a bad token or name, `403` for a wrong answer. |
-| `POST /api/games` | Starts a game with a random map: `{ token, mode?, players? }` of a signed-in player (`mode` `coop`, `easy`, `shared` or `ffa`, `players` 1 to 8; by default a cooperation game for one) gives `201 { id }`; `401` if not signed in, `400` for a bad mode or number. |
+| `POST /api/games` | Starts a game with a random map: `{ token, mode?, players? }` of a signed-in player (`mode` `coop`, `easy`, `shared` or `ffa`, `players` 1 to 8; by default a cooperation game for one) gives `201 { id }`; `401` if not signed in, `400` for a bad mode or number; `409 { error, games }` while the player has too many games on the go (three of theirs waiting for a player, or seats in three under way), with those games as `GET /api/games` lists them, each with `clear`: `'delete'`, `'leave'` or `null`. |
+| `POST /api/games/:id/delete` | `{ token }`: deletes a game under way that the player started and nobody else holds a seat in, closing its room if open; `403` if they didn't start it, `409` if someone else plays it or it is over. |
+| `POST /api/games/:id/leave` | `{ token }`: gives up the player's seat in a game under way, through its room if open; `409` if they hold none or it is over. |
 | `GET /api/games` | The 50 most recently active games, for the lobby, with their name, mode and who holds each seat: `{ pid, name }` or `null`. |
 | `GET /api/games/:id` | One game: its seed, latest snapshot and seats. |
 | `GET /api/games/:id/commands` | Its command log, with each command's tick. |
 | `GET /api/games/:id/seats` | Who holds each seat: `{ pid, name }`, or `null` for a free one. |
 
-The database has three tables: `games` (each game's seed, seats, and a
-snapshot of its state, saved every ten seconds and when its room closes),
+The database has three tables: `games` (each game's seed, seats, who
+started it and when (neither shown to players), and a snapshot of its
+state, saved every ten seconds and when its room closes),
 `commands` (every accepted command with its tick, in order, never changed)
 and `players` (each signed-in player's public id and name; never the token).
 A room reopening a game loads its snapshot and replays the commands logged

@@ -10,8 +10,8 @@
  * this keeps the list.
  */
 
-import { isRising } from '../core/game.js';
-import { BUILDING_TYPES, TICKS_PER_SECOND } from '../core/rules.js';
+import { isRising, purseOf } from '../core/game.js';
+import { BUILDING_TYPES, FOOD_PERIOD, MAX_HUNGER, TICKS_PER_SECOND } from '../core/rules.js';
 
 /** How long each kind of effect plays, in milliseconds. */
 export const EFFECT_TIME = Object.freeze({ hit: 900, fall: 1200, death: 800 });
@@ -62,6 +62,41 @@ const MAX_EFFECTS = 200;
  */
 export function jumped(prev, next) {
   return !prev || prev.seed !== next.seed || next.tick < prev.tick || next.tick - prev.tick > JUMP;
+}
+
+/**
+ * A side's heroes that died between two updates, by name: of hunger if a
+ * meal came between them with the side as hungry as it gets, else in
+ * combat. (One struck down at that very meal counts as starved.) None
+ * across a jump, nor for a spectator.
+ * @param {GameView | null} prev
+ * @param {GameView} next
+ * @param {number | null} seat
+ * @returns {{ combat: string[], hunger: string[] }}
+ */
+export function fallenHeroes(prev, next, seat) {
+  /** @type {{ combat: string[], hunger: string[] }} */
+  const fallen = { combat: [], hunger: [] };
+  if (!prev || seat === null || jumped(prev, next) || !next.players[seat]) return fallen;
+  const meal = Math.floor(next.tick / FOOD_PERIOD) > Math.floor(prev.tick / FOOD_PERIOD);
+  const starving = meal && purseOf(next, seat).hunger >= MAX_HUNGER;
+  for (const u of Object.values(prev.units)) {
+    if (u.owner === seat && u.hero && !next.units[u.id]) (starving ? fallen.hunger : fallen.combat).push(u.name);
+  }
+  return fallen;
+}
+
+/**
+ * What to say of them, or null for none: "Hero Hugh Baker died in combat.",
+ * "3 heroes died from hunger.", or both.
+ * @param {{ combat: string[], hunger: string[] }} fallen
+ * @returns {string | null}
+ */
+export function fallenHeroesNote({ combat, hunger }) {
+  const say = (/** @type {string[]} */ names, /** @type {string} */ how) => (
+    names.length === 1 ? `Hero ${names[0]} died ${how}` : `${names.length} heroes died ${how}`);
+  const parts = [...(combat.length ? [say(combat, 'in combat')] : []), ...(hunger.length ? [say(hunger, 'from hunger')] : [])];
+  return parts.length ? `${parts.join('; ')}.` : null;
 }
 
 /**

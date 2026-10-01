@@ -22,11 +22,12 @@
 import Database from 'better-sqlite3';
 
 /** Bump when the tables change, and add the upgrade step to `migrate`. */
-const SCHEMA_VERSION = 19;
+const SCHEMA_VERSION = 21;
 
 /**
  * @typedef {{ id: string, seed: number, state: unknown, seq: number, seats: Array<string | null>,
- *   createdAt: number, updatedAt: number }} SavedGame
+ *   creator: string | null, createdAt: number, updatedAt: number }} SavedGame
+ *   `creator`: the player who started it, which players aren't shown.
  * @typedef {{ seq: number, tick: number, player: number, command: unknown, at: number }} SavedCommand
  * @typedef {{ pid: string, name: string, createdAt: number, updatedAt: number }} SavedPlayer
  */
@@ -46,22 +47,29 @@ export function openStorage(file = ':memory:') {
   migrate(db);
 
   const insertGame = db.prepare(`
-    INSERT INTO games (id, seed, state, seq, seats, created_at, updated_at)
-    VALUES (@id, @seed, @state, 0, @seats, @now, @now)`);
+    INSERT INTO games (id, seed, state, seq, seats, creator, created_at, updated_at)
+    VALUES (@id, @seed, @state, 0, @seats, @creator, @now, @now)`);
   const selectGame = db.prepare('SELECT * FROM games WHERE id = ?');
   const updateSnapshot = db.prepare('UPDATE games SET state = ?, seq = ?, updated_at = ? WHERE id = ?');
   const updateSeats = db.prepare('UPDATE games SET seats = ?, updated_at = ? WHERE id = ?');
   const touchGame = db.prepare('UPDATE games SET updated_at = ? WHERE id = ?');
+  const deleteCommands = db.prepare('DELETE FROM commands WHERE game_id = ?');
+  const deleteGameRow = db.prepare('DELETE FROM games WHERE id = ?');
   const insertCommand = db.prepare(`
     INSERT INTO commands (game_id, seq, tick, player, command, at)
     VALUES (@id, (SELECT COALESCE(MAX(seq), 0) + 1 FROM commands WHERE game_id = @id), @tick, @player, @command, @now)
     RETURNING seq`);
   const selectCommands = db.prepare(`
     SELECT seq, tick, player, command, at FROM commands WHERE game_id = ? AND seq > ? ORDER BY seq`);
-  const selectRecent = db.prepare(`
-    SELECT id, seats, created_at, updated_at, json_extract(state, '$.tick') AS tick, json_extract(state, '$.mode') AS mode,
-      json_extract(state, '$.name') AS name, json_extract(state, '$.over') AS over, json_extract(state, '$.winner') AS winner
-    FROM games ORDER BY updated_at DESC, id LIMIT ?`);
+  const SUMMARY = `id, seats, creator, created_at, updated_at, json_extract(state, '$.tick') AS tick,
+    json_extract(state, '$.mode') AS mode, json_extract(state, '$.name') AS name,
+    json_extract(state, '$.over') AS over, json_extract(state, '$.winner') AS winner`;
+  const selectRecent = db.prepare(`SELECT ${SUMMARY} FROM games ORDER BY updated_at DESC, id LIMIT ?`);
+  const selectGoingOf = db.prepare(`
+    SELECT ${SUMMARY} FROM games
+    WHERE json_extract(state, '$.over') IS NULL
+      AND (creator = @pid OR EXISTS (SELECT 1 FROM json_each(games.seats) WHERE value = @pid))
+    ORDER BY updated_at DESC, id`);
   const upsertPlayer = db.prepare(`
     INSERT INTO players (pid, name, created_at, updated_at) VALUES (@pid, @name, @now, @now)
     ON CONFLICT (pid) DO UPDATE SET name = excluded.name, updated_at = excluded.updated_at`);
@@ -76,10 +84,11 @@ export function openStorage(file = ':memory:') {
   return {
     /**
      * Store a new game.
-     * @param {{ id: string, seed: number, state: unknown, seats: Array<string | null> }} game
+     * @param {{ id: string, seed: number, state: unknown, seats: Array<string | null>, creator?: string | null }} game
+     *   `creator`: the player who started it, if one did.
      */
-    createGame({ id, seed, state, seats }) {
-      insertGame.run({ id, seed, state: JSON.stringify(state), seats: JSON.stringify(seats), now: Date.now() });
+    createGame({ id, seed, state, seats, creator = null }) {
+      insertGame.run({ id, seed, state: JSON.stringify(state), seats: JSON.stringify(seats), creator, now: Date.now() });
     },
 
     /**
@@ -95,10 +104,20 @@ export function openStorage(file = ':memory:') {
         state: parse(row.state),
         seq: row.seq,
         seats: parseSeats(row.seats),
+        creator: row.creator ?? null,
         createdAt: row.created_at,
         updatedAt: row.updated_at,
       };
     },
+
+    /**
+     * Delete a game and its commands, for good.
+     * @param {string} id
+     */
+    deleteGame: db.transaction((/** @type {string} */ id) => {
+      deleteCommands.run(id);
+      if (deleteGameRow.run(id).changes !== 1) throw new Error(`no game "${id}"`);
+    }),
 
     /**
      * Append an accepted command to the log.
@@ -144,17 +163,17 @@ export function openStorage(file = ':memory:') {
      * @param {{ limit?: number }} [options]
      */
     listGames({ limit = 50 } = {}) {
-      return selectRecent.all(limit).map((/** @type {any} */ row) => ({
-        id: row.id,
-        mode: row.mode,
-        name: row.name ?? null,
-        over: row.over ?? null,
-        winner: row.winner ?? null,
-        tick: row.tick,
-        seats: parseSeats(row.seats),
-        createdAt: row.created_at,
-        updatedAt: row.updated_at,
-      }));
+      return selectRecent.all(limit).map(summary);
+    },
+
+    /**
+     * A player's games under way: those they started, and those they hold a
+     * seat in, most recently active first. With who started each, which the
+     * lobby's list leaves out.
+     * @param {string} pid
+     */
+    gamesUnderWayOf(pid) {
+      return selectGoingOf.all({ pid }).map((/** @type {any} */ row) => ({ ...summary(row), creator: row.creator ?? null }));
     },
 
     /**
@@ -387,11 +406,49 @@ function migrate(db) {
       PRAGMA user_version = 19;
     `))();
   }
+  if (version < 20) {
+    // Who started each game, so a player can't leave too many waiting.
+    // Games from before have none. A table that has the column already (one
+    // the tests age by hand) keeps it.
+    const has = db.prepare("SELECT 1 FROM pragma_table_info('games') WHERE name = 'creator'").get();
+    db.transaction(() => {
+      if (!has) db.exec('ALTER TABLE games ADD COLUMN creator TEXT REFERENCES players (pid)');
+      db.exec('PRAGMA user_version = 20');
+    })();
+  }
+  if (version < 21) {
+    // Some units are heroes, rolled as they are born, which moves every
+    // later roll; raiders and wagon upgrades are tougher: earlier games
+    // don't replay the same.
+    db.transaction(() => db.exec(`
+      DELETE FROM commands;
+      DELETE FROM games;
+      PRAGMA user_version = 21;
+    `))();
+  }
 }
 
 /** @param {string} text */
 function parse(text) {
   try { return JSON.parse(text); } catch { return null; }
+}
+
+/**
+ * A game as a lobby lists it, from a row of SUMMARY.
+ * @param {any} row
+ */
+function summary(row) {
+  return {
+    id: row.id,
+    mode: row.mode,
+    name: row.name ?? null,
+    over: row.over ?? null,
+    winner: row.winner ?? null,
+    tick: row.tick,
+    seats: parseSeats(row.seats),
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
 }
 
 /**

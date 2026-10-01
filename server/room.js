@@ -39,13 +39,23 @@ const RECONNECT_SECONDS = 20;
 const SNAPSHOT_TICKS = 10 * TICKS_PER_SECOND;
 
 /**
- * Games with a live room in this process. Matchmaking already routes
- * `joinOrCreate` for one game to one room; this also stops a client that asks
- * for `create` outright from opening a second room on the same game, which
- * would then play out two different histories.
- * @type {Set<string>}
+ * Games with a live room in this process, and their rooms. Matchmaking
+ * already routes `joinOrCreate` for one game to one room; this also stops a
+ * client that asks for `create` outright from opening a second room on the
+ * same game, which would then play out two different histories. And it lets
+ * the HTTP side reach a game's room: to free a seat, or close a deleted game.
+ * @type {Map<string, any>}
  */
-const liveGames = new Set();
+const liveGames = new Map();
+
+/**
+ * The live room of a game, if it has one in this process.
+ * @param {string} gameId
+ * @returns {{ releaseSeat(pid: string): void, abandon(): void } | null}
+ */
+export function liveRoom(gameId) {
+  return liveGames.get(gameId) ?? null;
+}
 
 /**
  * The public id for a secret player token. The token proves who a viewer is;
@@ -203,7 +213,7 @@ export class GameRoom extends Room {
     if (liveGames.has(saved.id)) {
       throw new ServerError(ErrorCode.MATCHMAKE_INVALID_CRITERIA, `game "${saved.id}" is already open`);
     }
-    liveGames.add(saved.id);
+    liveGames.set(saved.id, this);
 
     this.storage = storage;
     this.soloClock = soloClock === true;
@@ -261,6 +271,7 @@ export class GameRoom extends Room {
    * so it is logged and the game goes on; the next one is due in ten seconds.
    */
   snapshot() {
+    if (this.deleted) return;
     this.snapshotAt = this.game.tick;
     try {
       this.storage.saveSnapshot(this.gameId, { state: this.game, seq: this.seq });
@@ -276,6 +287,7 @@ export class GameRoom extends Room {
    * @param {import('@colyseus/core').MessageContext | undefined} ctx
    */
   play(client, message, ctx) {
+    if (this.deleted) return ctx?.reject('the game is gone');
     const seat = this.seatOf(client.auth.pid);
     if (seat === null) return ctx?.reject('not seated');
     const command = flatCommand(message);
@@ -319,6 +331,15 @@ export class GameRoom extends Room {
     if (free < 0) return null;
     this.saveSeats(this.seats.map((holder, i) => (i === free ? pid : holder)));
     return free;
+  }
+
+  /**
+   * The game has been deleted: send everyone away, and save nothing more of
+   * it, not even when the room closes.
+   */
+  abandon() {
+    this.deleted = true;
+    this.disconnect().catch((/** @type {unknown} */ e) => logger.error(`game ${this.gameId}: closing failed`, e));
   }
 
   /** @param {string} pid */

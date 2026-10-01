@@ -205,10 +205,11 @@ async function selectBuilding(page, b, { touch = false } = {}) {
 
 /**
  * Confirm the crew dialog, after ticking `add` more units than it came with,
- * or only the first `only`; with the button, or `key` if given.
+ * or only the first `only`, and pressing the order button `sort` if given;
+ * with the button, or `key` if given.
  * @returns {Promise<string>} The dialog's count, such as "3 of 20", when it opened.
  */
-async function confirmCrew(page, { add = 0, only = undefined, shot = '', key = '' } = {}) {
+async function confirmCrew(page, { add = 0, only = undefined, shot = '', key = '', sort = '' } = {}) {
   await page.waitForSelector('#crew[open]');
   const count = await text(page, '#crew-count');
   if (only !== undefined) {
@@ -219,7 +220,9 @@ async function confirmCrew(page, { add = 0, only = undefined, shot = '', key = '
   }
   for (let i = 0; i < add; i++) await page.locator('#crew-list input:not(:checked):not(:disabled)').first().check();
   if (shot) await page.screenshot({ path: join(OUT, shot) });
-  // Enter or the letter that opened it confirms, as the button does.
+  if (sort) await page.click(`#crew-sort [data-sort="${sort}"]`);
+  // Enter or the letter that opened it confirms, as the button does (and
+  // the chooser stays shut, though an order button has the focus).
   if (key) await page.keyboard.press(key);
   else await page.click('#crew-ok');
   await page.waitForSelector('#crew', { state: 'hidden' });
@@ -230,7 +233,7 @@ async function confirmCrew(page, { add = 0, only = undefined, shot = '', key = '
 async function crewWith(page, b, n) {
   await selectBuilding(page, b);
   await page.click('#crew-button');
-  await confirmCrew(page, { add: n, key: 'c' });
+  await confirmCrew(page, { add: n, key: 'c', sort: 'level' });
   await page.waitForFunction((id) => Object.values(/** @type {any} */ (window).__vigame.view.units)
     .some((u) => u.to === id || u.in === id), b.id);
 }
@@ -562,7 +565,7 @@ async function threeBrowsers(browser, url, { full, label }) {
   await waitMatch(a, '#selection', /^Tower \(grade 1\) · crew \d+\/\d+ · HP/);
   // Each button with a key shows its letter in bold.
   assert.deepEqual(await a.$$eval('#controls button[aria-keyshortcuts]', (els) => els.map((el) => el.querySelector('b')?.textContent)),
-    ['T', 'W', 'P', 'F', 'B', 'U', 'C', 'A']);
+    ['T', 'W', 'P', 'F', 'B', 'U', 'C', 'H', 'A']);
   // The upgrade is work for the crew too. U upgrades, as the button does.
   await a.keyboard.press('u');
   await waitMatch(a, '#selection', /^Tower \(grade 1\) · crew \d+\/\d+ · upgrading\s+\d+%/);
@@ -617,7 +620,7 @@ async function threeBrowsers(browser, url, { full, label }) {
   await a.keyboard.press('c');
   await a.waitForSelector('#crew[open]');
   // Each unit shows its age; a mouse drag down the list ticks each row it crosses.
-  assert.match(await a.locator('#crew-list .stats').first().textContent() ?? '', /· \d+ min$/);
+  assert.match(await a.locator('#crew-list .stats').first().textContent() ?? '', /· \d+m$/);
   assert.equal(await text(a, '#crew-count'), '1 of 8');
   const ids = await a.$$eval('#crew-list input:not(:checked)', (els) => els.slice(0, 3).map((e) => /** @type {HTMLInputElement} */ (e).value));
   const rowOf = (/** @type {string} */ id) => a.locator(`#crew-list input[value="${id}"]`).locator('xpath=..').boundingBox();
@@ -630,6 +633,48 @@ async function threeBrowsers(browser, url, { full, label }) {
   const ticked = await a.$$eval('#crew-list input:checked', (els) => els.map((e) => /** @type {HTMLInputElement} */ (e).value));
   assert.ok(ids.every((id) => ticked.includes(id)), `the drag ticked ${ticked} rather than ${ids}`);
   assert.equal(await text(a, '#crew-count'), '4 of 8');
+  // Ordered by level, then by nearness to the pit, the rows move and the
+  // same units stay ticked.
+  const tickedIds = () => a.$$eval('#crew-list input:checked', (els) => els.map((e) => /** @type {HTMLInputElement} */ (e).value).sort());
+  const tickedBefore = await tickedIds();
+  // A pit wants building: its button says so, and puts the best builders first.
+  assert.equal(await text(a, '#crew-sort-skill'), 'Building');
+  await a.click('#crew-sort-skill');
+  const skills = await a.$$eval('#crew-list .stats', (els) => els.map((e) => Number(/· Building (\d+) ·/.exec(e.textContent ?? '')?.[1])));
+  assert.deepEqual(skills, [...skills].sort((x, y) => y - x), 'best builders first');
+  // Heroes first, their ages in gold. The list holds the units there were
+  // as it opened, so each row is checked against its own unit: one born
+  // since isn't in it, and one gone since is skipped.
+  await a.click('#crew-sort [data-sort="hero"]');
+  const rows = await a.$$eval('#crew-list label', (els) => els.map((e) => ({
+    id: /** @type {HTMLInputElement} */ (e.querySelector('input')).value,
+    marked: Boolean(e.querySelector('.stats .hero')),
+  })));
+  const heroes = rows.map((row) => row.marked);
+  assert.deepEqual(heroes, [...heroes].sort((x, y) => Number(y) - Number(x)), 'heroes first');
+  const isHero = await a.evaluate((ids) => ids.map((id) => {
+    const u = /** @type {any} */ (window).__vigame.view.units[id];
+    return u ? Boolean(u.hero) : null;
+  }), rows.map((row) => row.id));
+  rows.forEach((row, i) => {
+    if (isHero[i] !== null) assert.equal(row.marked, isHero[i], `unit ${row.id} marked as a hero is`);
+  });
+  await a.click('#crew-sort [data-sort="level"]');
+  const levels = await a.$$eval('#crew-list .stats', (els) => els.map((e) => Number(/^Lv (\d+)/.exec(e.textContent ?? '')?.[1])));
+  assert.deepEqual(levels, [...levels].sort((x, y) => y - x), 'highest level first');
+  await a.click('#crew-sort [data-sort="near"]');
+  const reach = await a.$$eval('#crew-list input', (els) => {
+    const v = /** @type {any} */ (window).__vigame;
+    const site = v.view.buildings[v.crewTarget];
+    return els.map((e) => {
+      const u = v.view.units[/** @type {HTMLInputElement} */ (e).value];
+      const at = (u.in && v.view.buildings[u.in]) || u;
+      return (Math.abs(at.q - site.q) + Math.abs(at.r - site.r) + Math.abs(at.q + at.r - site.q - site.r)) / 2;
+    });
+  });
+  assert.deepEqual(reach, [...reach].sort((x, y) => x - y), 'closest first');
+  assert.equal(await a.getAttribute('#crew-sort [data-sort="near"]', 'aria-pressed'), 'true');
+  assert.deepEqual(await tickedIds(), tickedBefore, 'the ticks stay');
   assert.deepEqual(await a.evaluate(() => /** @type {any} */ (window).__vigame.net.send({ type: 'abort', building: /** @type {any} */ (window).__vigame.crewTarget })), { ok: true });
   await a.waitForSelector('#crew', { state: 'hidden' });
   await waitText(a, '#message', 'Your pit is gone.');
@@ -637,6 +682,42 @@ async function threeBrowsers(browser, url, { full, label }) {
     const v = /** @type {any} */ (window).__vigame;
     return [v.selected, v.aiming, v.crewTarget];
   }), [null, null, null], 'the page let go of the pit');
+
+  // Her castle has no crew: Heroes takes the button's place, listing her
+  // heroes alive now, highest level first, with every skill's level. H
+  // closes it again, and it stays closed.
+  await selectBuilding(a, await castleOf(a, 0));
+  assert.ok(await a.isHidden('#crew-button'), 'no Crew for a castle');
+  // Units are born meanwhile: those there before it opened must be in it.
+  const opened = await a.evaluate(() => /** @type {any} */ (window).__vigame.view.tick);
+  await a.keyboard.press('h');
+  await a.waitForSelector('#heroes[open]');
+  const listed = await a.$$eval('#heroes-list li:not(.none)', (els) => els.map((e) => ({
+    id: /** @type {HTMLElement} */ (e).dataset.unit,
+    level: Number(/^Lv *(\d+) · \d+m$/.exec(e.querySelector('.stats')?.textContent ?? '')?.[1]),
+    skills: e.querySelector('.skills')?.textContent ?? '',
+  })));
+  // Each listed unit is a hero of hers (unless gone since), and each of
+  // hers born before it opened is listed.
+  const heroIds = listed.map((h) => h.id);
+  const { fits, earlier } = await a.evaluate(({ tick, ids }) => {
+    const units = /** @type {any} */ (window).__vigame.view.units;
+    return {
+      fits: ids.map((id) => (units[id] ? units[id].owner === 0 && Boolean(units[id].hero) : null)),
+      earlier: Object.values(units).filter((u) => u.owner === 0 && u.hero && u.born <= tick).map((u) => u.id),
+    };
+  }, { tick: opened, ids: heroIds });
+  assert.ok(fits.every((fit) => fit !== false), `only her heroes listed: ${heroIds}`);
+  assert.ok(earlier.every((id) => heroIds.includes(id)), `every hero of hers listed: ${earlier} in ${heroIds}`);
+  if (!heroIds.length) assert.equal(await a.locator('#heroes-list .none').count(), 1, 'none yet, it says');
+  assert.deepEqual(listed.map((h) => h.level), listed.map((h) => h.level).sort((x, y) => y - x), 'highest level first');
+  // Each level takes three places, "Lv  8" to "Lv100", so the skills line up.
+  const skillLine = new RegExp(`^${['Att', 'Mel', 'Bld', 'Frm', 'Brd', 'Run'].map((s) => `${s} Lv[ \\d]{2}\\d`).join('')}$`);
+  for (const { skills } of listed) assert.match(skills, skillLine);
+  await a.screenshot({ path: join(OUT, 'heroes.png') });
+  await a.keyboard.press('h');
+  await a.waitForSelector('#heroes', { state: 'hidden', timeout: 3000 });
+  await a.keyboard.press('Escape');
 
   // Bēla forms a band next to her castle (who goes is chosen as it forms),
   // then leads it; its members go along inside.
@@ -647,6 +728,11 @@ async function threeBrowsers(browser, url, { full, label }) {
   const bandSpot = await openCell(b, bandCells.map((k) => k.split(',').map(Number))
     .sort(([q1, r1], [q2, r2]) => distance({ q: q1, r: r1 }, crimson) - distance({ q: q2, r: r2 }, crimson)));
   await clickHex(b, bandSpot.q, bandSpot.r);
+  // A band wants ranged attack, with close combat beside it.
+  await b.waitForSelector('#crew[open]');
+  assert.equal(await text(b, '#crew-sort-skill'), 'Attack');
+  assert.match(await b.locator('#crew-list .stats').first().textContent() ?? '', /· Ranged attack \d+ ·/);
+  assert.match(await b.locator('#crew-list .where').first().textContent() ?? '', /· Close combat \d+$/);
   await confirmCrew(b, { key: 'Enter' });
   await b.waitForFunction((n) => Object.keys(/** @type {any} */ (window).__vigame.view.buildings).length === n, before + 1);
   const wagon = (await buildings(b)).find((x) => x.type === 'band');
@@ -705,11 +791,35 @@ async function threeBrowsers(browser, url, { full, label }) {
   assert.equal(await c.locator('#build-tower').isDisabled(), true);
 
   // A link to a game that doesn't exist lands in the lobby, which says so.
-  // (Chromium logs the refused join request itself as a console error.)
-  const lost = await newPlayer(browser, `${url}?game=nope`, `${label}-lost`, 'Lou', undefined, /^Failed to load resource: .* 521\b/);
+  // (Chromium logs the refused join request itself as a console error, and
+  // below, the refused New game.)
+  const lost = await newPlayer(browser, `${url}?game=nope`, `${label}-lost`, 'Lou', undefined, /^Failed to load resource: .* (521|409)\b/);
   await inLobby(lost);
   await waitText(lost, '#lobby-notice', 'There is no game at that address.');
   assert.equal(new URL(lost.url()).search, '', 'the address is the lobby again');
+  // Lou leaves three games of his waiting for a player; New game then says
+  // so, and lists them to go back to.
+  await lost.evaluate(async () => {
+    const token = localStorage.getItem('vigame.token');
+    for (let i = 0; i < 3; i++) {
+      const res = await fetch('api/games', {
+        method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ token, players: 2 }),
+      });
+      if (res.status !== 201) throw new Error(`game ${i}: ${res.status}`);
+    }
+  });
+  await lost.click('#lobby-new');
+  await waitMatch(lost, '#lobby-limit-text', /^You have 3 games of yours waiting for a player\./);
+  assert.equal(await lost.locator('#lobby-limit-games li a', { hasText: 'Join' }).count(), 3);
+  if (label === 'direct') await lost.screenshot({ path: join(OUT, 'lobby-limit.png') });
+  // Nobody else plays them, so each has Delete; Lou deletes the first, after
+  // confirming, and the lobby says so.
+  assert.equal(await lost.locator('#lobby-limit-games li button', { hasText: 'Delete' }).count(), 3);
+  lost.once('dialog', (dialog) => dialog.accept());
+  await lost.locator('#lobby-limit-games li button', { hasText: 'Delete' }).first().click();
+  await waitMatch(lost, '#lobby-notice', /^Deleted “.+”\.$/);
+  assert.equal(await lost.locator('#lobby-limit').isHidden(), true);
+  assert.equal(new URL(lost.url()).search, '', 'still in the lobby');
   // Lou finds Ann and Bēla's game among those under way, folded away until
   // opened, and watches it from there.
   assert.equal(await lost.locator('#lobby-playing-section[open]').count(), 0);
