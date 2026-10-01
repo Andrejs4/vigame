@@ -413,6 +413,15 @@ async function threeBrowsers(browser, url, { full, label }) {
   assert.equal(await text(a, '#lobby-name'), 'Ann');
   await a.waitForSelector('#lobby-mine-empty:not([hidden])');
   if (full) await a.screenshot({ path: join(OUT, 'lobby.png') });
+  // Under the lists, How to play and About, folded at first; About links
+  // the source code. Opened, then folded again as they were.
+  assert.equal(await a.locator('#lobby-how-section[open], #lobby-about-section[open]').count(), 0, 'How to play and About start folded');
+  await a.click('#lobby-how-section summary');
+  await a.click('#lobby-about-section summary');
+  assert.ok(await a.locator('#lobby-about-section a[href="https://github.com/Andrejs4/vigame"]').isVisible(), 'About links the source');
+  if (full) await a.screenshot({ path: join(OUT, 'lobby-about.png'), fullPage: true });
+  await a.click('#lobby-how-section summary');
+  await a.click('#lobby-about-section summary');
   assert.equal(await a.inputValue('#lobby-players'), '1', 'one player against the Dark Lord by default');
   await a.selectOption('#lobby-players', '2');
   await a.click('#lobby-new');
@@ -528,11 +537,8 @@ async function threeBrowsers(browser, url, { full, label }) {
     assert.equal(await a.evaluate(() => /** @type {any} */ (window).__vigame.sounds.muted), muted);
     assert.equal(await a.getAttribute('#mute-button', 'aria-pressed'), String(muted));
   }
-  // "How to play" folds away and back.
-  for (const open of [false, true]) {
-    await a.click('#how-to-play summary');
-    assert.equal(await a.evaluate(() => /** @type {HTMLDetailsElement} */ (document.getElementById('how-to-play')).open), open);
-  }
+  // The game page has no legend: How to play and About are in the lobby.
+  assert.equal(await a.locator('#legend, #how-to-play').count(), 0, 'no legend in the game');
 
   // A drag pans rather than clicks.
   const camBefore = await a.evaluate(() => ({ .../** @type {any} */ (window).__vigame.camera }));
@@ -868,7 +874,6 @@ async function phone(browser, url) {
       status: box('status'),
       controls: box('controls'),
       minimap: box('minimap'),
-      legendShown: getComputedStyle(document.getElementById('legend')).display !== 'none',
     };
   });
   assert.ok(await fits(), 'the game scrolls sideways on a phone');
@@ -877,7 +882,6 @@ async function phone(browser, url) {
   assert.ok(layout.controls.top > layout.status.bottom, 'controls overlap the status panel');
   assert.ok(layout.minimap.top > layout.status.bottom && layout.minimap.bottom < layout.controls.top
     && layout.minimap.right <= layout.innerWidth, 'the minimap overlaps the panels or the screen edge');
-  assert.equal(layout.legendShown, false);
 
   const castle = await castleOf(page, 0);
   await selectBuilding(page, castle, { touch: true });

@@ -83,9 +83,11 @@ persistence.
   and don't add looping ones.
 - Pictures are one-colour SVGs in `src/client/art/`, from game-icons.net
   under CC BY 3.0: a new or replaced one needs its line in
-  `art/CREDITS.md` (`test/tokens.test.js` checks), and the page's credit
-  line in the legend must still name its authors. The page colours them, so
-  a file carries no colours, scripts or links of its own.
+  `art/CREDITS.md` (`test/tokens.test.js` checks), and the lobby's About
+  must still name its authors (checked too). The page colours them, so
+  a file carries no colours, scripts or links of its own. Pictures made
+  for Vigame by its author are CC BY-SA 4.0 (see `art/CREDITS.md`); the
+  code is GPL-2.0-or-later.
 - Views switch with a page load: `?game=<id>` is a game, anything else the
   lobby, and the login page comes first while the browser isn't signed in.
 

@@ -85,6 +85,44 @@
       <ul class="games" id="lobby-done"></ul>
       <p class="empty" id="lobby-done-empty">No game has ended yet.</p>
     </details>
+    <details class="games-list prose" id="lobby-how-section">
+      <summary><h2>How to play</h2></summary>
+      <p>The units at home in your castle raise new ones: the more of them,
+        and the better they breed, the sooner. Your side is out once your
+        castle falls.</p>
+      <p>Build near your standing buildings. The crew you pick raises a
+        building once they get there; meanwhile it has half its hit points
+        and shelters nobody. A pit's crew digs stone, which pays for towers,
+        farms and upgrades; farms grow food. Water can't be crossed, and
+        scrub can't be built on and is twice as slow to walk.</p>
+      <p>Select a building and press Crew to choose who works there; Return
+        sends them home. Your castle's Heroes lists your heroes, who level
+        up faster than the rest. Every minute your units eat: short meals
+        make them hungry, and at full hunger they may starve.</p>
+      <p>Select a wagon or band, then click a cell, to move it; it carries
+        its crew. A wagon can't pass other buildings; a band passes anything
+        of yours, gives no cover, and breaks up when it has nobody. Units in
+        buildings and bands strike enemies in reach; press Attack, then an
+        enemy building, to choose their target.</p>
+      <p>Drag to pan, wheel to zoom; press the minimap to look anywhere. A
+        button's bold letter is its key; choosing a crew, Enter or that
+        letter again sends it.</p>
+    </details>
+    <details class="games-list prose" id="lobby-about-section">
+      <summary><h2>About</h2></summary>
+      <p>Vigame is a real-time strategy game on a hex map, played in the
+        browser: a prototype, still changing.</p>
+      <p>Its source code, and the place to report a bug or suggest
+        something: <a href="https://github.com/Andrejs4/vigame" target="_blank" rel="noopener">github.com/Andrejs4/vigame</a>.</p>
+      <p>The code is free software under the
+        <a href="https://www.gnu.org/licenses/old-licenses/gpl-2.0.html" target="_blank" rel="noopener">GNU GPL</a>,
+        version 2 or later. Pictures:
+        <a href="https://game-icons.net" target="_blank" rel="noopener">game-icons.net</a>
+        by Lorc and Delapouite,
+        <a href="https://creativecommons.org/licenses/by/3.0/" target="_blank" rel="noopener">CC BY 3.0</a>.
+        Fonts: IBM Plex, under the SIL Open Font License. Made with
+        Colyseus, Express and SQLite.</p>
+    </details>
   </div>
 </main>
 
@@ -141,34 +179,6 @@
     <div class="minimap-box">
       <canvas id="minimap-canvas" aria-label="Map of the whole board: press or drag on it to look there"></canvas>
       <div class="minimap-frame" id="minimap-frame"></div>
-    </div>
-  </div>
-
-  <div class="hud" id="legend">
-    <div><span class="swatch" style="background:hsl(104,32%,40%)"></span>Grass &mdash; build, 2 s a cell on foot</div>
-    <div><span class="swatch" style="background:hsl(88,38%,48%)"></span>Meadow &mdash; build, 2 s a cell on foot</div>
-    <div><span class="swatch" style="background:hsl(74,24%,34%)"></span>Scrub &mdash; no building, 4 s a cell on foot</div>
-    <div><span class="swatch" style="background:hsl(203,44%,40%)"></span>Water &mdash; neither</div>
-    <details class="legend-note" id="how-to-play" open>
-      <summary>How to play</summary>
-      The units at home in your castle raise new ones: the more of them, and
-      the better they breed, the sooner. Build near your standing buildings:
-      the crew you pick raises it once they get there, and meanwhile it has
-      half its hit points and shelters nobody. Select a building and press Crew to choose who works there; Return
-      sends them home. Your castle's Heroes lists your heroes. A pit's crew digs stone, which pays for towers, farms
-      and upgrades; farms grow food. Every minute your units eat; short
-      meals make them hungry, and at full hunger they may starve. Select a
-      wagon or band, then click a cell, to move it; it carries its crew. A
-      wagon can't pass other buildings; a band passes anything of yours,
-      gives no cover, and breaks up when it has nobody. Units in buildings
-      and bands strike enemies in reach; press Attack, then an enemy
-      building, to choose their target. Drag to pan, wheel to zoom; press
-      the minimap to look anywhere. A button's bold letter is its key;
-      choosing a crew, Enter or that letter again sends it.
-    </details>
-    <div class="legend-note">
-      Pictures: <a href="https://game-icons.net" target="_blank" rel="noopener">game-icons.net</a>
-      by Lorc and Delapouite, <a href="https://creativecommons.org/licenses/by/3.0/" target="_blank" rel="noopener">CC BY 3.0</a>.
     </div>
   </div>
 </div>

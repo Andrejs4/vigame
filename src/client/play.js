@@ -81,9 +81,6 @@ function keyLabel(button, label) {
   button.replaceChildren(key, label.slice(1));
 }
 
-/** Where the browser keeps whether "How to play" is open. */
-const HOW_TO_KEY = 'vigame.howToPlay';
-
 /** @typedef {import('../core/game.js').Building} Building */
 
 /**
@@ -1005,11 +1002,6 @@ export async function startGame(net, me) {
   new ResizeObserver(() => {
     stage.style.setProperty('--controls-height', `${controls.offsetHeight}px`);
   }).observe(controls);
-  // The legend keeps below the status panel, however tall that grows.
-  const statusPanel = /** @type {HTMLElement} */ (document.getElementById('status'));
-  new ResizeObserver(() => {
-    stage.style.setProperty('--status-height', `${statusPanel.offsetHeight}px`);
-  }).observe(statusPanel);
 
   addEventListener('keydown', (e) => {
     // Escape in the crew chooser closes just the chooser.
@@ -1139,21 +1131,6 @@ export async function startGame(net, me) {
   muteButton.addEventListener('click', () => {
     sounds.setMuted(!sounds.muted);
     muteButton.setAttribute('aria-pressed', String(sounds.muted));
-  });
-
-  // "How to play" stays as the player last left it, open or closed, in this browser.
-  const howTo = /** @type {HTMLDetailsElement} */ (document.getElementById('how-to-play'));
-  try {
-    if (localStorage.getItem(HOW_TO_KEY) === 'closed') howTo.open = false;
-  } catch {
-    // Open, then.
-  }
-  howTo.addEventListener('toggle', () => {
-    try {
-      localStorage.setItem(HOW_TO_KEY, howTo.open ? 'open' : 'closed');
-    } catch {
-      // Not remembered, then.
-    }
   });
 
   seatButton.addEventListener('click', () => {

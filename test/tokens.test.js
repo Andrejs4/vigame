@@ -25,3 +25,14 @@ test('the pictures are small, plain, one-colour SVGs, and credited', () => {
     assert.ok(credits.includes(`\`${name}.svg\``), `${name}.svg is not in art/CREDITS.md`);
   }
 });
+
+test("the lobby's About names every picture's author and its licence", () => {
+  const credits = readFileSync(new URL('CREDITS.md', ART), 'utf8');
+  // The last column of each row of the table: | `castle.svg` | castle | Delapouite |
+  const authors = new Set([...credits.matchAll(/^\| `[a-z]+\.svg` \|[^|]+\| ([^|]+?) \|$/gm)].map((m) => m[1]));
+  assert.ok(authors.size > 0, 'no authors found in art/CREDITS.md');
+  const page = readFileSync(new URL('../src/client/index.html', import.meta.url), 'utf8');
+  const about = page.slice(page.indexOf('id="lobby-about-section"'), page.indexOf('</details>', page.indexOf('id="lobby-about-section"')));
+  for (const author of authors) assert.ok(about.includes(author), `About doesn't name ${author}`);
+  assert.ok(about.includes('https://creativecommons.org/licenses/by/3.0/'), 'About has no link to CC BY 3.0');
+});

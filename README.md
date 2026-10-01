@@ -26,8 +26,11 @@ Run `npm start` and open http://127.0.0.1:2567.
 - **The lobby** lists your games under way, games with a free seat, other
   people's under way with every seat taken (**Watch** opens one as an
   observer), and the finished ones (anyone's; **Scores** opens one at its
-  table of points). Each list folds away; the last two start folded,
-  and the browser keeps them as you leave them. **New game**
+  table of points). Under the lists, **How to play** sums up the game, and
+  **About** links the source code on GitHub and names the licences and
+  credits. Each section folds away; the lists of others' games under way
+  and finished, How to play and About start folded, and the browser keeps
+  them as you leave them. **New game**
   starts one for 1 to 8 players (1 by default, against the Dark Lord), on a map that grows with
   them (29 × 20 cells for two, 59 × 39 for eight), castles in a ring
   around the middle, out of reach of the lair and of each other. A game's address (`?game=…`) is also the link to send
@@ -254,8 +257,7 @@ Run `npm start` and open http://127.0.0.1:2567.
   in the corner shows the whole board and a frame around what you see;
   press or drag on it to look there.
   **Coordinates** shows axial `q,r` labels. Escape cancels building and
-  clears the selection; **A** is Attack. **How to play**, in the legend, folds away; this
-  browser remembers whether it is open.
+  clears the selection; **A** is Attack.
 - Every viewer's picked hex shows as a ring: solid for yours, dashed for
   others.
 - Buildings and units are round tokens in their side's colour, with a
@@ -538,4 +540,15 @@ comes next.
 
 ## License
 
-GPL-2.0. See [LICENSE](LICENSE).
+Vigame is free software: you can redistribute it and/or modify it under the
+terms of the GNU General Public License as published by the Free Software
+Foundation, either version 2 of the License, or (at your option) any later
+version (GPL-2.0-or-later). See [LICENSE](LICENSE).
+
+Pictures (`src/client/art/`, listed in its `CREDITS.md`): the icons from
+[game-icons.net](https://game-icons.net) are under
+[CC BY 3.0](https://creativecommons.org/licenses/by/3.0/), and pictures made
+for Vigame by its author are under
+[CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/). The page
+names them in the lobby's **About**, with the fonts (IBM Plex, SIL Open Font
+License), which the browser loads from Google Fonts.

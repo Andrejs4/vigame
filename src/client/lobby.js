@@ -113,7 +113,8 @@ export function showLobby(token, me, { notice } = {}) {
   const playersSelect = /** @type {HTMLSelectElement} */ (document.getElementById('lobby-players'));
   const rename = /** @type {HTMLElement} */ (document.getElementById('lobby-rename'));
 
-  // Each list stays open or shut as the player last left it, in this browser.
+  // Each list, and How to play and About, stays open or shut as the player
+  // last left it, in this browser.
   const sections = /** @type {HTMLDetailsElement[]} */ ([...page.querySelectorAll('details.games-list')]);
   try {
     const kept = JSON.parse(localStorage.getItem(OPEN_KEY) ?? '{}');

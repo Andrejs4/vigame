@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "description": "Real-time hex strategy prototype: a deterministic game core, a canvas page, and a Colyseus game server.",
-  "license": "SEE LICENSE IN LICENSE",
+  "license": "GPL-2.0-or-later",
   "type": "module",
   "engines": {
     "node": ">=22"
