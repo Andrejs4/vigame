@@ -102,13 +102,15 @@ test('the player hears of their heroes who die: in combat, or of hunger at a mea
   // Away from a meal, every hero gone of the player's own died in combat; an
   // ordinary unit and another side's hero go unmentioned.
   const battle = fallenHeroes(at(100, MAX_HUNGER, army), at(101, MAX_HUNGER, []), 0);
-  assert.deepEqual(battle, { combat: ['Unit u1', 'Unit u2'], hunger: [] });
+  // As last seen, for the Heroes list to keep.
+  assert.deepEqual(battle.combat.map((u) => u.name), ['Unit u1', 'Unit u2']);
+  assert.deepEqual(battle.hunger, []);
   assert.equal(fallenHeroesNote(battle), '2 heroes died in combat.');
   // Over a meal, starving, they died of hunger; well fed, in combat.
   const meal = (/** @type {number} */ hunger) => fallenHeroes(at(FOOD_PERIOD - 1, hunger, army), at(FOOD_PERIOD, hunger, army.slice(1)), 0);
   assert.equal(fallenHeroesNote(meal(MAX_HUNGER)), 'Hero Unit u1 died from hunger.');
   assert.equal(fallenHeroesNote(meal(50)), 'Hero Unit u1 died in combat.');
-  assert.equal(fallenHeroesNote({ combat: ['Ann'], hunger: ['Bo', 'Cy'] }), 'Hero Ann died in combat; 2 heroes died from hunger.');
+  assert.equal(fallenHeroesNote({ combat: [{ name: 'Ann' }], hunger: [{ name: 'Bo' }, { name: 'Cy' }] }), 'Hero Ann died in combat; 2 heroes died from hunger.');
   assert.equal(fallenHeroesNote({ combat: [], hunger: [] }), null);
   // Not for a spectator, nor across a jump in time.
   assert.deepEqual(fallenHeroes(at(100, 0, army), at(101, 0, []), null), { combat: [], hunger: [] });

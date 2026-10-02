@@ -113,7 +113,11 @@ Run `npm start` and open http://127.0.0.1:2567.
   (in Crew's place, as the castle has no crew) for yours alive now, highest
   level first, with where each is and every skill's level, as "Att Lv 15"
   (ranged attack; then close combat, building, farming, breeding and
-  running), each level padded to line up ("Lv  8", "Lv100"). The status panel says when one of yours
+  running), each level padded to line up ("Lv  8", "Lv100"). Below them
+  come those that died while the page was open, in the order they died, as
+  they last were: how long each lived, in silver, and how it died. The page
+  keeps them only while it is open: a reload forgets them, and it misses
+  deaths while it was away. The status panel says when one of yours
   dies ("Hero Hugh Baker died in combat.", "3 heroes died from hunger."):
   of hunger if it went at a meal while your side was starving, else in
   combat. Every skill counts: breeding speeds

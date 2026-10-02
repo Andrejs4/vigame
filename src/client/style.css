@@ -9,6 +9,7 @@
   --ink: #e9ede7;
   --ink-dim: #93a191;
   --amber: #ffd84d;
+  --silver: #c9d1d9;
   --sans: "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   --mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
 }
@@ -294,6 +295,8 @@ button.inline:hover:not(:disabled) { background: none; color: var(--amber); }
 .heroes-list .stats { white-space: pre; }
 .heroes-list .skills span { white-space: pre; cursor: help; }
 .heroes-list .none { display: block; color: var(--ink-dim); font-size: 13px; }
+/* A fallen hero: how long it lived, in silver. */
+.heroes-list .stats .fallen { color: var(--silver); font-weight: 600; }
 .crew-foot { display: flex; align-items: center; gap: 8px; }
 .crew-foot span { flex: 1; color: var(--ink-dim); font-size: 13px; }
 
