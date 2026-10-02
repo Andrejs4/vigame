@@ -28,8 +28,11 @@ Pictures made for Vigame by its author, Andrejs Petrovs (Andrejs4 on
 GitHub), are under the
 [Creative Commons Attribution-ShareAlike 4.0](https://creativecommons.org/licenses/by-sa/4.0/)
 licence (CC BY-SA 4.0): anyone may use and change them, crediting the author,
-and share what they make of them under the same terms. Each goes in a table
-here as it comes, with its file and what it shows. None yet.
+and share what they make of them under the same terms.
+
+| File | What it shows |
+| --- | --- |
+| `favicon.png` | the browser tab's icon (32 × 32): a band of heroes |
 
 Replacing one: keep the file name, a square `viewBox`, `width` and `height`
 attributes (Firefox draws an SVG on a canvas only with them), one colour

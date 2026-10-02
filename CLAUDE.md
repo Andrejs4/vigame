@@ -86,8 +86,9 @@ persistence.
   `art/CREDITS.md` (`test/tokens.test.js` checks), and the lobby's About
   must still name its authors (checked too). The page colours them, so
   a file carries no colours, scripts or links of its own. Pictures made
-  for Vigame by its author are CC BY-SA 4.0 (see `art/CREDITS.md`); the
-  code is GPL-2.0-or-later.
+  for Vigame by its author, such as the tab's icon (`art/favicon.png`), are
+  CC BY-SA 4.0, each with its line in `art/CREDITS.md` too; the code is
+  GPL-2.0-or-later.
 - Views switch with a page load: `?game=<id>` is a game, anything else the
   lobby, and the login page comes first while the browser isn't signed in.
 

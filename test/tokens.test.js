@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 
 import { BUILDING_TYPES } from '../src/core/rules.js';
 import { PICTURES } from '../src/client/tokens.js';
@@ -23,6 +23,13 @@ test('the pictures are small, plain, one-colour SVGs, and credited', () => {
     assert.deepEqual([...new Set(tags)].sort(), ['</svg', '<path', '<svg'], `${name}.svg has more than paths`);
     assert.doesNotMatch(svg, /fill=|href|style/, `${name}.svg carries a colour or a link`);
     assert.ok(credits.includes(`\`${name}.svg\``), `${name}.svg is not in art/CREDITS.md`);
+  }
+});
+
+test('every file among the pictures is credited', () => {
+  const credits = readFileSync(new URL('CREDITS.md', ART), 'utf8');
+  for (const name of readdirSync(ART)) {
+    if (name !== 'CREDITS.md') assert.ok(credits.includes(`\`${name}\``), `${name} is not in art/CREDITS.md`);
   }
 });
 

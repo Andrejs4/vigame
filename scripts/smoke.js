@@ -418,6 +418,11 @@ async function threeBrowsers(browser, url, { full, label }) {
   assert.equal(await a.locator('#lobby-how-section[open], #lobby-about-section[open]').count(), 0, 'How to play and About start folded');
   await a.click('#lobby-how-section summary');
   await a.click('#lobby-about-section summary');
+  // The tab's icon, by a relative address, so under a subfolder too.
+  assert.equal(await a.evaluate(async () => {
+    const res = await fetch(/** @type {HTMLLinkElement} */ (document.querySelector('link[rel=icon]')).href);
+    return `${res.status} ${res.headers.get('content-type')}`;
+  }), '200 image/png', 'the icon loads');
   assert.ok(await a.locator('#lobby-about-section a[href="https://github.com/Andrejs4/vigame"]').isVisible(), 'About links the source');
   if (full) await a.screenshot({ path: join(OUT, 'lobby-about.png'), fullPage: true });
   await a.click('#lobby-how-section summary');
