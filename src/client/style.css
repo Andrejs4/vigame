@@ -70,6 +70,12 @@ button[aria-pressed="true"] { background: rgba(255, 216, 77, 0.18); border-color
   border-radius: 10px;
 }
 .card.wide { width: min(520px, 100%); }
+/* The login page: the banner above the form, as wide as the lobby's card. */
+#login { flex-direction: column; gap: 16px; }
+.banner {
+  display: block; width: min(520px, 100%); height: auto;
+  border: 1px solid var(--panel-edge); border-radius: 10px;
+}
 .card h1 {
   margin: 0 0 6px;
   font-size: 12px; font-weight: 500; letter-spacing: 0.10em; text-transform: uppercase;

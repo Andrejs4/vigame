@@ -287,6 +287,11 @@ const inGame = (page) => page.waitForFunction(() => /** @type {any} */ (window).
  */
 async function logIn(page, name, { touch = false } = {}) {
   await page.waitForSelector('#login:not([hidden])');
+  // The banner above the form loads, by a relative address (so under a subfolder too).
+  await page.waitForFunction(() => {
+    const banner = /** @type {HTMLImageElement | null} */ (document.querySelector('#login .banner'));
+    return Boolean(banner?.complete && banner.naturalWidth === 1040);
+  });
   const question = await page.waitForFunction(() => {
     const m = /What is (\d+) \+ (\d+)\?/.exec(document.getElementById('login-question')?.textContent ?? '');
     return m && Number(m[1]) + Number(m[2]);
@@ -394,6 +399,7 @@ async function threeBrowsers(browser, url, { full, label }) {
   await a.goto(url);
   await a.waitForSelector('#login:not([hidden])');
   await a.waitForFunction(() => /What is/.test(document.getElementById('login-question')?.textContent ?? ''));
+  await a.waitForFunction(() => /** @type {HTMLImageElement} */ (document.querySelector('#login .banner')).complete);
   if (full) await a.screenshot({ path: join(OUT, 'login.png') });
   await a.fill('#login-name', 'Ann \u{1F642}');
   await a.fill('#login-answer', '1');
