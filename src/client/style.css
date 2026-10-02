@@ -104,6 +104,8 @@ button[aria-pressed="true"] { background: rgba(255, 216, 77, 0.18); border-color
 .games-list[open] summary { margin-bottom: 8px; }
 .games-list summary:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
 .card .games-list h2 { display: inline; margin: 0; }
+/* How to play and About: text under the lists. */
+.games-list.prose p { margin: 0 0 8px; color: var(--ink-dim); font-size: 13px; line-height: 1.55; }
 .games-list .count { color: var(--ink-dim); font: 12px var(--mono); margin-left: 4px; }
 
 .games { list-style: none; margin: 0; padding: 0; }
@@ -148,11 +150,6 @@ button[aria-pressed="true"] { background: rgba(255, 216, 77, 0.18); border-color
 
 #status { top: 14px; left: 14px; min-width: 216px; }
 #controls { top: 14px; right: 14px; display: flex; flex-direction: column; gap: 6px; }
-#legend {
-  bottom: 14px; left: 14px; font-size: 12px; color: var(--ink-dim); max-width: 300px;
-  /* Below the status panel, scrolling when "How to play" doesn't fit. */
-  max-height: calc(100% - var(--status-height, 0px) - 42px); overflow-y: auto;
-}
 #minimap { bottom: 14px; right: 14px; padding: 6px; }
 
 /* The minimap: the canvas holds a few pixels a cell, scaled up unsmoothed. */
@@ -202,15 +199,6 @@ dl { margin: 0; }
 .zoom-row { display: flex; gap: 6px; }
 .zoom-row button { flex: 1; text-align: center; font-size: 15px; padding: 5px 0; }
 .zoom-row #mute-button { flex: 1.6; font-size: 13px; }
-
-.swatch {
-  display: inline-block; width: 10px; height: 10px;
-  border-radius: 2px; margin-right: 6px; vertical-align: -1px;
-}
-.legend-note { margin-top: 8px; color: var(--ink-dim); }
-#how-to-play summary { cursor: pointer; color: var(--ink); width: max-content; }
-#how-to-play summary:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
-#how-to-play[open] summary { margin-bottom: 4px; }
 
 .notice {
   margin: 8px 0 0; padding-top: 7px; max-width: 240px;
@@ -305,7 +293,6 @@ button.inline:hover:not(:disabled) { background: none; color: var(--amber); }
 
 /* Narrow screens: controls become a thumb-reachable row along the bottom. */
 @media (max-width: 620px) {
-  #legend { display: none; }
   .hud { font-size: 12px; padding: 9px 11px; }
   #status { min-width: 0; top: 10px; left: 10px; }
   #controls {

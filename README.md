@@ -1,19 +1,24 @@
 # Vigame
 
-A real-time hex strategy prototype. Players direct buildings, not units.
-Each side has a castle, home to its units, who raise new ones. Players
-build towers, wagons, pits and farms and choose each one's crew from their
-named units, who walk there and get better at the work. Pits dig stone,
-which pays for towers, farms and upgrades; castles and farms grow food.
-Units in buildings and bands fight whatever enemy comes in reach, either
-together against the Dark Lord or each side for itself. The rules work
-end to end; the numbers are placeholders.
+A real-time hex strategy game in the browser, where you command buildings,
+not units. Each side has a castle, home to its units, who raise new ones.
+You build towers, wagons, pits and farms and choose each one's crew from
+your named units, who walk there and get better at the work. Pits dig
+stone, which pays for towers, farms and upgrades; castles and farms grow
+food. Units in buildings and bands fight any enemy that comes in reach,
+either together against the Dark Lord or each side for itself. The game
+plays end to end, from the lobby to the final scores; the balance is still
+being tuned.
+
+Vigame is its author's first pure vibe-coding project, and a successful
+one: it was built entirely through conversation with Claude, and its
+author never once looked at the code.
 
 The game core is plain data and pure functions (`src/core/`), with no
-screen, network or clock of its own. The game server runs it, and tests play
-whole games with it and no players at all. The server is Node with
-[Colyseus](https://colyseus.io/) and SQLite; it mirrors each game's state to
-its players. The page (`src/client/`) is plain JavaScript ES modules with no
+screen, network or clock of its own, so the game server runs it and the
+tests play whole games with no players at all. The server is Node with
+[Colyseus](https://colyseus.io/) and SQLite, and mirrors each game's state
+to its players. The page (`src/client/`) is plain JavaScript ES modules with no
 framework and no build step: the server serves them as they are. It shows
 what the server sends and passes on the player's clicks as commands.
 
@@ -26,8 +31,11 @@ Run `npm start` and open http://127.0.0.1:2567.
 - **The lobby** lists your games under way, games with a free seat, other
   people's under way with every seat taken (**Watch** opens one as an
   observer), and the finished ones (anyone's; **Scores** opens one at its
-  table of points). Each list folds away; the last two start folded,
-  and the browser keeps them as you leave them. **New game**
+  table of points). Under the lists, **How to play** sums up the game, and
+  **About** links the source code on GitHub and names the licences and
+  credits. Each section folds away; the lists of others' games under way
+  and finished, How to play and About start folded, and the browser keeps
+  them as you leave them. **New game**
   starts one for 1 to 8 players (1 by default, against the Dark Lord), on a map that grows with
   them (29 × 20 cells for two, 59 × 39 for eight), castles in a ring
   around the middle, out of reach of the lair and of each other. A game's address (`?game=…`) is also the link to send
@@ -254,8 +262,7 @@ Run `npm start` and open http://127.0.0.1:2567.
   in the corner shows the whole board and a frame around what you see;
   press or drag on it to look there.
   **Coordinates** shows axial `q,r` labels. Escape cancels building and
-  clears the selection; **A** is Attack. **How to play**, in the legend, folds away; this
-  browser remembers whether it is open.
+  clears the selection; **A** is Attack.
 - Every viewer's picked hex shows as a ring: solid for yours, dashed for
   others.
 - Buildings and units are round tokens in their side's colour, with a
@@ -332,7 +339,7 @@ have one, install it with `npx playwright install chromium`.
 | `src/client/minimap.js` | The minimap: a few pixels a cell, repainted at most twice a second and only when a pixel changes. |
 | `src/client/effects.js` | Hits, falls and deaths, worked out from each update and the one before, for the renderer to play. |
 | `src/client/sounds.js` | Sounds: which ones an update calls for, and a small synthesizer that plays them. |
-| `src/client/tokens.js`, `art/` | The pictures (SVG, credited in `art/CREDITS.md`) and the tokens made of them, painted once per colour and size. |
+| `src/client/tokens.js`, `art/` | The pictures (SVG, credited in `art/CREDITS.md`) and the tokens made of them, painted once per colour and size; also the tab's icon, `favicon.png`. |
 | `server/app.js` | The game server: Colyseus, the HTTP API, the page's files, the monitor. |
 | `server/room.js` | `GameRoom`, one per game: runs the core's clock, logs and applies commands, snapshots. |
 | `server/schema.js` | The room state Colyseus syncs: a generic mirror of the core's view. |
@@ -538,4 +545,17 @@ comes next.
 
 ## License
 
-GPL-2.0. See [LICENSE](LICENSE).
+Copyright (C) 2026 Andrejs Petrovs.
+
+Vigame is free software: you can redistribute it and/or modify it under the
+terms of the GNU General Public License as published by the Free Software
+Foundation, either version 2 of the License, or (at your option) any later
+version (GPL-2.0-or-later). See [LICENSE](LICENSE).
+
+Pictures (`src/client/art/`, listed in its `CREDITS.md`): the icons from
+[game-icons.net](https://game-icons.net) are under
+[CC BY 3.0](https://creativecommons.org/licenses/by/3.0/), and pictures made
+for Vigame by its author, Andrejs Petrovs, are under
+[CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/). The page
+names them in the lobby's **About**, with the fonts (IBM Plex, SIL Open Font
+License), which the browser loads from Google Fonts.
