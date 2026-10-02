@@ -554,8 +554,12 @@ version (GPL-2.0-or-later). See [LICENSE](LICENSE).
 
 Pictures (`src/client/art/`, listed in its `CREDITS.md`): the icons from
 [game-icons.net](https://game-icons.net) are under
-[CC BY 3.0](https://creativecommons.org/licenses/by/3.0/), and pictures made
-for Vigame by its author, Andrejs Petrovs, are under
+[CC BY 3.0](https://creativecommons.org/licenses/by/3.0/). The tab's icon
+and the login page's banners were generated with Perplexity, whose terms
+allow them for personal, non-commercial use only: they are not covered by
+Vigame's licences, and anyone reusing Vigame commercially should leave them
+out or replace them. Pictures drawn for Vigame by its author, Andrejs
+Petrovs, would be under
 [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/). The page
 names them in the lobby's **About**, with the fonts (IBM Plex, SIL Open Font
 License), which the browser loads from Google Fonts.
