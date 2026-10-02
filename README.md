@@ -1,19 +1,24 @@
 # Vigame
 
-A real-time hex strategy prototype. Players direct buildings, not units.
-Each side has a castle, home to its units, who raise new ones. Players
-build towers, wagons, pits and farms and choose each one's crew from their
-named units, who walk there and get better at the work. Pits dig stone,
-which pays for towers, farms and upgrades; castles and farms grow food.
-Units in buildings and bands fight whatever enemy comes in reach, either
-together against the Dark Lord or each side for itself. The rules work
-end to end; the numbers are placeholders.
+A real-time hex strategy game in the browser, where you command buildings,
+not units. Each side has a castle, home to its units, who raise new ones.
+You build towers, wagons, pits and farms and choose each one's crew from
+your named units, who walk there and get better at the work. Pits dig
+stone, which pays for towers, farms and upgrades; castles and farms grow
+food. Units in buildings and bands fight any enemy that comes in reach,
+either together against the Dark Lord or each side for itself. The game
+plays end to end, from the lobby to the final scores; the balance is still
+being tuned.
+
+Vigame is its author's first pure vibe-coding project, and a successful
+one: it was built entirely through conversation with Claude, and its
+author never once looked at the code.
 
 The game core is plain data and pure functions (`src/core/`), with no
-screen, network or clock of its own. The game server runs it, and tests play
-whole games with it and no players at all. The server is Node with
-[Colyseus](https://colyseus.io/) and SQLite; it mirrors each game's state to
-its players. The page (`src/client/`) is plain JavaScript ES modules with no
+screen, network or clock of its own, so the game server runs it and the
+tests play whole games with no players at all. The server is Node with
+[Colyseus](https://colyseus.io/) and SQLite, and mirrors each game's state
+to its players. The page (`src/client/`) is plain JavaScript ES modules with no
 framework and no build step: the server serves them as they are. It shows
 what the server sends and passes on the player's clicks as commands.
 
