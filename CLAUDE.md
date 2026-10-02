@@ -85,10 +85,12 @@ persistence.
   under CC BY 3.0: a new or replaced one needs its line in
   `art/CREDITS.md` (`test/tokens.test.js` checks), and the lobby's About
   must still name its authors (checked too). The page colours them, so
-  a file carries no colours, scripts or links of its own. Pictures made
-  for Vigame by its author, such as the tab's icon (`art/favicon.png`), are
-  CC BY-SA 4.0, each with its line in `art/CREDITS.md` too; the code is
-  GPL-2.0-or-later.
+  a file carries no colours, scripts or links of its own. The tab's icon
+  (`art/favicon.png`) and the login page's banners (`art/banner.webp`,
+  `art/banner-lord.webp`) were generated with Perplexity, for
+  non-commercial use only, outside Vigame's licences; pictures drawn for
+  Vigame by its author would be CC BY-SA 4.0. Each has its line in
+  `art/CREDITS.md` too. The code is GPL-2.0-or-later.
 - Views switch with a page load: `?game=<id>` is a game, anything else the
   lobby, and the login page comes first while the browser isn't signed in.
 

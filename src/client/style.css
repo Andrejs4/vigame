@@ -9,6 +9,7 @@
   --ink: #e9ede7;
   --ink-dim: #93a191;
   --amber: #ffd84d;
+  --silver: #c9d1d9;
   --sans: "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   --mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
 }
@@ -70,6 +71,12 @@ button[aria-pressed="true"] { background: rgba(255, 216, 77, 0.18); border-color
   border-radius: 10px;
 }
 .card.wide { width: min(520px, 100%); }
+/* The login page: a banner above the form and one below, as wide as the lobby's card. */
+#login { flex-direction: column; gap: 16px; }
+.banner {
+  display: block; width: min(520px, 100%); height: auto;
+  border: 1px solid var(--panel-edge); border-radius: 10px;
+}
 .card h1 {
   margin: 0 0 6px;
   font-size: 12px; font-weight: 500; letter-spacing: 0.10em; text-transform: uppercase;
@@ -288,6 +295,8 @@ button.inline:hover:not(:disabled) { background: none; color: var(--amber); }
 .heroes-list .stats { white-space: pre; }
 .heroes-list .skills span { white-space: pre; cursor: help; }
 .heroes-list .none { display: block; color: var(--ink-dim); font-size: 13px; }
+/* A fallen hero: how long it lived, in silver. */
+.heroes-list .stats .fallen { color: var(--silver); font-weight: 600; }
 .crew-foot { display: flex; align-items: center; gap: 8px; }
 .crew-foot span { flex: 1; color: var(--ink-dim); font-size: 13px; }
 

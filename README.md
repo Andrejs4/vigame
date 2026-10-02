@@ -113,7 +113,11 @@ Run `npm start` and open http://127.0.0.1:2567.
   (in Crew's place, as the castle has no crew) for yours alive now, highest
   level first, with where each is and every skill's level, as "Att Lv 15"
   (ranged attack; then close combat, building, farming, breeding and
-  running), each level padded to line up ("Lv  8", "Lv100"). The status panel says when one of yours
+  running), each level padded to line up ("Lv  8", "Lv100"). Below them
+  come those that died while the page was open, in the order they died, as
+  they last were: how long each lived, in silver, and how it died. The page
+  keeps them only while it is open: a reload forgets them, and it misses
+  deaths while it was away. The status panel says when one of yours
   dies ("Hero Hugh Baker died in combat.", "3 heroes died from hunger."):
   of hunger if it went at a meal while your side was starving, else in
   combat. Every skill counts: breeding speeds
@@ -339,7 +343,7 @@ have one, install it with `npx playwright install chromium`.
 | `src/client/minimap.js` | The minimap: a few pixels a cell, repainted at most twice a second and only when a pixel changes. |
 | `src/client/effects.js` | Hits, falls and deaths, worked out from each update and the one before, for the renderer to play. |
 | `src/client/sounds.js` | Sounds: which ones an update calls for, and a small synthesizer that plays them. |
-| `src/client/tokens.js`, `art/` | The pictures (SVG, credited in `art/CREDITS.md`) and the tokens made of them, painted once per colour and size; also the tab's icon, `favicon.png`. |
+| `src/client/tokens.js`, `art/` | The pictures (SVG, credited in `art/CREDITS.md`) and the tokens made of them, painted once per colour and size; also the tab's icon, `favicon.png`, and the login page's banners, `banner.webp` and `banner-lord.webp`. |
 | `server/app.js` | The game server: Colyseus, the HTTP API, the page's files, the monitor. |
 | `server/room.js` | `GameRoom`, one per game: runs the core's clock, logs and applies commands, snapshots. |
 | `server/schema.js` | The room state Colyseus syncs: a generic mirror of the core's view. |
@@ -554,8 +558,12 @@ version (GPL-2.0-or-later). See [LICENSE](LICENSE).
 
 Pictures (`src/client/art/`, listed in its `CREDITS.md`): the icons from
 [game-icons.net](https://game-icons.net) are under
-[CC BY 3.0](https://creativecommons.org/licenses/by/3.0/), and pictures made
-for Vigame by its author, Andrejs Petrovs, are under
+[CC BY 3.0](https://creativecommons.org/licenses/by/3.0/). The tab's icon
+and the login page's banners were generated with Perplexity, whose terms
+allow them for personal, non-commercial use only: they are not covered by
+Vigame's licences, and anyone reusing Vigame commercially should leave them
+out or replace them. Pictures drawn for Vigame by its author, Andrejs
+Petrovs, would be under
 [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/). The page
 names them in the lobby's **About**, with the fonts (IBM Plex, SIL Open Font
 License), which the browser loads from Google Fonts.

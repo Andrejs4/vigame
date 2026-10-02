@@ -163,6 +163,14 @@ export async function startGame(net, me) {
   /** Whether anything is on the move, so the board must be redrawn every frame. */
   let moving = false;
   /**
+   * The heroes of this viewer's side the page saw die, in that order: as
+   * last seen, with the tick they died and how, for the Heroes list. Kept
+   * only while the page is open: a reload forgets them, and deaths while it
+   * was away (a jump in time) go unseen.
+   * @type {Array<import('./net.js').GameView['units'][string] & { died: number, how: 'combat' | 'hunger' }>}
+   */
+  const fallen = [];
+  /**
    * Whether the last frame drew things on the move. Only while the clock
    * runs: paused, a unit halfway along a path stays where it is, so the
    * board is still, and a frame after the clock stops draws it there.
@@ -232,8 +240,12 @@ export async function startGame(net, me) {
       recenter();
     }
     const fresh = effects.update(view, next, performance.now());
-    // The player's heroes who died meanwhile, said where refusals are.
-    const lost = fallenHeroesNote(fallenHeroes(view, next, net.seat()));
+    // The player's heroes who died meanwhile, said where refusals are, and
+    // kept for the Heroes list.
+    const died = fallenHeroes(view, next, net.seat());
+    for (const u of died.combat) fallen.push({ ...u, died: next.tick, how: 'combat' });
+    for (const u of died.hunger) fallen.push({ ...u, died: next.tick, how: 'hunger' });
+    const lost = fallenHeroesNote(died);
     if (lost) flash(lost);
     for (const { name, pan } of soundsFor({ prev: view, next, fresh, seat: net.seat(), where: panOf })) sounds.play(name, pan);
     if (view) letGo(view, next, fresh);
@@ -546,38 +558,44 @@ export async function startGame(net, me) {
   }
 
   /**
-   * A unit's age, in whole minutes of the game's time.
+   * A unit's age, in whole minutes of the game's time: now, or when it died.
    * @param {{ born?: number }} u
+   * @param {number} [until] The tick it died.
    */
-  function minutesOld(u) {
-    return view ? Math.max(0, Math.floor((view.tick - (u.born ?? view.tick)) / (60 * TICKS_PER_SECOND))) : 0;
+  function minutesOld(u, until) {
+    const now = until ?? view?.tick ?? 0;
+    return Math.max(0, Math.floor((now - (u.born ?? now)) / (60 * TICKS_PER_SECOND)));
   }
 
   /**
    * Show the player's heroes alive now, highest level first, to read: each
    * with its level, age and whereabouts as the crew chooser has them, and
    * every skill's level. Levels take three places ("Lv  8", "Lv 15",
-   * "Lv100"), so the skills line up from row to row.
+   * "Lv100"), so the skills line up from row to row. Below them, those this
+   * page saw die, in the order they died, as they last were: their age is
+   * how long they lived, in silver, and how they died is where they are.
    */
   function showHeroes() {
     const seat = net.seat();
     if (!view || seat === null) return;
     const units = Object.values(view.units).filter((u) => u.owner === seat);
     const heroes = units.filter((u) => u.hero).sort((a, b) => b.level - a.level || a.name.localeCompare(b.name));
+    const gone = fallen.filter((u) => u.owner === seat);
     const skills = /** @type {[import('../core/rules.js').Skill, string][]} */ (Object.entries(SKILL_SHORT));
     const lv = (/** @type {number} */ n) => `Lv${String(n).padStart(3)}`;
-    heroesList.replaceChildren(...heroes.map((u) => {
+    /** @param {typeof heroes[number] & { died?: number, how?: string }} u */
+    const row = (u) => {
       const name = document.createElement('span');
       name.textContent = u.name;
       const years = document.createElement('span');
-      years.className = 'hero';
-      years.textContent = `${minutesOld(u)}m`;
+      years.className = u.died === undefined ? 'hero' : 'fallen';
+      years.textContent = `${minutesOld(u, u.died)}m`;
       const stats = document.createElement('span');
       stats.className = 'stats';
       stats.append(`${lv(u.level)} · `, years);
       const where = document.createElement('span');
       where.className = 'where';
-      where.textContent = whereIs(u, null);
+      where.textContent = u.died === undefined ? whereIs(u, null) : u.how === 'hunger' ? 'died of hunger' : 'died in combat';
       const levels = document.createElement('span');
       levels.className = 'skills';
       levels.append(...skills.map(([skill, short]) => {
@@ -588,16 +606,19 @@ export async function startGame(net, me) {
       }));
       const li = document.createElement('li');
       li.dataset.unit = u.id;
+      if (u.died !== undefined) li.className = 'fallen';
       li.append(name, stats, where, levels);
       return li;
-    }));
+    };
+    heroesList.replaceChildren(...heroes.map(row));
     if (!heroes.length) {
       const none = document.createElement('li');
       none.className = 'none';
-      none.textContent = 'None yet: about one unit in ten is born a hero.';
+      none.textContent = gone.length ? 'None alive.' : 'None yet: about one unit in ten is born a hero.';
       heroesList.append(none);
     }
-    heroesCount.textContent = `${heroes.length} of your ${units.length} units`;
+    heroesList.append(...gone.map(row));
+    heroesCount.textContent = `${heroes.length} of your ${units.length} units${gone.length ? ` · ${gone.length} fallen` : ''}`;
     heroesDialog.showModal();
     heroesList.scrollTop = 0;
   }
@@ -744,7 +765,8 @@ export async function startGame(net, me) {
     // Enter confirms, as does the letter that opened it; Enter on a button
     // still presses that button, and Escape cancels.
     crewDialog.onkeydown = (e) => {
-      if (e.repeat || e.ctrlKey || e.metaKey || e.altKey) return;
+      // Closed, it keeps the focus until the next frame: the key is the page's then.
+      if (!crewDialog.open || e.repeat || e.ctrlKey || e.metaKey || e.altKey) return;
       const confirms = e.key === 'Enter' ? !(e.target instanceof HTMLButtonElement) : e.key.toLowerCase() === key.toLowerCase();
       if (!confirms) return;
       e.preventDefault();
@@ -1098,10 +1120,11 @@ export async function startGame(net, me) {
 
   // The heroes list: H, as well as Enter or Escape, closes it again.
   /** @type {HTMLElement} */ (document.getElementById('heroes-hint')).textContent = `Yours alive now, highest level first, with each skill's level: ${
-    Object.entries(SKILL_SHORT).map(([skill, short]) => `${short} ${SKILLS[/** @type {import('../core/rules.js').Skill} */ (skill)].toLowerCase()}`).join(', ')}.`;
+    Object.entries(SKILL_SHORT).map(([skill, short]) => `${short} ${SKILLS[/** @type {import('../core/rules.js').Skill} */ (skill)].toLowerCase()}`).join(', ')}. Below them, those that died while this page was open.`;
   heroesButton.addEventListener('click', showHeroes);
   heroesDialog.addEventListener('keydown', (e) => {
-    if (e.key.toLowerCase() !== 'h' || e.repeat || e.ctrlKey || e.metaKey || e.altKey) return;
+    // Closed, it keeps the focus until the next frame: the key is the page's then.
+    if (!heroesDialog.open || e.key.toLowerCase() !== 'h' || e.repeat || e.ctrlKey || e.metaKey || e.altKey) return;
     e.preventDefault();
     heroesDialog.close();
   });
@@ -1214,6 +1237,7 @@ export async function startGame(net, me) {
       get minimap() { return minimap; },
       get facingLeft() { return [...renderer.facingLeft]; },
       get draws() { return draws; },
+      get fallen() { return fallen; },
       effects,
       tokens,
       sounds,

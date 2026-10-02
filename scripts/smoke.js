@@ -287,6 +287,12 @@ const inGame = (page) => page.waitForFunction(() => /** @type {any} */ (window).
  */
 async function logIn(page, name, { touch = false } = {}) {
   await page.waitForSelector('#login:not([hidden])');
+  // The banners above and below the form load, by relative addresses (so
+  // under a subfolder too).
+  await page.waitForFunction(() => {
+    const banners = /** @type {HTMLImageElement[]} */ ([...document.querySelectorAll('#login .banner')]);
+    return banners.length === 2 && banners.every((b) => b.complete && b.naturalWidth === 1040);
+  });
   const question = await page.waitForFunction(() => {
     const m = /What is (\d+) \+ (\d+)\?/.exec(document.getElementById('login-question')?.textContent ?? '');
     return m && Number(m[1]) + Number(m[2]);
@@ -394,6 +400,7 @@ async function threeBrowsers(browser, url, { full, label }) {
   await a.goto(url);
   await a.waitForSelector('#login:not([hidden])');
   await a.waitForFunction(() => /What is/.test(document.getElementById('login-question')?.textContent ?? ''));
+  await a.waitForFunction(() => [...document.querySelectorAll('#login .banner')].every((b) => /** @type {HTMLImageElement} */ (b).complete));
   if (full) await a.screenshot({ path: join(OUT, 'login.png') });
   await a.fill('#login-name', 'Ann \u{1F642}');
   await a.fill('#login-answer', '1');
@@ -703,7 +710,7 @@ async function threeBrowsers(browser, url, { full, label }) {
   const opened = await a.evaluate(() => /** @type {any} */ (window).__vigame.view.tick);
   await a.keyboard.press('h');
   await a.waitForSelector('#heroes[open]');
-  const listed = await a.$$eval('#heroes-list li:not(.none)', (els) => els.map((e) => ({
+  const listed = await a.$$eval('#heroes-list li:not(.none):not(.fallen)', (els) => els.map((e) => ({
     id: /** @type {HTMLElement} */ (e).dataset.unit,
     level: Number(/^Lv *(\d+) · \d+m$/.exec(e.querySelector('.stats')?.textContent ?? '')?.[1]),
     skills: e.querySelector('.skills')?.textContent ?? '',
@@ -726,8 +733,38 @@ async function threeBrowsers(browser, url, { full, label }) {
   const skillLine = new RegExp(`^${['Att', 'Mel', 'Bld', 'Frm', 'Brd', 'Run'].map((s) => `${s} Lv[ \\d]{2}\\d`).join('')}$`);
   for (const { skills } of listed) assert.match(skills, skillLine);
   await a.screenshot({ path: join(OUT, 'heroes.png') });
+  // A hero the page saw die goes below the living, as last seen: how long
+  // it lived in silver, and how it died where it would be. (One is made up
+  // here, from one of her units: nobody dies this early in the game.)
+  await a.evaluate(() => {
+    const v = /** @type {any} */ (window).__vigame;
+    const u = Object.values(v.view.units).find((x) => x.owner === 0);
+    v.fallen.push({ ...u, id: 'gone', name: 'Fulk Gage', hero: true, born: 0, died: 6000, how: 'combat' });
+  });
+  // H shuts the list, and H at once opens it again. Shut, the list keeps
+  // the focus until the next frame, and must leave the key to the page:
+  // both keys go in one task here, so no frame comes between.
+  assert.ok(await a.evaluate(() => {
+    const list = /** @type {HTMLDialogElement} */ (document.getElementById('heroes'));
+    const h = () => document.activeElement?.dispatchEvent(new KeyboardEvent('keydown', { key: 'h', bubbles: true, cancelable: true }));
+    h();
+    const shut = !list.open;
+    h();
+    return shut && list.open;
+  }), 'H shuts the heroes list, and H right away opens it again');
+  await a.waitForSelector('#heroes[open]');
+  assert.deepEqual(await a.$eval('#heroes-list li:last-child', (li) => ({
+    fallen: li.classList.contains('fallen'),
+    name: li.firstElementChild?.textContent,
+    age: li.querySelector('.stats .fallen')?.textContent,
+    silver: getComputedStyle(/** @type {Element} */ (li.querySelector('.stats .fallen'))).color,
+    where: li.querySelector('.where')?.textContent,
+  })), { fallen: true, name: 'Fulk Gage', age: '10m', silver: 'rgb(201, 209, 217)', where: 'died in combat' });
+  assert.match(await text(a, '#heroes-count'), / · 1 fallen$/);
+  await a.screenshot({ path: join(OUT, 'heroes-fallen.png') });
   await a.keyboard.press('h');
   await a.waitForSelector('#heroes', { state: 'hidden', timeout: 3000 });
+  await a.evaluate(() => /** @type {any} */ (window).__vigame.fallen.pop());
   await a.keyboard.press('Escape');
 
   // Bēla forms a band next to her castle (who goes is chosen as it forms),
