@@ -70,7 +70,7 @@ button[aria-pressed="true"] { background: rgba(255, 216, 77, 0.18); border-color
   border-radius: 10px;
 }
 .card.wide { width: min(520px, 100%); }
-/* The login page: the banner above the form, as wide as the lobby's card. */
+/* The login page: a banner above the form and one below, as wide as the lobby's card. */
 #login { flex-direction: column; gap: 16px; }
 .banner {
   display: block; width: min(520px, 100%); height: auto;

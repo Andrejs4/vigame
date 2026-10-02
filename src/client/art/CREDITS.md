@@ -33,7 +33,8 @@ and share what they make of them under the same terms.
 | File | What it shows |
 | --- | --- |
 | `favicon.png` | the browser tab's icon (32 × 32): a band of heroes |
-| `banner.webp` | the login page's banner (1040 × 400): a crowd of townsfolk and soldiers at dusk |
+| `banner.webp` | the login page's banner above the form (1040 × 400): a crowd of townsfolk and soldiers at dusk |
+| `banner-lord.webp` | the login page's banner below the form (1040 × 400): the Dark Lord's castle, and ogres and ghouls on the march |
 
 Replacing one: keep the file name, a square `viewBox`, `width` and `height`
 attributes (Firefox draws an SVG on a canvas only with them), one colour
