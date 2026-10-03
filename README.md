@@ -343,7 +343,7 @@ have one, install it with `npx playwright install chromium`.
 | `src/client/minimap.js` | The minimap: a few pixels a cell, repainted at most twice a second and only when a pixel changes. |
 | `src/client/effects.js` | Hits, falls and deaths, worked out from each update and the one before, for the renderer to play. |
 | `src/client/sounds.js` | Sounds: which ones an update calls for, and a small synthesizer that plays them. |
-| `src/client/tokens.js`, `art/` | The pictures (SVG, credited in `art/CREDITS.md`) and the tokens made of them, painted once per colour and size; also the tab's icon, `favicon.png`, and the login page's banners, `banner.webp` and `banner-lord.webp`. |
+| `src/client/tokens.js`, `art/` | The pictures (SVG, credited in `art/CREDITS.md`) and the tokens made of them, painted once per colour and size; also the tab's icon, `favicon.png`, the login page's banners, `banner.webp` and `banner-lord.webp`; and the heroes' portraits, two 8 × 8 sheets of 32 × 32 faces (`portraits-men.png`, `portraits-women.png`, not yet shown in the game). |
 | `server/app.js` | The game server: Colyseus, the HTTP API, the page's files, the monitor. |
 | `server/room.js` | `GameRoom`, one per game: runs the core's clock, logs and applies commands, snapshots. |
 | `server/schema.js` | The room state Colyseus syncs: a generic mirror of the core's view. |
@@ -562,8 +562,9 @@ Pictures (`src/client/art/`, listed in its `CREDITS.md`): the icons from
 and the login page's banners were generated with Perplexity, whose terms
 allow them for personal, non-commercial use only: they are not covered by
 Vigame's licences, and anyone reusing Vigame commercially should leave them
-out or replace them. Pictures drawn for Vigame by its author, Andrejs
-Petrovs, would be under
+out or replace them. Pictures made for Vigame by its author, Andrejs
+Petrovs, such as the heroes' portraits (generated with Stable Diffusion on
+his own machine), are under
 [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/). The page
 names them in the lobby's **About**, with the fonts (IBM Plex, SIL Open Font
 License), which the browser loads from Google Fonts.

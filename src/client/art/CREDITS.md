@@ -42,9 +42,24 @@ non-commercial use only. So they are not covered by Vigame's licences: they
 are here for this non-commercial game alone, and anyone reusing Vigame,
 above all for anything commercial, should leave them out or replace them.
 
-## Pictures drawn by hand
+## The author's own pictures
 
-Pictures drawn for Vigame by its author would be under the
+Pictures made for Vigame by its author, Andrejs Petrovs (Andrejs4 on
+GitHub), drawn by hand or generated with Stable Diffusion run on his own
+machine, are under the
 [Creative Commons Attribution-ShareAlike 4.0](https://creativecommons.org/licenses/by-sa/4.0/)
 licence (CC BY-SA 4.0): anyone may use and change them, crediting the author,
-and share what they make of them under the same terms. None yet.
+and share what they make of them under the same terms.
+
+| File | What it shows |
+| --- | --- |
+| `portraits-men.png` | 64 portraits of men, 32 × 32 each, in an 8 × 8 sheet |
+| `portraits-women.png` | 64 portraits of women, 32 × 32 each, in an 8 × 8 sheet |
+| `portraits.hex` | the portraits' 14 colours, one a line: faces added later use these to match |
+
+The portraits were generated with Stable Diffusion (1.5 and SDXL base, whose
+licences allow using their images), then framed around each face, put on one
+grey background, shrunk to 32 × 32 and given one shared palette with the
+`web-pixel-images` skill from
+[Andrejs4/my-claude-skills](https://github.com/Andrejs4/my-claude-skills).
+The full-size originals are not in this repository.

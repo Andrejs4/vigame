@@ -88,9 +88,12 @@ persistence.
   a file carries no colours, scripts or links of its own. The tab's icon
   (`art/favicon.png`) and the login page's banners (`art/banner.webp`,
   `art/banner-lord.webp`) were generated with Perplexity, for
-  non-commercial use only, outside Vigame's licences; pictures drawn for
-  Vigame by its author would be CC BY-SA 4.0. Each has its line in
-  `art/CREDITS.md` too. The code is GPL-2.0-or-later.
+  non-commercial use only, outside Vigame's licences. The heroes'
+  portraits (`art/portraits-men.png`, `art/portraits-women.png`: 8 × 8
+  sheets of 32 × 32 faces, colours in `art/portraits.hex`) are the
+  author's own, CC BY-SA 4.0. Each file has its line in `art/CREDITS.md`
+  too. Raw source art stays out of git (`art-src/` is ignored). The code is
+  GPL-2.0-or-later.
 - Views switch with a page load: `?game=<id>` is a game, anything else the
   lobby, and the login page comes first while the browser isn't signed in.
 
