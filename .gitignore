@@ -147,3 +147,7 @@ smoke-output/
 
 # Game server database (npm start)
 data/
+
+# Raw source art (full-size originals, with their prompts in the metadata):
+# kept on your own machine; only the small processed images are committed.
+art-src/
