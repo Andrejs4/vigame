@@ -109,9 +109,10 @@ Run `npm start` and open http://127.0.0.1:2567.
   (390 at first, then 1.032 times as much each), so for the same work it
   stands about three times as high, 58 when an ordinary unit is 20, and
   reaches 100 about when an ordinary one would be 34. The crew chooser
-  shows a hero's age in gold. Select your castle and press **Heroes…**
+  shows a hero's face and its age in gold (the rest have a silhouette).
+  Select your castle and press **Heroes…**
   (in Crew's place, as the castle has no crew) for yours alive now, highest
-  level first, each with a portrait (a silhouette for now), where it is and
+  level first, each with its face, where it is and
   every skill's level, as "Att Lv 15"
   (ranged attack; then close combat, building, farming, breeding and
   running), each level padded to line up ("Lv  8", "Lv100"). Below them
@@ -330,7 +331,7 @@ have one, install it with `npx playwright install chromium`.
 | `src/core/hex.js` | Pointy-top axial hex math: neighbours, distance, lines, pixel conversion, board shapes. |
 | `src/core/board.js` | Seeded terrain, with what each terrain allows, and the castle and lair sites; same seed and player count, same map everywhere. |
 | `src/core/rules.js` | The numbers: tick rate, sides and modes, skills and experience, food and hunger, fighting, raiders, the Dark Lord's horde, building types. |
-| `src/core/names.js` | Medieval names for units. |
+| `src/core/names.js` | Medieval names for units, and which face goes with a name (`portraitOf`). |
 | `src/core/game.js` | The game core: the state as plain JSON, `applyCommand`, `advance` (one tick), `occupancy`, `checkState`, `publicView`. Deterministic. |
 | `src/core/player.js` | Player-name rules, checked on the page and on the server. |
 | `src/client/` | The page, served as it is. |
@@ -344,7 +345,7 @@ have one, install it with `npx playwright install chromium`.
 | `src/client/minimap.js` | The minimap: a few pixels a cell, repainted at most twice a second and only when a pixel changes. |
 | `src/client/effects.js` | Hits, falls and deaths, worked out from each update and the one before, for the renderer to play. |
 | `src/client/sounds.js` | Sounds: which ones an update calls for, and a small synthesizer that plays them. |
-| `src/client/tokens.js`, `art/` | The pictures (SVG, credited in `art/CREDITS.md`) and the tokens made of them, painted once per colour and size; also the tab's icon, `favicon.png`, the login page's banners, `banner.webp` and `banner-lord.webp`; and the heroes' portraits, two 8 × 8 sheets of 32 × 32 faces (`portraits-men.png`, `portraits-women.png`, not yet shown in the game). |
+| `src/client/tokens.js`, `art/` | The pictures (SVG, credited in `art/CREDITS.md`) and the tokens made of them, painted once per colour and size; also the tab's icon, `favicon.png`, the login page's banners, `banner.webp` and `banner-lord.webp`; and the heroes' portraits, two 8 × 8 sheets of 32 × 32 faces (`portraits-men.png`, `portraits-women.png`), with `portrait.svg`, the silhouette of a unit that isn't a hero. |
 | `server/app.js` | The game server: Colyseus, the HTTP API, the page's files, the monitor. |
 | `server/room.js` | `GameRoom`, one per game: runs the core's clock, logs and applies commands, snapshots. |
 | `server/schema.js` | The room state Colyseus syncs: a generic mirror of the core's view. |

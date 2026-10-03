@@ -639,6 +639,22 @@ async function threeBrowsers(browser, url, { full, label }) {
   await a.waitForSelector('#crew[open]');
   // Each unit shows its age; a mouse drag down the list ticks each row it crosses.
   assert.match(await a.locator('#crew-list .stats').first().textContent() ?? '', /· \d+m$/);
+  // Each has a portrait beside its two lines, no taller than they are: a
+  // hero's face, and a silhouette for the rest.
+  const crewFaces = await a.$$eval('#crew-list label', (els) => els.map((label) => {
+    const box = (/** @type {string} */ s) => /** @type {Element} */ (label.querySelector(s)).getBoundingClientRect();
+    const u = /** @type {any} */ (window).__vigame.view.units[/** @type {HTMLInputElement} */ (label.querySelector('input')).value];
+    return {
+      face: box('.portrait').height,
+      text: box('.where').bottom - box('.name').top,
+      hero: u ? Boolean(u.hero) : null,
+      cut: /** @type {Element} */ (label.querySelector('.portrait')).classList.contains('face'),
+    };
+  }));
+  for (const { face, text, hero, cut } of crewFaces) {
+    assert.ok(face > 0 && face <= text, `a portrait ${face}px tall beside ${text}px of text`);
+    if (hero !== null) assert.equal(cut, hero, 'a face for a hero, a silhouette for the rest');
+  }
   assert.equal(await text(a, '#crew-count'), '1 of 8');
   const ids = await a.$$eval('#crew-list input:not(:checked)', (els) => els.slice(0, 3).map((e) => /** @type {HTMLInputElement} */ (e).value));
   const rowOf = (/** @type {string} */ id) => a.locator(`#crew-list input[value="${id}"]`).locator('xpath=..').boundingBox();
@@ -729,18 +745,38 @@ async function threeBrowsers(browser, url, { full, label }) {
   assert.ok(earlier.every((id) => heroIds.includes(id)), `every hero of hers listed: ${earlier} in ${heroIds}`);
   if (!heroIds.length) assert.equal(await a.locator('#heroes-list .none').count(), 1, 'none yet, it says');
   assert.deepEqual(listed.map((h) => h.level), listed.map((h) => h.level).sort((x, y) => y - x), 'highest level first');
-  // Each hero has a portrait (a silhouette for now) beside its three lines,
-  // which doesn't make the row any taller: it is no taller than the lines,
-  // and leaves them their width, so the skills still fit on one.
+  // Each hero has its face beside its three lines, which doesn't make the
+  // row any taller: it is no taller than the lines, and leaves them their
+  // width, so the skills still fit on one.
   const heroRows = await a.$$eval('#heroes-list li:not(.none)', (els) => els.map((li) => {
     const box = (/** @type {string} */ s) => /** @type {Element} */ (li.querySelector(s)).getBoundingClientRect();
     const tops = [...li.querySelectorAll('.skills span')].map((s) => s.getBoundingClientRect().top);
-    return { face: box('.portrait').height, text: box('.skills').bottom - box('.name').top, skillLines: new Set(tops).size };
+    return {
+      face: box('.portrait').height,
+      text: box('.skills').bottom - box('.name').top,
+      skillLines: new Set(tops).size,
+      cut: /** @type {Element} */ (li.querySelector('.portrait')).classList.contains('face'),
+    };
   }));
-  for (const { face, text, skillLines } of heroRows) {
+  for (const { face, text, skillLines, cut } of heroRows) {
     assert.ok(face > 0 && face <= text, `a portrait ${face}px tall beside ${text}px of text`);
     assert.equal(skillLines, 1, 'the skills fit on one line');
+    assert.ok(cut, "a hero's portrait is a face");
   }
+  // Both sheets of faces load, from the addresses the page's style gives them.
+  assert.deepEqual(await a.evaluate(() => Promise.all(['men', 'women'].map((sheet) => {
+    const span = document.createElement('span');
+    span.className = `portrait face ${sheet}`;
+    document.body.append(span);
+    const url = /url\("?(.*?)"?\)/.exec(getComputedStyle(span).backgroundImage)?.[1] ?? '';
+    span.remove();
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => resolve(img.naturalWidth);
+      img.onerror = () => resolve(0);
+      img.src = url;
+    });
+  }))), [256, 256], 'both sheets of faces load');
   // Each level takes three places, "Lv  8" to "Lv100", so the skills line up.
   const skillLine = new RegExp(`^${['Att', 'Mel', 'Bld', 'Frm', 'Brd', 'Run'].map((s) => `${s} Lv[ \\d]{2}\\d`).join('')}$`);
   for (const { skills } of listed) assert.match(skills, skillLine);

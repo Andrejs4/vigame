@@ -91,7 +91,9 @@ persistence.
   non-commercial use only, outside Vigame's licences. The heroes'
   portraits (`art/portraits-men.png`, `art/portraits-women.png`: 8 × 8
   sheets of 32 × 32 faces, colours in `art/portraits.hex`) are the
-  author's own, CC BY-SA 4.0. Each file has its line in `art/CREDITS.md`
+  author's own, CC BY-SA 4.0. A hero's face comes from its name
+  (`portraitOf` in names.js): a new first name for a woman goes in its
+  `WOMEN` list too, or she gets a man's face. Each file has its line in `art/CREDITS.md`
   too. Raw source art stays out of git (`art-src/` is ignored). The code is
   GPL-2.0-or-later.
 - Views switch with a page load: `?game=<id>` is a game, anything else the
