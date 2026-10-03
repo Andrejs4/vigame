@@ -10,6 +10,10 @@
   --ink-dim: #93a191;
   --amber: #ffd84d;
   --silver: #c9d1d9;
+  /* The portraits' background, and a darker grey of theirs for the
+     silhouette that stands in for a face (art/portraits.hex). */
+  --portrait-bg: #6f6e6e;
+  --portrait-ink: #524b49;
   --sans: "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   --mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
 }
@@ -228,8 +232,8 @@ dl { margin: 0; }
 #crew h2, #heroes h2, #scores h2, #rename h2 { margin: 0; font-size: 15px; font-weight: 600; }
 #crew .hint, #heroes .hint, #scores .hint, #rename .hint { margin: 0; color: var(--ink-dim); font-size: 13px; }
 
-/* The heroes list is wider, for a line of every skill's level. */
-#heroes { width: min(520px, calc(100vw - 32px)); }
+/* The heroes list is wider, for a portrait and a line of every skill's level. */
+#heroes { width: min(580px, calc(100vw - 32px)); }
 
 /* Renaming the game: a line to type in, and why it won't do. */
 #rename { width: min(360px, calc(100vw - 32px)); }
@@ -272,7 +276,7 @@ button.inline:hover:not(:disabled) { background: none; color: var(--amber); }
   border-top: 1px solid var(--panel-edge);
 }
 .crew-list label {
-  display: grid; grid-template-columns: auto 1fr auto; column-gap: 10px; align-items: center;
+  display: grid; grid-template-columns: auto auto 1fr auto; column-gap: 10px; align-items: center;
   padding: 6px 4px;
   border-bottom: 1px solid var(--panel-edge);
   cursor: pointer;
@@ -280,16 +284,37 @@ button.inline:hover:not(:disabled) { background: none; color: var(--amber); }
 .crew-list input { width: 16px; height: 16px; margin: 0; accent-color: var(--amber); }
 .crew-list label { user-select: none; } /* a mouse drags across rows to tick them */
 .crew-list .stats, .crew-list .where { font: 12px var(--mono); color: var(--ink-dim); }
-.crew-list .where { grid-column: 2 / 4; }
+.crew-list .where { grid-column: 3 / 5; }
 .crew-list .stats .hero { color: var(--amber); font-weight: 600; }
 .crew-list label:has(input:disabled) { opacity: 0.5; cursor: not-allowed; }
 /* The heroes list: the crew chooser's rows, to read rather than tick, with every skill. */
 .heroes-list li {
-  display: grid; grid-template-columns: 1fr auto; column-gap: 10px; align-items: center;
+  display: grid; grid-template-columns: auto 1fr auto; column-gap: 10px; align-items: center;
   padding: 6px 4px;
   border-bottom: 1px solid var(--panel-edge);
 }
-.heroes-list .where, .heroes-list .skills { grid-column: 1 / -1; }
+.heroes-list .where, .heroes-list .skills { grid-column: 2 / -1; }
+/* A unit's portrait beside its lines, no taller than they are: a hero's
+   face, one of a sheet's 8 × 8, or else a silhouette, the SVG used as a
+   mask and coloured here, on the faces' grey. */
+.portrait {
+  display: block; align-self: center;
+  width: 48px; height: 48px; border-radius: 6px; overflow: hidden;
+  background: var(--portrait-bg);
+}
+.portrait:not(.face)::before {
+  content: ""; display: block; width: 100%; height: 100%;
+  background: var(--portrait-ink);
+  -webkit-mask: url(art/portrait.svg) center bottom / 88% 88% no-repeat;
+  mask: url(art/portrait.svg) center bottom / 88% 88% no-repeat;
+}
+.portrait.face { background-size: 800% 800%; background-repeat: no-repeat; image-rendering: pixelated; }
+.portrait.men { background-image: url(art/portraits-men.png); }
+.portrait.women { background-image: url(art/portraits-women.png); }
+/* In the crew chooser, after the tick, the faces' own size beside two lines. */
+.crew-list label .portrait { grid-column: 2; grid-row: 1 / span 2; width: 32px; height: 32px; border-radius: 4px; }
+.heroes-list .portrait { grid-row: 1 / span 3; }
+.heroes-list .fallen .portrait { filter: grayscale(1); }
 .heroes-list .skills { display: flex; flex-wrap: wrap; column-gap: 12px; font: 12px var(--mono); color: var(--ink-dim); }
 /* Levels are padded with spaces to line up, which the page must keep. */
 .heroes-list .stats { white-space: pre; }

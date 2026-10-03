@@ -11,6 +11,7 @@ import {
   raiseWork, seatsOf, sharesStock, shortOf, sideOf, upgradeCost,
 } from '../core/game.js';
 import { GAME_NAME_MAX, cleanGameName } from '../core/player.js';
+import { PORTRAIT_SIDE, portraitOf } from '../core/names.js';
 import { BUILDING_TYPES, POINTS, SKILL_SHORT, SKILLS, TICKS_PER_SECOND, UNIT_LIMIT } from '../core/rules.js';
 import { getJson, serverBase } from './api.js';
 import { Camera } from './camera.js';
@@ -558,6 +559,25 @@ export async function startGame(net, me) {
   }
 
   /**
+   * A unit's portrait, for a list: a hero's face, cut from its sheet by the
+   * hero's name, or for the rest a silhouette.
+   * @param {{ name: string, hero?: true }} u
+   */
+  function portrait(u) {
+    const span = document.createElement('span');
+    span.className = 'portrait';
+    span.setAttribute('aria-hidden', 'true');
+    const face = u.hero ? portraitOf(u.name) : null;
+    if (face) {
+      // The sheet is PORTRAIT_SIDE faces a side, so a face's place on it in percent.
+      const at = (/** @type {number} */ n) => `${(n * 100) / (PORTRAIT_SIDE - 1)}%`;
+      span.classList.add('face', face.sheet);
+      span.style.backgroundPosition = `${at(face.face % PORTRAIT_SIDE)} ${at(Math.floor(face.face / PORTRAIT_SIDE))}`;
+    }
+    return span;
+  }
+
+  /**
    * A unit's age, in whole minutes of the game's time: now, or when it died.
    * @param {{ born?: number }} u
    * @param {number} [until] The tick it died.
@@ -586,6 +606,7 @@ export async function startGame(net, me) {
     /** @param {typeof heroes[number] & { died?: number, how?: string }} u */
     const row = (u) => {
       const name = document.createElement('span');
+      name.className = 'name';
       name.textContent = u.name;
       const years = document.createElement('span');
       years.className = u.died === undefined ? 'hero' : 'fallen';
@@ -607,7 +628,7 @@ export async function startGame(net, me) {
       const li = document.createElement('li');
       li.dataset.unit = u.id;
       if (u.died !== undefined) li.className = 'fallen';
-      li.append(name, stats, where, levels);
+      li.append(portrait(u), name, stats, where, levels);
       return li;
     };
     heroesList.replaceChildren(...heroes.map(row));
@@ -668,6 +689,7 @@ export async function startGame(net, me) {
       box.value = u.id;
       box.checked = chosen.has(u.id);
       const name = document.createElement('span');
+      name.className = 'name';
       name.textContent = u.name;
       const stats = document.createElement('span');
       stats.className = 'stats';
@@ -683,7 +705,7 @@ export async function startGame(net, me) {
       where.className = 'where';
       where.textContent = extra ? `${whereIs(u, target)} · ${SKILLS[extra]} ${u.skills[extra]}` : whereIs(u, target);
       const label = document.createElement('label');
-      label.append(box, name, stats, where);
+      label.append(box, portrait(u), name, stats, where);
       const li = document.createElement('li');
       li.append(label);
       rows.set(u.id, li);

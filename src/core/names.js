@@ -33,6 +33,44 @@ export function unitName(roll) {
 }
 
 /**
+ * The first names whose faces are on the women's sheet of portraits; the
+ * rest are on the men's (Jocelyn was a man's name then).
+ */
+const WOMEN = [
+  'Adela', 'Agnes', 'Aldith', 'Amice', 'Aveline', 'Beatrice', 'Cecily', 'Clarice',
+  'Edith', 'Elspeth', 'Emma', 'Gisela', 'Hawise', 'Helewise', 'Idonea', 'Isolde',
+  'Joan', 'Mabel', 'Matilda', 'Maud', 'Petronilla', 'Rohese', 'Rowena', 'Sibyl',
+  'Tiphaine',
+];
+
+/** Each sheet's first names, in FIRST's order. */
+const SHEET_NAMES = {
+  men: FIRST.filter((name) => !WOMEN.includes(name)),
+  women: FIRST.filter((name) => WOMEN.includes(name)),
+};
+
+/** A sheet of portraits is this many faces a side: 8 × 8, 64 a sheet. */
+export const PORTRAIT_SIDE = 8;
+
+/**
+ * A name's portrait: the sheet, men's or women's by the first name, and the
+ * face's number on it, from 0 at the top left, row by row. The surname picks
+ * the row and the first name the column, so a name always has the same face
+ * and every face on a sheet is someone's. Null for a name unitName can't
+ * make.
+ * @param {string} name
+ * @returns {{ sheet: 'men' | 'women', face: number } | null}
+ */
+export function portraitOf(name) {
+  const [first, last, ...more] = name.split(' ');
+  const sheet = WOMEN.includes(first) ? 'women' : 'men';
+  const column = SHEET_NAMES[sheet].indexOf(first);
+  const row = LAST.indexOf(last);
+  if (more.length || column < 0 || row < 0) return null;
+  return { sheet, face: (row % PORTRAIT_SIDE) * PORTRAIT_SIDE + (column % PORTRAIT_SIDE) };
+}
+
+/**
  * The names a new game may start with, to set its mood; its players may
  * rename it. Each is a valid game name (cleanGameName in player.js).
  */
