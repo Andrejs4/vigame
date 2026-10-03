@@ -111,7 +111,8 @@ Run `npm start` and open http://127.0.0.1:2567.
   reaches 100 about when an ordinary one would be 34. The crew chooser
   shows a hero's age in gold. Select your castle and press **Heroes…**
   (in Crew's place, as the castle has no crew) for yours alive now, highest
-  level first, with where each is and every skill's level, as "Att Lv 15"
+  level first, each with a portrait (a silhouette for now), where it is and
+  every skill's level, as "Att Lv 15"
   (ranged attack; then close combat, building, farming, breeding and
   running), each level padded to line up ("Lv  8", "Lv100"). Below them
   come those that died while the page was open, in the order they died, as

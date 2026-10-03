@@ -56,6 +56,7 @@ and share what they make of them under the same terms.
 | `portraits-men.png` | 64 portraits of men, 32 × 32 each, in an 8 × 8 sheet |
 | `portraits-women.png` | 64 portraits of women, 32 × 32 each, in an 8 × 8 sheet |
 | `portraits.hex` | the portraits' 14 colours, one a line: faces added later use these to match |
+| `portrait.svg` | a head-and-shoulders silhouette, the Heroes list's placeholder portrait (one colour, made for Vigame) |
 
 The portraits were generated with Stable Diffusion (1.5 and SDXL base, whose
 licences allow using their images), then framed around each face, put on one

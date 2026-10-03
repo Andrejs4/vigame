@@ -729,6 +729,18 @@ async function threeBrowsers(browser, url, { full, label }) {
   assert.ok(earlier.every((id) => heroIds.includes(id)), `every hero of hers listed: ${earlier} in ${heroIds}`);
   if (!heroIds.length) assert.equal(await a.locator('#heroes-list .none').count(), 1, 'none yet, it says');
   assert.deepEqual(listed.map((h) => h.level), listed.map((h) => h.level).sort((x, y) => y - x), 'highest level first');
+  // Each hero has a portrait (a silhouette for now) beside its three lines,
+  // which doesn't make the row any taller: it is no taller than the lines,
+  // and leaves them their width, so the skills still fit on one.
+  const heroRows = await a.$$eval('#heroes-list li:not(.none)', (els) => els.map((li) => {
+    const box = (/** @type {string} */ s) => /** @type {Element} */ (li.querySelector(s)).getBoundingClientRect();
+    const tops = [...li.querySelectorAll('.skills span')].map((s) => s.getBoundingClientRect().top);
+    return { face: box('.portrait').height, text: box('.skills').bottom - box('.name').top, skillLines: new Set(tops).size };
+  }));
+  for (const { face, text, skillLines } of heroRows) {
+    assert.ok(face > 0 && face <= text, `a portrait ${face}px tall beside ${text}px of text`);
+    assert.equal(skillLines, 1, 'the skills fit on one line');
+  }
   // Each level takes three places, "Lv  8" to "Lv100", so the skills line up.
   const skillLine = new RegExp(`^${['Att', 'Mel', 'Bld', 'Frm', 'Brd', 'Run'].map((s) => `${s} Lv[ \\d]{2}\\d`).join('')}$`);
   for (const { skills } of listed) assert.match(skills, skillLine);
@@ -755,7 +767,7 @@ async function threeBrowsers(browser, url, { full, label }) {
   await a.waitForSelector('#heroes[open]');
   assert.deepEqual(await a.$eval('#heroes-list li:last-child', (li) => ({
     fallen: li.classList.contains('fallen'),
-    name: li.firstElementChild?.textContent,
+    name: li.querySelector('.name')?.textContent,
     age: li.querySelector('.stats .fallen')?.textContent,
     silver: getComputedStyle(/** @type {Element} */ (li.querySelector('.stats .fallen'))).color,
     where: li.querySelector('.where')?.textContent,

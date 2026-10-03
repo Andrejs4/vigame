@@ -586,6 +586,7 @@ export async function startGame(net, me) {
     /** @param {typeof heroes[number] & { died?: number, how?: string }} u */
     const row = (u) => {
       const name = document.createElement('span');
+      name.className = 'name';
       name.textContent = u.name;
       const years = document.createElement('span');
       years.className = u.died === undefined ? 'hero' : 'fallen';
@@ -604,10 +605,14 @@ export async function startGame(net, me) {
         level.title = SKILLS[skill];
         return level;
       }));
+      // A face to come: for now the same silhouette for every hero.
+      const face = document.createElement('span');
+      face.className = 'portrait';
+      face.setAttribute('aria-hidden', 'true');
       const li = document.createElement('li');
       li.dataset.unit = u.id;
       if (u.died !== undefined) li.className = 'fallen';
-      li.append(name, stats, where, levels);
+      li.append(face, name, stats, where, levels);
       return li;
     };
     heroesList.replaceChildren(...heroes.map(row));
