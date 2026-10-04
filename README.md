@@ -257,8 +257,12 @@ Run `npm start` and open http://127.0.0.1:2567.
   wagon down (another player, the Dark Lord, raiders) gets half its price in
   dark metal, 7 for 15. An upgrade armours a wagon: each of three adds 500
   hit points to its 300 (800, 1300, 1800), but no room.
-- **Bands** are groups of up to 30 units that move like wagons, for free.
-  Placing one asks who goes. A band holds no cell, so it passes anything of
+- **Bands** are groups of up to 80 units (more than a tower at its last
+  grade holds) that move like wagons, for free. Placing one asks who goes,
+  with the best fighters at home ticked, up to 30. A band is drawn over
+  whatever it passes, yours over another side's; a click on the cell picks
+  your band, and another side's band can't be selected, only aimed at with
+  Attack. A band holds no cell, so it passes anything of
   yours and blocks nothing; it has no hit points and gives no cover, and it
   breaks up as soon as it has nobody (its last unit left or died). It goes
   at the pace of its slowest walker.

@@ -276,6 +276,9 @@ export const REPAIR_WORK = 500;
  * @property {number} [hpPerGrade] Hit points each grade after the first adds.
  *   At none left, the building collapses at once, and whoever was inside is
  *   left standing on its cell. A band has none: it protects nobody.
+ * @property {number} [ticked] For a new one, the most its crew chooser ticks
+ *   (the best at home, up to half of them), if fewer than its room: a band
+ *   holds more than a tower at its last grade, but sets out with fewer.
  * @property {boolean} [band] A band: a group of units, free, that moves like
  *   a wagon but holds no cell, so it blocks nothing, and breaks up once it
  *   has nobody.
@@ -374,7 +377,7 @@ export const BUILDING_TYPES = {
     skill: 'melee', speed: 4 * TICKS_PER_SECOND, attack: { damage: 50, skill: 35, reach: 1 }, loot: 6, hunts: true, scales: true,
   },
   band: {
-    name: 'Band', size: 1, capacity: 30, grades: 1, hp: 0, build: true, cost: 0,
+    name: 'Band', size: 1, capacity: 80, ticked: 30, grades: 1, hp: 0, build: true, cost: 0,
     skill: 'ranged', extra: 'melee', speed: WALK_TICKS, band: true,
   },
 };

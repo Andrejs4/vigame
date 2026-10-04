@@ -17,7 +17,7 @@ import { getJson, serverBase } from './api.js';
 import { Camera } from './camera.js';
 import { Effects, fallenHeroes, fallenHeroesNote } from './effects.js';
 import { Minimap } from './minimap.js';
-import { BoardRenderer, COUNT_ZOOM } from './render.js';
+import { BoardRenderer, COUNT_ZOOM, pickAt } from './render.js';
 import { Sounds, soundsFor } from './sounds.js';
 import { Tokens } from './tokens.js';
 
@@ -685,7 +685,7 @@ export async function startGame(net, me) {
   function chooseCrew({ title, hint, action, kind, limit, target, key, site }) {
     const seat = net.seat();
     if (!view || seat === null) return Promise.resolve(null);
-    const { skill, extra } = BUILDING_TYPES[kind];
+    const { skill, extra, ticked = limit } = BUILDING_TYPES[kind];
     const home = castleOf(view, seat)?.id;
     const units = Object.values(view.units).filter((u) => u.owner === seat);
     /** @param {typeof units[number]} a @param {typeof units[number]} b */
@@ -693,7 +693,7 @@ export async function startGame(net, me) {
     const atHome = units.filter((u) => u.in === home);
     const chosen = new Set(target
       ? crewOf(view, target)
-      : atHome.sort(better).slice(0, Math.min(limit, Math.floor(atHome.length / 2))).map((u) => u.id));
+      : atHome.sort(better).slice(0, Math.min(limit, ticked, Math.floor(atHome.length / 2))).map((u) => u.id));
     const rank = (/** @type {typeof units[number]} */ u) => (chosen.has(u.id) ? 0 : u.in === home ? 1 : 2);
     units.sort((a, b) => rank(a) - rank(b) || better(a, b));
 
@@ -892,7 +892,8 @@ export async function startGame(net, me) {
         const chosen = await chooseCrew({
           title: `New ${type.name.toLowerCase()}`,
           hint: type.band
-            ? `Choose who goes, up to ${type.capacity}. The best fighters at home are ticked, up to half of those at home.`
+            ? `Choose who goes, up to ${type.capacity}. The best fighters at home are ticked, up to ${type.ticked ?? type.capacity} `
+              + 'and up to half of those at home.'
             : `Choose its crew, up to ${type.capacity}: they build it once they get there, then work it. `
               + 'The best at home for the work are ticked, up to half of those at home.',
           action: 'Build',
@@ -911,17 +912,14 @@ export async function startGame(net, me) {
       return;
     }
 
-    // Bands hold no cell, so they are found by where they stand.
-    const here = occ.buildingAt.get(key(at.q, at.r))
-      ?? Object.values(view.buildings).find((b) => BUILDING_TYPES[b.type].band && b.q === at.q && b.r === at.r)?.id
-      ?? null;
+    // Bands are on top, your own first; another side's is only for aiming at.
+    const here = pickAt(view.buildings, occ.buildingAt, at, net.seat(), aiming !== null);
     if (aiming) {
-      // After Attack: an enemy building becomes the target; anywhere else clears it.
+      // After Attack: an enemy band or building becomes the target; anywhere else clears it.
       const from = aiming;
       aiming = null;
-      const enemy = here !== null && !isMine(here);
-      if (canCommand() && (enemy || view.buildings[from]?.target)) {
-        await give({ type: 'target', building: from, target: enemy ? here : '' }, 'attack that');
+      if (canCommand() && (here || view.buildings[from]?.target)) {
+        await give({ type: 'target', building: from, target: here ?? '' }, 'attack that');
       }
       updateHud();
       return;
@@ -1250,7 +1248,7 @@ export async function startGame(net, me) {
     if (!needsDraw && !animating && !animated && !playing && !played) return;
     needsDraw = false;
     draws += 1;
-    renderer.draw({ camera, view, clock: net.clock(), selected, highlights, hover, peers, effects, now: time });
+    renderer.draw({ camera, view, clock: net.clock(), selected, seat: net.seat(), highlights, hover, peers, effects, now: time });
     minimap.frameView(camera, viewW, viewH);
   }
 

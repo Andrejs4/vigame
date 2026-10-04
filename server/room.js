@@ -26,7 +26,7 @@ import { ErrorCode, Room, ServerError, logger } from '@colyseus/core';
 
 import { BOARD_OPTIONS, createBoard, tileAt } from '../src/core/board.js';
 import { advance, applyCommand, checkState, newGame, publicView } from '../src/core/game.js';
-import { DEFAULT_MODE, MODES, TICKS_PER_SECOND } from '../src/core/rules.js';
+import { BUILDING_TYPES, DEFAULT_MODE, MODES, TICKS_PER_SECOND } from '../src/core/rules.js';
 import { GameState, ViewerState, syncGame, syncSeats } from './schema.js';
 
 /** What a player token must look like: long, random, URL-safe. */
@@ -116,8 +116,12 @@ function fields(message) {
     : {};
 }
 
-/** The longest list a command may carry, such as a crew's unit ids. */
-const LIST_MAX = 64;
+/**
+ * The longest list a command may carry: a crew's unit ids, so as many as any
+ * building holds at its last grade (a band's 80).
+ */
+const LIST_MAX = Math.max(...Object.values(BUILDING_TYPES)
+  .map(({ capacity, perGrade = capacity, grades }) => capacity + perGrade * (grades - 1)));
 
 /**
  * A command as it will be logged, or null. The room doesn't know what
