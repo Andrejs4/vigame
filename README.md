@@ -152,7 +152,9 @@ Run `npm start` and open http://127.0.0.1:2567.
   60 (a tower), dark metal from 30 (a wagon's upgrade), and food when the
   store, with what the castle and farms give before the meal, won't give
   every unit a full one.
-- **Build**: pick **Tower** (60 stone), **Pit**, **Farm** (30 stone),
+- **Build**: pick **Tower** (60 stone), **Pit** (no stone, but 1% more
+  hunger, so pits can't be put down by the dozen for nothing; free once
+  hunger is 100%), **Farm** (30 stone),
   **Band** or **Wagon** (15 dark metal), then a highlighted cell: open,
   buildable ground within three cells of one of your standing buildings (a
   wagon: of your castle). Scrub can be crossed but not built on; water is

@@ -1101,9 +1101,10 @@ export async function startGame(net, me) {
   });
 
   for (const button of buildButtons) {
-    const { name, cost, metal } = BUILDING_TYPES[button.dataset.kind ?? ''];
-    keyLabel(button, cost ? `${name} · ${cost}` : metal ? `${name} · ${metal}◆` : name);
-    button.title = `${name} (${name[0]}): ${cost ? `${cost} stone` : metal ? `${metal} dark metal, near your castle` : 'free'}`;
+    const { name, cost, metal, hunger } = BUILDING_TYPES[button.dataset.kind ?? ''];
+    keyLabel(button, cost ? `${name} · ${cost}` : metal ? `${name} · ${metal}◆` : hunger ? `${name} · ${hunger}%` : name);
+    button.title = `${name} (${name[0]}): ${cost ? `${cost} stone` : metal ? `${metal} dark metal, near your castle`
+      : hunger ? `${hunger}% more hunger (free once it is 100%)` : 'free'}`;
     button.addEventListener('click', () => {
       const kind = button.dataset.kind ?? null;
       // Short of its price, say so now, not after a cell and a crew are chosen.
