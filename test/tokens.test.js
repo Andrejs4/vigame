@@ -13,11 +13,14 @@ test('every building type, and a unit, has a picture', () => {
 
 test('the pictures are small, plain, one-colour SVGs, and credited', () => {
   const credits = readFileSync(new URL('CREDITS.md', ART), 'utf8');
-  for (const name of PICTURES) {
+  // The tokens' pictures, and the page's own: the stock's, the buttons', the silhouette.
+  const svgs = readdirSync(ART).filter((file) => file.endsWith('.svg')).map((file) => file.slice(0, -4));
+  for (const name of PICTURES) assert.ok(svgs.includes(name), `no ${name}.svg`);
+  for (const name of svgs) {
     const svg = readFileSync(new URL(`${name}.svg`, ART), 'utf8');
     assert.ok(svg.length < 8000, `${name}.svg is ${svg.length} bytes`);
-    // Firefox draws an SVG on a canvas only with its size given.
-    assert.match(svg, /^<svg xmlns="http:\/\/www\.w3\.org\/2000\/svg" viewBox="0 0 512 512" width="512" height="512">/);
+    // Square, and (as Firefox draws an SVG on a canvas only with its size given) sized.
+    assert.match(svg, /^<svg xmlns="http:\/\/www\.w3\.org\/2000\/svg" viewBox="0 0 (\d+) \1" width="\1" height="\1">/, `${name}.svg`);
     // Nothing but paths: no scripts, styles, links or colours of its own.
     const tags = svg.match(/<\/?[a-z]+/g) ?? [];
     assert.deepEqual([...new Set(tags)].sort(), ['</svg', '<path', '<svg'], `${name}.svg has more than paths`);

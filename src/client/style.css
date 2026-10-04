@@ -161,6 +161,7 @@ button[aria-pressed="true"] { background: rgba(255, 216, 77, 0.18); border-color
 
 #status { top: 14px; left: 14px; min-width: 216px; }
 #controls { top: 14px; right: 14px; display: flex; flex-direction: column; gap: 6px; }
+#tactics { bottom: 14px; left: 14px; width: 340px; display: flex; flex-direction: column; gap: 10px; }
 #minimap { bottom: 14px; right: 14px; padding: 6px; }
 
 /* The minimap: the canvas holds a few pixels a cell, scaled up unsmoothed. */
@@ -191,16 +192,80 @@ dl { margin: 0; }
 .row { display: flex; justify-content: space-between; gap: 18px; }
 .row dt { color: var(--ink-dim); margin: 0; }
 .row dd { margin: 0; font-family: var(--mono); font-size: 12px; font-variant-numeric: tabular-nums; }
-/* What the side has to spend, on a band of its own. */
-.row.stock {
-  margin: 0 -6px; padding: 1px 6px;
-  background: rgba(255, 216, 77, 0.09);
-  border-radius: 5px 5px 0 0;
+
+/* What the side has to spend: a big figure each, after its picture, and
+   what it is under it. Amber while the side goes hungry. */
+.stocks { display: flex; gap: 14px; }
+.stock { flex: 1 1 auto; min-width: 0; color: var(--ink); }
+.stock .figure { white-space: nowrap; font: 500 22px/1.2 var(--mono); font-variant-numeric: tabular-nums; }
+.stock .figure::before {
+  content: ""; display: inline-block; width: 20px; height: 20px;
+  margin-right: 6px; vertical-align: -3px;
+  background: var(--ink-dim);
+  -webkit-mask: var(--icon) center / contain no-repeat;
+  mask: var(--icon) center / contain no-repeat;
 }
-.row.stock + .row.stock { border-radius: 0 0 5px 5px; }
-.row.stock dt { color: var(--ink); }
+.stock.stone { --icon: url(art/stone.svg); }
+.stock.metal { --icon: url(art/metal.svg); }
+.stock.food { --icon: url(art/food.svg); }
+.stock .of { font-size: 12px; font-weight: 400; color: var(--ink-dim); }
+.stock .label { font-size: 11px; color: var(--ink-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.stock.hungry, .stock.hungry .of, .stock.hungry .label { color: var(--amber); }
 /* A figure worth a look: stone or dark metal enough to spend, food short of the next meal. */
-.row .marked { font-weight: 600; }
+.stock .marked { font-weight: 700; }
+
+/* What is selected: its type's picture, as on its token, on the portraits'
+   grey in its side's colour; beside it a line for what it is, one for its
+   units and work, and one for its HP. */
+.selected {
+  display: flex; align-items: center; gap: 10px;
+  padding-top: 10px; border-top: 1px solid var(--panel-edge);
+}
+.selected .picture {
+  flex: none; width: 48px; height: 48px; border-radius: 7px;
+  background: var(--portrait-bg); border: 2px solid var(--panel-edge);
+}
+.selected .picture::before {
+  content: ""; display: block; width: 100%; height: 100%;
+  background: #f6f2e8;
+  -webkit-mask: var(--icon) center / 74% no-repeat;
+  mask: var(--icon) center / 74% no-repeat;
+}
+/* Nothing selected: an empty frame. */
+.selected .picture:not([data-picture]), .selected .picture[data-picture=""] { border-style: dashed; opacity: 0.5; }
+.selected .picture:not([data-picture])::before, .selected .picture[data-picture=""]::before { content: none; }
+#selection { min-width: 0; font: 12px/1.45 var(--mono); color: var(--ink); }
+#selection .name { font: 600 14px/1.35 var(--sans); }
+#selection-hp { color: var(--ink-dim); }
+
+/* Each control's picture before its label: a one-colour SVG as a mask, in
+   the label's colour (zooming has its signs). */
+#controls :is(button, .button):not(#zoom-in, #zoom-out)::before {
+  content: ""; display: inline-block; width: 16px; height: 16px;
+  /* The negative margins keep the line, and so the button, as tall as before. */
+  margin: -4px 8px -4px 0; vertical-align: -3px;
+  background: currentColor;
+  -webkit-mask: var(--icon) center / contain no-repeat;
+  mask: var(--icon) center / contain no-repeat;
+}
+#build-tower { --icon: url(art/tower.svg); }
+#build-wagon { --icon: url(art/wagon.svg); }
+#build-pit { --icon: url(art/pit.svg); }
+#build-farm { --icon: url(art/farm.svg); }
+#build-band { --icon: url(art/band.svg); }
+#upgrade { --icon: url(art/upgrade.svg); }
+#crew-button { --icon: url(art/crew.svg); }
+#heroes-button { --icon: url(art/heroes.svg); }
+#return-button { --icon: url(art/return.svg); }
+#abort-button { --icon: url(art/abort.svg); }
+#attack-button { --icon: url(art/attack.svg); }
+#recenter { --icon: url(art/recenter.svg); }
+#mute-button { --icon: url(art/sound.svg); }
+#mute-button[aria-pressed="true"] { --icon: url(art/muted.svg); }
+#toggle-coords { --icon: url(art/coords.svg); }
+#seat-button { --icon: url(art/seat.svg); }
+#scores-button { --icon: url(art/scores.svg); }
+#to-lobby { --icon: url(art/lobby.svg); }
 
 .group-label {
   font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase;
@@ -209,7 +274,8 @@ dl { margin: 0; }
 
 .zoom-row { display: flex; gap: 6px; }
 .zoom-row button { flex: 1; text-align: center; font-size: 15px; padding: 5px 0; }
-.zoom-row #mute-button { flex: 1.6; font-size: 13px; }
+.zoom-row #mute-button { flex: 1.6; font-size: 13px; white-space: nowrap; }
+#controls .zoom-row #mute-button::before { margin-right: 5px; }
 
 .notice {
   margin: 8px 0 0; padding-top: 7px; max-width: 240px;
@@ -334,11 +400,23 @@ button.inline:hover:not(:disabled) { background: none; color: var(--amber); }
     bottom: calc(10px + env(safe-area-inset-bottom, 0px));
     flex-direction: row; flex-wrap: wrap; justify-content: center; gap: 8px;
   }
-  #controls button, #controls .button { flex: 1; text-align: center; padding: 12px 6px; }
+  #controls button, #controls .button { flex: 1; text-align: center; padding: 8px 6px; }
+  /* The picture above the label, so the label keeps the button's width. */
+  #controls :is(button, .button):not(#zoom-in, #zoom-out)::before { display: block; width: 18px; height: 18px; margin: 0 auto 3px; }
   #controls .group-label, #toggle-coords, #recenter { display: none; }
+  /* The stock and selection across the screen just above the controls, the minimap above them. */
+  #tactics {
+    left: 10px; right: 10px; width: auto; gap: 8px;
+    bottom: calc(var(--controls-height, 180px) + 20px + env(safe-area-inset-bottom, 0px));
+  }
+  .stocks { gap: 10px; }
+  .stock .figure { font-size: 18px; }
+  .stock .figure::before { width: 17px; height: 17px; margin-right: 4px; }
+  .selected { padding-top: 8px; }
+  .selected .picture { width: 42px; height: 42px; }
   #minimap {
     right: 10px; padding: 4px;
-    bottom: calc(var(--controls-height, 180px) + 20px + env(safe-area-inset-bottom, 0px));
+    bottom: calc(var(--controls-height, 180px) + var(--tactics-height, 120px) + 30px + env(safe-area-inset-bottom, 0px));
   }
   #minimap-canvas { width: 130px; }
   .zoom-row { flex: 1; }

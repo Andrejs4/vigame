@@ -104,8 +104,12 @@ export async function startGame(net, me) {
     metal: document.getElementById('metal'),
     food: document.getElementById('food'),
     foodCount: document.getElementById('food-count'),
-    foodRest: document.getElementById('food-rest'),
-    selection: document.getElementById('selection'),
+    foodStore: document.getElementById('food-store'),
+    hunger: document.getElementById('hunger'),
+    selectionName: document.getElementById('selection-name'),
+    selectionWork: document.getElementById('selection-work'),
+    selectionHp: document.getElementById('selection-hp'),
+    selectionPicture: document.getElementById('selection-picture'),
     tile: document.getElementById('tile'),
     players: document.getElementById('players'),
     observers: document.getElementById('observers'),
@@ -197,6 +201,9 @@ export async function startGame(net, me) {
   /** The building whose target is being chosen, after pressing Attack. */
   /** @type {string | null} */
   let aiming = null;
+  /** The game as the open crew chooser found it: its rows and orders are of then. */
+  /** @type {import('./net.js').GameView | null} */
+  let crewView = null;
   /** The building the open crew chooser is for (null for a new one). */
   /** @type {string | null} */
   let crewTarget = null;
@@ -443,25 +450,35 @@ export async function startGame(net, me) {
       hud.metal.textContent = stock ? String(stock.metal) : '—';
       hud.metal.classList.toggle('marked', (stock?.metal ?? 0) >= PLENTY.metal);
     }
-    if (hud.food && hud.foodCount && hud.foodRest) {
+    if (hud.food && hud.foodCount && hud.foodStore && hud.hunger) {
       const second = Math.floor((view?.tick ?? 0) / TICKS_PER_SECOND);
       if (view && stock && seat !== null && (second !== meal.second || seat !== meal.seat)) {
         meal = { second, seat, short: !fullMeal(view, seat) };
       }
       hud.foodCount.textContent = stock ? String(stock.food) : '—';
       hud.foodCount.classList.toggle('marked', Boolean(stock) && meal.seat === seat && meal.short);
-      hud.foodRest.textContent = stock && view && seat !== null ? ` / ${foodStore(view, seat)} · hunger ${stock.hunger}%` : '';
-      hud.food.style.color = stock?.hunger ? 'var(--amber)' : '';
+      hud.foodStore.textContent = stock && view && seat !== null ? ` / ${foodStore(view, seat)}` : '';
+      hud.hunger.textContent = stock ? ` · hunger ${stock.hunger}%` : '';
+      hud.food.classList.toggle('hungry', Boolean(stock?.hunger));
     }
-    if (hud.selection) {
+    if (hud.selectionName && hud.selectionWork && hud.selectionHp && hud.selectionPicture) {
       const b = selected ? view?.buildings[selected] : null;
-      if (b) {
-        hud.selection.textContent = describe(b);
-        hud.selection.style.color = view ? sideOf(view, b.owner).accent : '';
-      } else {
-        hud.selection.textContent = 'none';
-        hud.selection.style.color = '';
+      const lines = b ? describe(b) : { name: 'Nothing selected', work: '', hp: '' };
+      const accent = b && view ? sideOf(view, b.owner).accent : '';
+      hud.selectionName.textContent = lines.name;
+      hud.selectionName.style.color = b ? accent : 'var(--ink-dim)';
+      hud.selectionWork.textContent = lines.work;
+      hud.selectionWork.hidden = !lines.work;
+      hud.selectionHp.textContent = lines.hp;
+      hud.selectionHp.hidden = !lines.hp;
+      // Its type's picture, the one on its token, on grey with its side's colour around.
+      const picture = b ? b.type : '';
+      if (hud.selectionPicture.dataset.picture !== picture) {
+        hud.selectionPicture.dataset.picture = picture;
+        if (picture) hud.selectionPicture.style.setProperty('--icon', `url(art/${picture}.svg)`);
+        else hud.selectionPicture.style.removeProperty('--icon');
       }
+      hud.selectionPicture.style.borderColor = accent;
     }
     if (hud.tile) {
       const t = hover ? tileAt(board, hover.q, hover.r) : null;
@@ -511,12 +528,16 @@ export async function startGame(net, me) {
   }
 
   /**
-   * A building, as the HUD describes it: its units, and how its work is going.
+   * A building, as the HUD describes it, a line each: what it is, its units
+   * and how its work is going, and its hit points (an empty line is left out).
    * @param {Building} b
+   * @returns {{ name: string, work: string, hp: string }}
    */
   function describe(b) {
     const type = BUILDING_TYPES[b.type];
-    const parts = [type.grades > 1 ? `${type.name} (grade ${b.grade})` : type.name];
+    const name = type.grades > 1 ? `${type.name} (grade ${b.grade})` : type.name;
+    /** @type {string[]} */
+    const parts = [];
     const done = percent(b.work ?? 0, type.work ?? 1);
     if (b.type === 'castle') {
       parts.push(`${occ?.inside.get(b.id)?.length ?? 0}/${capacityOf(b)} at home`, `next unit ${done}`);
@@ -537,10 +558,10 @@ export async function startGame(net, me) {
       }
       if (type.yields === 'food') parts.push(`next food ${done}`);
     }
-    if (b.hp !== undefined && view) parts.push(`HP ${b.hp}/${maxHp(view, b)}`);
     const target = b.target ? view?.buildings[b.target] : null;
     if (target) parts.push(`attacking the ${BUILDING_TYPES[target.type].name.toLowerCase()}`);
-    return parts.join(' · ');
+    const hp = b.hp !== undefined && view ? `HP ${b.hp}/${maxHp(view, b)}` : '';
+    return { name, work: parts.join(' · '), hp };
   }
 
   /**
@@ -797,12 +818,14 @@ export async function startGame(net, me) {
 
     crewDialog.returnValue = '';
     crewTarget = target;
+    crewView = view;
     crewDialog.showModal();
     // The first unit, not the first order button, so Enter sends the crew.
     crewParts.list.querySelector('input')?.focus({ preventScroll: true });
     return new Promise((resolve) => {
       crewDialog.addEventListener('close', () => {
         crewTarget = null;
+        crewView = null;
         resolve(crewDialog.returnValue === 'ok' ? units.filter((u) => chosen.has(u.id)).map((u) => u.id) : null);
       }, { once: true });
     });
@@ -1041,11 +1064,16 @@ export async function startGame(net, me) {
     });
   }
 
-  // On a phone the minimap sits just above the controls, whose height
-  // depends on how their buttons wrap.
-  new ResizeObserver(() => {
+  // On a phone the stock and selection sit just above the controls, and the
+  // minimap above them, so each needs the heights below it, which depend on
+  // how the buttons and lines wrap.
+  const tactics = /** @type {HTMLElement} */ (document.getElementById('tactics'));
+  const heights = new ResizeObserver(() => {
     stage.style.setProperty('--controls-height', `${controls.offsetHeight}px`);
-  }).observe(controls);
+    stage.style.setProperty('--tactics-height', `${tactics.offsetHeight}px`);
+  });
+  heights.observe(controls);
+  heights.observe(tactics);
 
   addEventListener('keydown', (e) => {
     // Escape in the crew chooser closes just the chooser.
@@ -1253,6 +1281,7 @@ export async function startGame(net, me) {
       get placing() { return placing; },
       get aiming() { return aiming; },
       get crewTarget() { return crewTarget; },
+      get crewView() { return crewView; },
       get scoresOpen() { return scoresDialog.open; },
       get highlights() { return [...highlights]; },
       get peers() { return peers; },

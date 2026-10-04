@@ -143,9 +143,12 @@ Run `npm start` and open http://127.0.0.1:2567.
   ground and four on scrub, less the better they run. Water is impassable.
   **Return** sends the whole crew home. A unit left with nowhere to go (its
   building collapsed, say) goes home by itself.
-- **Stone, dark metal and food** go straight into your side's stock (the
-  HUD shows them, and hunger next to food); nothing carries them. Each side
-  starts with 200 stone and no dark metal. The HUD shows stone in bold from
+- **Stone, dark metal and food** go straight into your side's stock;
+  nothing carries them. A panel of their own (bottom left; on a phone just
+  above the buttons) shows them in big figures, with hunger under food, and
+  below them what is selected: its picture, then a line for what it is, one
+  for its units and work, and one for its hit points. Each side
+  starts with 200 stone and no dark metal. It shows stone in bold from
   60 (a tower), dark metal from 30 (a wagon's upgrade), and food when the
   store, with what the castle and farms give before the meal, won't give
   every unit a full one.
@@ -345,7 +348,7 @@ have one, install it with `npx playwright install chromium`.
 | `src/client/minimap.js` | The minimap: a few pixels a cell, repainted at most twice a second and only when a pixel changes. |
 | `src/client/effects.js` | Hits, falls and deaths, worked out from each update and the one before, for the renderer to play. |
 | `src/client/sounds.js` | Sounds: which ones an update calls for, and a small synthesizer that plays them. |
-| `src/client/tokens.js`, `art/` | The pictures (SVG, credited in `art/CREDITS.md`) and the tokens made of them, painted once per colour and size; also the tab's icon, `favicon.png`, the login page's banners, `banner.webp` and `banner-lord.webp`; and the heroes' portraits, two 8 × 8 sheets of 32 × 32 faces (`portraits-men.png`, `portraits-women.png`), with `portrait.svg`, the silhouette of a unit that isn't a hero. |
+| `src/client/tokens.js`, `art/` | The pictures (SVG, credited in `art/CREDITS.md`) and the tokens made of them, painted once per colour and size; the stock's and the buttons' icons (SVG too, coloured by the page's style); also the tab's icon, `favicon.png`, the login page's banners, `banner.webp` and `banner-lord.webp`; and the heroes' portraits, two 8 × 8 sheets of 32 × 32 faces (`portraits-men.png`, `portraits-women.png`), with `portrait.svg`, the silhouette of a unit that isn't a hero. |
 | `server/app.js` | The game server: Colyseus, the HTTP API, the page's files, the monitor. |
 | `server/room.js` | `GameRoom`, one per game: runs the core's clock, logs and applies commands, snapshots. |
 | `server/schema.js` | The room state Colyseus syncs: a generic mirror of the core's view. |

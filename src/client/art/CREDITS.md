@@ -19,6 +19,26 @@ removed and the icon left unfilled, for the page to colour.
 | `ghoul.svg` | shambling-zombie | Delapouite |
 | `ogre.svg` | ogre | Delapouite |
 | `raider.svg` | bandit | Delapouite |
+| `stone.svg` | stone-pile | Delapouite |
+| `metal.svg` | metal-bar | Lorc |
+| `food.svg` | wheat | Lorc |
+| `upgrade.svg` | upgrade | Delapouite |
+| `crew.svg` | three-friends | Delapouite |
+| `heroes.svg` | laurels | Lorc |
+| `return.svg` | return-arrow | Lorc |
+| `abort.svg` | cross-mark | Lorc |
+| `attack.svg` | crossed-swords | Lorc |
+| `recenter.svg` | convergence-target | Delapouite |
+| `sound.svg` | speaker | Delapouite |
+| `muted.svg` | speaker-off | Delapouite |
+| `coords.svg` | compass | Lorc |
+| `seat.svg` | wooden-chair | Delapouite |
+| `scores.svg` | podium | Delapouite |
+| `lobby.svg` | exit-door | Delapouite |
+
+The first eleven are the board's tokens (a building type's picture also
+shows beside what is selected); the rest are the stock's and the control
+buttons'.
 
 Lorc: <http://lorcblog.blogspot.com>. Delapouite: <https://delapouite.com>.
 

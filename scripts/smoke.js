@@ -113,6 +113,13 @@ const waitMatch = (page, selector, pattern, timeout = 5000) => page.waitForFunct
   { timeout },
 );
 
+/** Wait for what is selected to read so: its lines, shown ones only, joined by " | ". */
+const waitSelection = (page, pattern, timeout = 5000) => page.waitForFunction(
+  (source) => new RegExp(source).test([...document.querySelectorAll('#selection > :not([hidden])')].map((e) => e.textContent).join(' | ')),
+  pattern.source,
+  { timeout },
+);
+
 /** The page's game: buildings as a list. */
 const buildings = (page) => page.evaluate(() => Object.values(/** @type {any} */ (window).__vigame.view?.buildings ?? {}));
 
@@ -577,17 +584,34 @@ async function threeBrowsers(browser, url, { full, label }) {
   // Once her tower stands, Ann looks at its crew and upgrades it; Bēla sees it.
   await a.keyboard.press('Escape');
   await selectBuilding(a, tower);
-  await waitMatch(a, '#selection', /^Tower \(grade 1\) · crew \d+\/\d+ · going up\s+\d+%/);
+  // What is selected shows its type's picture, and its lines: what it is,
+  // its crew and work, its HP.
+  await waitSelection(a, /^Tower \(grade 1\) \| crew \d+\/\d+ · going up\s+\d+%/);
+  assert.equal(await a.getAttribute('#selection-picture', 'data-picture'), 'tower');
   await a.waitForFunction((id) => /** @type {any} */ (window).__vigame.view.buildings[id].raised === undefined, tower.id, { timeout: 60000 });
   await crewWith(a, tower, 0);
-  await waitMatch(a, '#selection', /^Tower \(grade 1\) · crew \d+\/\d+ · HP/);
+  await waitSelection(a, /^Tower \(grade 1\) \| crew \d+\/\d+ \| HP \d+\/\d+$/);
+  // Each control on show (but the zoom's signs), each stock and what is
+  // selected have a picture, which loads from the address the page's style
+  // gives it (under a subfolder too).
+  const pictures = await a.$$eval('#controls :is(button, .button):not(#zoom-in, #zoom-out), .stock .figure, #selection-picture', (els) => els
+    .filter((el) => el.getClientRects().length > 0)
+    .map((el) => {
+      const before = getComputedStyle(el, '::before');
+      return { id: el.id || el.className, mask: before.getPropertyValue('mask-image') || before.getPropertyValue('-webkit-mask-image') };
+    }));
+  assert.ok(pictures.length >= 18, `only ${pictures.length} pictures`);
+  for (const { id, mask } of pictures) assert.match(mask, /^url\(".+\.svg"\)$/, `${id} has no picture`);
+  const loaded = await a.evaluate((urls) => Promise.all(urls.map((u) => fetch(u).then((r) => r.ok && /svg/.test(r.headers.get('content-type') ?? '')))),
+    pictures.map(({ mask }) => /** @type {string} */ (/^url\("(.+)"\)$/.exec(mask)?.[1])));
+  pictures.forEach(({ id }, i) => assert.ok(loaded[i], `${id}'s picture doesn't load`));
   // Each button with a key shows its letter in bold.
   assert.deepEqual(await a.$$eval('#controls button[aria-keyshortcuts]', (els) => els.map((el) => el.querySelector('b')?.textContent)),
     ['T', 'W', 'P', 'F', 'B', 'U', 'C', 'H', 'A']);
   // The upgrade is work for the crew too. U upgrades, as the button does.
   await a.keyboard.press('u');
-  await waitMatch(a, '#selection', /^Tower \(grade 1\) · crew \d+\/\d+ · upgrading\s+\d+%/);
-  await waitMatch(a, '#selection', /^Tower \(grade 2\)/, 60000);
+  await waitSelection(a, /^Tower \(grade 1\) \| crew \d+\/\d+ · upgrading\s+\d+%/);
+  await waitSelection(a, /^Tower \(grade 2\)/, 60000);
   await b.waitForFunction((id) => /** @type {any} */ (window).__vigame.view.buildings[id].grade === 2, tower.id);
 
   // Short of dark metal, W says so at once, before any cell or crew is chosen.
@@ -617,7 +641,7 @@ async function threeBrowsers(browser, url, { full, label }) {
   const pit = (await buildings(a)).find((x) => x.type === 'pit');
   await a.waitForFunction((id) => /** @type {any} */ (window).__vigame.view.buildings[id].work > 0, pit.id, { timeout: 30000 });
   await selectBuilding(a, pit);
-  await waitMatch(a, '#selection', /^Pit · crew \d+\/\d+ · depth 0\/\d+, \d+ stone · HP \d+\/\d+$/);
+  await waitSelection(a, /^Pit \| crew \d+\/\d+ · depth 0\/\d+, \d+ stone \| HP \d+\/\d+$/);
   // Stone from 60 and dark metal from 30 show in bold: enough to spend.
   for (const [id, from] of [['stone', 60], ['metal', 30]]) {
     const [shown, bold] = await a.$eval(`#${id}`, (el) => [Number(el.textContent), el.classList.contains('marked')]);
@@ -697,12 +721,15 @@ async function threeBrowsers(browser, url, { full, label }) {
   const levels = await a.$$eval('#crew-list .stats', (els) => els.map((e) => Number(/^Lv (\d+)/.exec(e.textContent ?? '')?.[1])));
   assert.deepEqual(levels, [...levels].sort((x, y) => y - x), 'highest level first');
   await a.click('#crew-sort [data-sort="near"]');
+  // Where each was as the list opened, which is what it orders by: those on
+  // the move have gone on since.
   const reach = await a.$$eval('#crew-list input', (els) => {
     const v = /** @type {any} */ (window).__vigame;
-    const site = v.view.buildings[v.crewTarget];
+    const then = v.crewView;
+    const site = then.buildings[v.crewTarget];
     return els.map((e) => {
-      const u = v.view.units[/** @type {HTMLInputElement} */ (e).value];
-      const at = (u.in && v.view.buildings[u.in]) || u;
+      const u = then.units[/** @type {HTMLInputElement} */ (e).value];
+      const at = (u.in && then.buildings[u.in]) || u;
       return (Math.abs(at.q - site.q) + Math.abs(at.r - site.r) + Math.abs(at.q + at.r - site.q - site.r)) / 2;
     });
   });
@@ -962,6 +989,7 @@ async function phone(browser, url) {
       innerWidth,
       innerHeight,
       status: box('status'),
+      tactics: box('tactics'),
       controls: box('controls'),
       minimap: box('minimap'),
     };
@@ -970,7 +998,9 @@ async function phone(browser, url) {
   assert.ok(layout.controls.bottom <= layout.innerHeight && layout.controls.left >= 0
     && layout.controls.right <= layout.innerWidth, 'controls are off-screen');
   assert.ok(layout.controls.top > layout.status.bottom, 'controls overlap the status panel');
-  assert.ok(layout.minimap.top > layout.status.bottom && layout.minimap.bottom < layout.controls.top
+  assert.ok(layout.tactics.top > layout.status.bottom && layout.tactics.bottom < layout.controls.top
+    && layout.tactics.left >= 0 && layout.tactics.right <= layout.innerWidth, 'the stock and selection overlap the panels or the screen edge');
+  assert.ok(layout.minimap.top > layout.status.bottom && layout.minimap.bottom < layout.tactics.top
     && layout.minimap.right <= layout.innerWidth, 'the minimap overlaps the panels or the screen edge');
 
   const castle = await castleOf(page, 0);
