@@ -10,6 +10,20 @@ mirrors, SQLite, logging commands and replaying them) are in
 docs/architecture.md. Read it before working on the core, networking or
 persistence.
 
+docs/notes.md has the background: how the author works, how the pictures
+were made (with the commands), tools that helped, and plans not yet built (a
+"Painted" graphics mode, less drawing during play). Read it before art or
+graphics work.
+
+## Working with the author
+
+- He plays the game and doesn't read the code. Report changes as a player
+  sees them, send the smoke check's screenshots (`smoke-output/`), and say
+  whether the deploy keeps saved games. He deploys with `git pull` and
+  `sudo deploy/install.sh` on his server.
+- Open a pull request only when he asks for one; he merges it himself.
+- His raw pictures never go to GitHub (`art-src/` is ignored).
+
 ## Commands
 
 - `npm test`: unit tests (node:test), including a real game server
@@ -21,7 +35,12 @@ persistence.
   server: login, lobby and games between three browsers, a subfolder proxy,
   and a phone. Run it before pushing UI, net or server changes. In Claude Code cloud sessions, Chromium is
   preinstalled and found through `PLAYWRIGHT_BROWSERS_PATH`; don't run
-  `playwright install` there.
+  `playwright install` there. About a minute and a half; it leaves
+  screenshots in `smoke-output/` (`failed-*.png` when a check fails).
+- A smoke check compares against what the page itself used, such as the game
+  as a dialog found it (`__vigame.crewView`), or goes unit by unit, skipping
+  any gone: never against a later view, as units move meanwhile. Two flaky
+  checks came from that.
 
 ## The game core (src/core/game.js, src/core/rules.js)
 
@@ -73,7 +92,9 @@ persistence.
 - The board redraws only when something changed or moves (`needsDraw`,
   `moving` in play.js), or while an effect plays (`effects.js`: hits,
   falls, deaths). Effects are short, so the page is still once they end;
-  keep new ones short, and don't add looping ones. The minimap is stricter: at most twice a second, only
+  keep new ones short, and don't add looping ones. Nothing moves while the
+  game is paused (`moving && net.running()`): a paused board once redrew
+  every frame, and the smoke check now counts its draws. The minimap is stricter: at most twice a second, only
   after a server update, and only if a pixel differs; its view frame is an
   element, so panning never repaints it. Keep it that way as it grows.
 - Sounds are synthesized (`sounds.js`, Web Audio): a sound is a few notes
@@ -96,6 +117,15 @@ persistence.
   `WOMEN` list too, or she gets a man's face. Each file has its line in `art/CREDITS.md`
   too. Raw source art stays out of git (`art-src/` is ignored). The code is
   GPL-2.0-or-later.
+- A dialog closed by a key keeps the focus until the next frame, so the
+  same key also reaches the window's shortcuts: those check
+  `e.defaultPrevented`, and each dialog's own key handler checks
+  `dialog.open` first. Otherwise a key that shuts a dialog reopens it.
+- The heroes list is also a `crew-list`, for its styles: a rule for the
+  crew chooser alone goes through `.crew-list label`.
+- The HUD's pictures are the art/ SVGs used as CSS masks: `--icon` set on
+  an element or its parent, the mask on a `::before`. A mask rule reaching
+  an element with no `--icon` paints a solid square.
 - Views switch with a page load: `?game=<id>` is a game, anything else the
   lobby, and the login page comes first while the browser isn't signed in.
 

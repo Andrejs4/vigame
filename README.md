@@ -365,6 +365,7 @@ have one, install it with `npx playwright install chromium`.
 | `scripts/smoke.js` | Playwright check of the page through the game server: three browsers, a subfolder proxy, a phone. |
 | `test/` | Unit tests, including whole games of random commands checked tick by tick. |
 | `docs/architecture.md` | How the pieces fit, and the decisions behind them. |
+| `docs/notes.md` | How it is made, how its pictures were made, tools that helped, and plans not yet built. |
 
 ### On a server
 
