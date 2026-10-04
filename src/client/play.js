@@ -17,7 +17,7 @@ import { getJson, serverBase } from './api.js';
 import { Camera } from './camera.js';
 import { Effects, fallenHeroes, fallenHeroesNote } from './effects.js';
 import { Minimap } from './minimap.js';
-import { BoardRenderer, COUNT_ZOOM } from './render.js';
+import { BoardRenderer, COUNT_ZOOM, pickAt } from './render.js';
 import { Sounds, soundsFor } from './sounds.js';
 import { Tokens } from './tokens.js';
 
@@ -104,8 +104,12 @@ export async function startGame(net, me) {
     metal: document.getElementById('metal'),
     food: document.getElementById('food'),
     foodCount: document.getElementById('food-count'),
-    foodRest: document.getElementById('food-rest'),
-    selection: document.getElementById('selection'),
+    foodStore: document.getElementById('food-store'),
+    hunger: document.getElementById('hunger'),
+    selectionName: document.getElementById('selection-name'),
+    selectionWork: document.getElementById('selection-work'),
+    selectionHp: document.getElementById('selection-hp'),
+    selectionPicture: document.getElementById('selection-picture'),
     tile: document.getElementById('tile'),
     players: document.getElementById('players'),
     observers: document.getElementById('observers'),
@@ -197,6 +201,9 @@ export async function startGame(net, me) {
   /** The building whose target is being chosen, after pressing Attack. */
   /** @type {string | null} */
   let aiming = null;
+  /** The game as the open crew chooser found it: its rows and orders are of then. */
+  /** @type {import('./net.js').GameView | null} */
+  let crewView = null;
   /** The building the open crew chooser is for (null for a new one). */
   /** @type {string | null} */
   let crewTarget = null;
@@ -443,25 +450,35 @@ export async function startGame(net, me) {
       hud.metal.textContent = stock ? String(stock.metal) : '—';
       hud.metal.classList.toggle('marked', (stock?.metal ?? 0) >= PLENTY.metal);
     }
-    if (hud.food && hud.foodCount && hud.foodRest) {
+    if (hud.food && hud.foodCount && hud.foodStore && hud.hunger) {
       const second = Math.floor((view?.tick ?? 0) / TICKS_PER_SECOND);
       if (view && stock && seat !== null && (second !== meal.second || seat !== meal.seat)) {
         meal = { second, seat, short: !fullMeal(view, seat) };
       }
       hud.foodCount.textContent = stock ? String(stock.food) : '—';
       hud.foodCount.classList.toggle('marked', Boolean(stock) && meal.seat === seat && meal.short);
-      hud.foodRest.textContent = stock && view && seat !== null ? ` / ${foodStore(view, seat)} · hunger ${stock.hunger}%` : '';
-      hud.food.style.color = stock?.hunger ? 'var(--amber)' : '';
+      hud.foodStore.textContent = stock && view && seat !== null ? ` / ${foodStore(view, seat)}` : '';
+      hud.hunger.textContent = stock ? ` · hunger ${stock.hunger}%` : '';
+      hud.food.classList.toggle('hungry', Boolean(stock?.hunger));
     }
-    if (hud.selection) {
+    if (hud.selectionName && hud.selectionWork && hud.selectionHp && hud.selectionPicture) {
       const b = selected ? view?.buildings[selected] : null;
-      if (b) {
-        hud.selection.textContent = describe(b);
-        hud.selection.style.color = view ? sideOf(view, b.owner).accent : '';
-      } else {
-        hud.selection.textContent = 'none';
-        hud.selection.style.color = '';
+      const lines = b ? describe(b) : { name: 'Nothing selected', work: '', hp: '' };
+      const accent = b && view ? sideOf(view, b.owner).accent : '';
+      hud.selectionName.textContent = lines.name;
+      hud.selectionName.style.color = b ? accent : 'var(--ink-dim)';
+      hud.selectionWork.textContent = lines.work;
+      hud.selectionWork.hidden = !lines.work;
+      hud.selectionHp.textContent = lines.hp;
+      hud.selectionHp.hidden = !lines.hp;
+      // Its type's picture, the one on its token, on grey with its side's colour around.
+      const picture = b ? b.type : '';
+      if (hud.selectionPicture.dataset.picture !== picture) {
+        hud.selectionPicture.dataset.picture = picture;
+        if (picture) hud.selectionPicture.style.setProperty('--icon', `url(art/${picture}.svg)`);
+        else hud.selectionPicture.style.removeProperty('--icon');
       }
+      hud.selectionPicture.style.borderColor = accent;
     }
     if (hud.tile) {
       const t = hover ? tileAt(board, hover.q, hover.r) : null;
@@ -511,12 +528,16 @@ export async function startGame(net, me) {
   }
 
   /**
-   * A building, as the HUD describes it: its units, and how its work is going.
+   * A building, as the HUD describes it, a line each: what it is, its units
+   * and how its work is going, and its hit points (an empty line is left out).
    * @param {Building} b
+   * @returns {{ name: string, work: string, hp: string }}
    */
   function describe(b) {
     const type = BUILDING_TYPES[b.type];
-    const parts = [type.grades > 1 ? `${type.name} (grade ${b.grade})` : type.name];
+    const name = type.grades > 1 ? `${type.name} (grade ${b.grade})` : type.name;
+    /** @type {string[]} */
+    const parts = [];
     const done = percent(b.work ?? 0, type.work ?? 1);
     if (b.type === 'castle') {
       parts.push(`${occ?.inside.get(b.id)?.length ?? 0}/${capacityOf(b)} at home`, `next unit ${done}`);
@@ -537,10 +558,10 @@ export async function startGame(net, me) {
       }
       if (type.yields === 'food') parts.push(`next food ${done}`);
     }
-    if (b.hp !== undefined && view) parts.push(`HP ${b.hp}/${maxHp(view, b)}`);
     const target = b.target ? view?.buildings[b.target] : null;
     if (target) parts.push(`attacking the ${BUILDING_TYPES[target.type].name.toLowerCase()}`);
-    return parts.join(' · ');
+    const hp = b.hp !== undefined && view ? `HP ${b.hp}/${maxHp(view, b)}` : '';
+    return { name, work: parts.join(' · '), hp };
   }
 
   /**
@@ -664,7 +685,7 @@ export async function startGame(net, me) {
   function chooseCrew({ title, hint, action, kind, limit, target, key, site }) {
     const seat = net.seat();
     if (!view || seat === null) return Promise.resolve(null);
-    const { skill, extra } = BUILDING_TYPES[kind];
+    const { skill, extra, ticked = limit } = BUILDING_TYPES[kind];
     const home = castleOf(view, seat)?.id;
     const units = Object.values(view.units).filter((u) => u.owner === seat);
     /** @param {typeof units[number]} a @param {typeof units[number]} b */
@@ -672,7 +693,7 @@ export async function startGame(net, me) {
     const atHome = units.filter((u) => u.in === home);
     const chosen = new Set(target
       ? crewOf(view, target)
-      : atHome.sort(better).slice(0, Math.min(limit, Math.floor(atHome.length / 2))).map((u) => u.id));
+      : atHome.sort(better).slice(0, Math.min(limit, ticked, Math.floor(atHome.length / 2))).map((u) => u.id));
     const rank = (/** @type {typeof units[number]} */ u) => (chosen.has(u.id) ? 0 : u.in === home ? 1 : 2);
     units.sort((a, b) => rank(a) - rank(b) || better(a, b));
 
@@ -797,12 +818,14 @@ export async function startGame(net, me) {
 
     crewDialog.returnValue = '';
     crewTarget = target;
+    crewView = view;
     crewDialog.showModal();
     // The first unit, not the first order button, so Enter sends the crew.
     crewParts.list.querySelector('input')?.focus({ preventScroll: true });
     return new Promise((resolve) => {
       crewDialog.addEventListener('close', () => {
         crewTarget = null;
+        crewView = null;
         resolve(crewDialog.returnValue === 'ok' ? units.filter((u) => chosen.has(u.id)).map((u) => u.id) : null);
       }, { once: true });
     });
@@ -869,7 +892,8 @@ export async function startGame(net, me) {
         const chosen = await chooseCrew({
           title: `New ${type.name.toLowerCase()}`,
           hint: type.band
-            ? `Choose who goes, up to ${type.capacity}. The best fighters at home are ticked, up to half of those at home.`
+            ? `Choose who goes, up to ${type.capacity}. The best fighters at home are ticked, up to ${type.ticked ?? type.capacity} `
+              + 'and up to half of those at home.'
             : `Choose its crew, up to ${type.capacity}: they build it once they get there, then work it. `
               + 'The best at home for the work are ticked, up to half of those at home.',
           action: 'Build',
@@ -888,17 +912,14 @@ export async function startGame(net, me) {
       return;
     }
 
-    // Bands hold no cell, so they are found by where they stand.
-    const here = occ.buildingAt.get(key(at.q, at.r))
-      ?? Object.values(view.buildings).find((b) => BUILDING_TYPES[b.type].band && b.q === at.q && b.r === at.r)?.id
-      ?? null;
+    // Bands are on top, your own first; another side's is only for aiming at.
+    const here = pickAt(view.buildings, occ.buildingAt, at, net.seat(), aiming !== null);
     if (aiming) {
-      // After Attack: an enemy building becomes the target; anywhere else clears it.
+      // After Attack: an enemy band or building becomes the target; anywhere else clears it.
       const from = aiming;
       aiming = null;
-      const enemy = here !== null && !isMine(here);
-      if (canCommand() && (enemy || view.buildings[from]?.target)) {
-        await give({ type: 'target', building: from, target: enemy ? here : '' }, 'attack that');
+      if (canCommand() && (here || view.buildings[from]?.target)) {
+        await give({ type: 'target', building: from, target: here ?? '' }, 'attack that');
       }
       updateHud();
       return;
@@ -1041,11 +1062,16 @@ export async function startGame(net, me) {
     });
   }
 
-  // On a phone the minimap sits just above the controls, whose height
-  // depends on how their buttons wrap.
-  new ResizeObserver(() => {
+  // On a phone the stock and selection sit just above the controls, and the
+  // minimap above them, so each needs the heights below it, which depend on
+  // how the buttons and lines wrap.
+  const tactics = /** @type {HTMLElement} */ (document.getElementById('tactics'));
+  const heights = new ResizeObserver(() => {
     stage.style.setProperty('--controls-height', `${controls.offsetHeight}px`);
-  }).observe(controls);
+    stage.style.setProperty('--tactics-height', `${tactics.offsetHeight}px`);
+  });
+  heights.observe(controls);
+  heights.observe(tactics);
 
   addEventListener('keydown', (e) => {
     // Escape in the crew chooser closes just the chooser.
@@ -1073,9 +1099,10 @@ export async function startGame(net, me) {
   });
 
   for (const button of buildButtons) {
-    const { name, cost, metal } = BUILDING_TYPES[button.dataset.kind ?? ''];
-    keyLabel(button, cost ? `${name} · ${cost}` : metal ? `${name} · ${metal}◆` : name);
-    button.title = `${name} (${name[0]}): ${cost ? `${cost} stone` : metal ? `${metal} dark metal, near your castle` : 'free'}`;
+    const { name, cost, metal, hunger } = BUILDING_TYPES[button.dataset.kind ?? ''];
+    keyLabel(button, cost ? `${name} · ${cost}` : metal ? `${name} · ${metal}◆` : hunger ? `${name} · ${hunger}%` : name);
+    button.title = `${name} (${name[0]}): ${cost ? `${cost} stone` : metal ? `${metal} dark metal, near your castle`
+      : hunger ? `${hunger}% more hunger (free once it is 100%)` : 'free'}`;
     button.addEventListener('click', () => {
       const kind = button.dataset.kind ?? null;
       // Short of its price, say so now, not after a cell and a crew are chosen.
@@ -1221,7 +1248,7 @@ export async function startGame(net, me) {
     if (!needsDraw && !animating && !animated && !playing && !played) return;
     needsDraw = false;
     draws += 1;
-    renderer.draw({ camera, view, clock: net.clock(), selected, highlights, hover, peers, effects, now: time });
+    renderer.draw({ camera, view, clock: net.clock(), selected, seat: net.seat(), highlights, hover, peers, effects, now: time });
     minimap.frameView(camera, viewW, viewH);
   }
 
@@ -1253,6 +1280,7 @@ export async function startGame(net, me) {
       get placing() { return placing; },
       get aiming() { return aiming; },
       get crewTarget() { return crewTarget; },
+      get crewView() { return crewView; },
       get scoresOpen() { return scoresDialog.open; },
       get highlights() { return [...highlights]; },
       get peers() { return peers; },

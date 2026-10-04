@@ -144,14 +144,36 @@
       <div class="row"><dt>You</dt><dd id="seat">&mdash;</dd></div>
       <div class="row"><dt>Players</dt><dd id="players" title="Seated players here, of the game's seats; it blinks while the game waits for the rest">&mdash;</dd></div>
       <div class="row"><dt>Units</dt><dd id="units">&mdash;</dd></div>
-      <div class="row stock"><dt id="stone-label">Stone</dt><dd id="stone" title="In bold from 60, enough for a tower">&mdash;</dd></div>
-      <div class="row stock"><dt id="metal-label">Dark metal</dt><dd id="metal" title="In bold from 30, enough for a wagon's upgrade">&mdash;</dd></div>
-      <div class="row"><dt id="food-label">Food</dt><dd id="food"><span id="food-count" title="In bold when the store, with what the castle and farms give by then, won't feed every unit a full next meal">&mdash;</span><span id="food-rest"></span></dd></div>
-      <div class="row"><dt>Selected</dt><dd id="selection">none</dd></div>
       <div class="row"><dt>Tile</dt><dd id="tile">&mdash;</dd></div>
       <div class="row"><dt>Observers</dt><dd id="observers">0</dd></div>
     </dl>
     <p class="notice" id="message" role="status" hidden></p>
+  </div>
+
+  <!-- What play turns on: what the side has to spend, in big figures, and what is selected. -->
+  <div class="hud" id="tactics">
+    <div class="stocks">
+      <div class="stock stone" title="In bold from 60, enough for a tower">
+        <div class="figure"><span id="stone">&mdash;</span></div>
+        <div class="label" id="stone-label">Stone</div>
+      </div>
+      <div class="stock metal" title="In bold from 30, enough for a wagon's upgrade">
+        <div class="figure"><span id="metal">&mdash;</span></div>
+        <div class="label" id="metal-label">Dark metal</div>
+      </div>
+      <div class="stock food" id="food">
+        <div class="figure"><span id="food-count" title="In bold when the store, with what the castle and farms give by then, won't feed every unit a full next meal">&mdash;</span><span class="of" id="food-store" title="The most the store holds"></span></div>
+        <div class="label"><span id="food-label">Food</span><span id="hunger"></span></div>
+      </div>
+    </div>
+    <div class="selected">
+      <span class="picture" id="selection-picture" aria-hidden="true"></span>
+      <div id="selection">
+        <div class="name" id="selection-name">Nothing selected</div>
+        <div id="selection-work" hidden></div>
+        <div id="selection-hp" hidden></div>
+      </div>
+    </div>
   </div>
 
   <div class="hud" id="controls">

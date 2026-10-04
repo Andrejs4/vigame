@@ -18,7 +18,7 @@ import { advance, castleOf, checkState, nearStanding, newGame, occupancy, public
 import { key } from '../src/core/hex.js';
 import { GAME_NAMES } from '../src/core/names.js';
 import { createServerNet } from '../src/client/net.js';
-import { TICKS_PER_SECOND } from '../src/core/rules.js';
+import { BUILDING_TYPES, TICKS_PER_SECOND } from '../src/core/rules.js';
 
 /** @type {Awaited<ReturnType<typeof startGameServer>>} */
 let server;
@@ -438,7 +438,10 @@ test('the server refuses commands from spectators, while paused, and that the ru
   assert.equal(await refusal(give(a, { type: 'build', kind: 'tower', q: { deep: 1 }, r: 0 })), 'not a command');
   assert.equal(await refusal(give(a, { type: 'upgrade', building: 'b'.repeat(100) })), 'not a command');
   assert.equal(await refusal(give(a, { type: 'crew', building: 'b1', units: [{ id: 'u3' }] })), 'not a command');
-  assert.equal(await refusal(give(a, { type: 'crew', building: 'b1', units: Array(65).fill('u3') })), 'not a command');
+  // A crew as long as a full band reaches the rules; one longer doesn't.
+  const band = BUILDING_TYPES.band.capacity;
+  assert.notEqual(await refusal(give(a, { type: 'crew', building: 'b1', units: Array(band).fill('u3') })), 'not a command');
+  assert.equal(await refusal(give(a, { type: 'crew', building: 'b1', units: Array(band + 1).fill('u3') })), 'not a command');
 
   assert.deepEqual(server.storage.listCommands(id), []);
   assert.equal(seen(a).buildings.b1.grade, 1);

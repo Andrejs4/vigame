@@ -143,13 +143,18 @@ Run `npm start` and open http://127.0.0.1:2567.
   ground and four on scrub, less the better they run. Water is impassable.
   **Return** sends the whole crew home. A unit left with nowhere to go (its
   building collapsed, say) goes home by itself.
-- **Stone, dark metal and food** go straight into your side's stock (the
-  HUD shows them, and hunger next to food); nothing carries them. Each side
-  starts with 200 stone and no dark metal. The HUD shows stone in bold from
+- **Stone, dark metal and food** go straight into your side's stock;
+  nothing carries them. A panel of their own (bottom left; on a phone just
+  above the buttons) shows them in big figures, with hunger under food, and
+  below them what is selected: its picture, then a line for what it is, one
+  for its units and work, and one for its hit points. Each side
+  starts with 200 stone and no dark metal. It shows stone in bold from
   60 (a tower), dark metal from 30 (a wagon's upgrade), and food when the
   store, with what the castle and farms give before the meal, won't give
   every unit a full one.
-- **Build**: pick **Tower** (60 stone), **Pit**, **Farm** (30 stone),
+- **Build**: pick **Tower** (60 stone), **Pit** (no stone, but 1% more
+  hunger, so pits can't be put down by the dozen for nothing; free once
+  hunger is 100%), **Farm** (30 stone),
   **Band** or **Wagon** (15 dark metal), then a highlighted cell: open,
   buildable ground within three cells of one of your standing buildings (a
   wagon: of your castle). Scrub can be crossed but not built on; water is
@@ -252,8 +257,12 @@ Run `npm start` and open http://127.0.0.1:2567.
   wagon down (another player, the Dark Lord, raiders) gets half its price in
   dark metal, 7 for 15. An upgrade armours a wagon: each of three adds 500
   hit points to its 300 (800, 1300, 1800), but no room.
-- **Bands** are groups of up to 30 units that move like wagons, for free.
-  Placing one asks who goes. A band holds no cell, so it passes anything of
+- **Bands** are groups of up to 80 units (more than a tower at its last
+  grade holds) that move like wagons, for free. Placing one asks who goes,
+  with the best fighters at home ticked, up to 30. A band is drawn over
+  whatever it passes, yours over another side's; a click on the cell picks
+  your band, and another side's band can't be selected, only aimed at with
+  Attack. A band holds no cell, so it passes anything of
   yours and blocks nothing; it has no hit points and gives no cover, and it
   breaks up as soon as it has nobody (its last unit left or died). It goes
   at the pace of its slowest walker.
@@ -345,7 +354,7 @@ have one, install it with `npx playwright install chromium`.
 | `src/client/minimap.js` | The minimap: a few pixels a cell, repainted at most twice a second and only when a pixel changes. |
 | `src/client/effects.js` | Hits, falls and deaths, worked out from each update and the one before, for the renderer to play. |
 | `src/client/sounds.js` | Sounds: which ones an update calls for, and a small synthesizer that plays them. |
-| `src/client/tokens.js`, `art/` | The pictures (SVG, credited in `art/CREDITS.md`) and the tokens made of them, painted once per colour and size; also the tab's icon, `favicon.png`, the login page's banners, `banner.webp` and `banner-lord.webp`; and the heroes' portraits, two 8 × 8 sheets of 32 × 32 faces (`portraits-men.png`, `portraits-women.png`), with `portrait.svg`, the silhouette of a unit that isn't a hero. |
+| `src/client/tokens.js`, `art/` | The pictures (SVG, credited in `art/CREDITS.md`) and the tokens made of them, painted once per colour and size; the stock's and the buttons' icons (SVG too, coloured by the page's style); also the tab's icon, `favicon.png`, the login page's banners, `banner.webp` and `banner-lord.webp`; and the heroes' portraits, two 8 × 8 sheets of 32 × 32 faces (`portraits-men.png`, `portraits-women.png`), with `portrait.svg`, the silhouette of a unit that isn't a hero. |
 | `server/app.js` | The game server: Colyseus, the HTTP API, the page's files, the monitor. |
 | `server/room.js` | `GameRoom`, one per game: runs the core's clock, logs and applies commands, snapshots. |
 | `server/schema.js` | The room state Colyseus syncs: a generic mirror of the core's view. |
@@ -356,6 +365,7 @@ have one, install it with `npx playwright install chromium`.
 | `scripts/smoke.js` | Playwright check of the page through the game server: three browsers, a subfolder proxy, a phone. |
 | `test/` | Unit tests, including whole games of random commands checked tick by tick. |
 | `docs/architecture.md` | How the pieces fit, and the decisions behind them. |
+| `docs/notes.md` | How it is made, how its pictures were made, tools that helped, and plans not yet built. |
 
 ### On a server
 

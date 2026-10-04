@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { heading, pipsOf } from '../src/client/render.js';
+import { drawOrder, heading, pickAt, pipsOf } from '../src/client/render.js';
 import { BUILDING_TYPES } from '../src/core/rules.js';
 
 test('a building shows a pip for each upgrade, a pit for each grade of depth, a new one none', () => {
@@ -20,4 +20,40 @@ test('a moving building heads left or right by its next cell, and nowhere while 
   assert.deepEqual([[1, 0], [-1, 0], [1, -1], [0, -1], [0, 1], [-1, 1]].map((c) => going('ghoul', [/** @type {[number, number]} */ (c)])), [1, -1, 1, -1, 1, -1]);
   assert.equal(going('wagon', []), 0, 'standing');
   assert.equal(going('castle', [[-1, 0]]), 0, 'never moves');
+});
+
+/** Buildings by id, for drawOrder and pickAt: each at (0, 0) unless it says. */
+const placed = (/** @type {Array<{ id: string, type: string, owner: number, q?: number }>} */ list) => Object.fromEntries(
+  list.map((b) => [b.id, /** @type {any} */ ({ grade: 1, r: 0, q: 0, ...b })]),
+);
+
+test("bands are drawn over buildings, the viewer's own over another side's", () => {
+  const buildings = placed([
+    { id: 'b1', type: 'band', owner: 0 }, { id: 'b2', type: 'band', owner: 1 }, { id: 'b3', type: 'pit', owner: 1 }, { id: 'b4', type: 'tower', owner: 0, q: 1 },
+  ]);
+  assert.deepEqual(drawOrder(buildings, 0).map((b) => b.id), ['b3', 'b4', 'b2', 'b1']);
+  assert.deepEqual(drawOrder(buildings, 1).map((b) => b.id), ['b3', 'b4', 'b1', 'b2']);
+  assert.deepEqual(drawOrder(buildings, null).map((b) => b.id), ['b3', 'b4', 'b1', 'b2'], 'a spectator: as they were made');
+});
+
+test("a click picks the viewer's band over the building under it; another side's band only when aiming", () => {
+  // Bēla's band (side 1) and Ann's (side 0) stand on Bēla's pit; Ann's tower is next to it.
+  const buildings = placed([
+    { id: 'b1', type: 'pit', owner: 1 }, { id: 'b2', type: 'band', owner: 1 }, { id: 'b3', type: 'band', owner: 0 }, { id: 'b4', type: 'tower', owner: 0, q: 1 },
+  ]);
+  const at = new Map([['0,0', 'b1'], ['1,0', 'b4']]);
+  const pick = (/** @type {number | null} */ seat, /** @type {boolean} */ aiming, q = 0) => pickAt(buildings, at, { q, r: 0 }, seat, aiming);
+  assert.equal(pick(0, false), 'b3', 'her own band');
+  assert.equal(pick(1, false), 'b2', 'his own band');
+  assert.equal(pick(0, true), 'b2', "aiming, the other side's band before the pit under it");
+  assert.equal(pick(null, false), 'b2', 'a spectator, any band');
+  assert.equal(pick(0, false, 1), 'b4');
+  assert.equal(pick(0, true, 1), null, 'never her own');
+  assert.equal(pick(0, false, 5), null, 'nothing there');
+  // With only another side's band and the pit: selecting reaches the pit, aiming the band.
+  delete buildings.b3;
+  assert.equal(pick(0, false), 'b1');
+  assert.equal(pick(0, true), 'b2');
+  delete buildings.b2;
+  assert.equal(pick(0, true), 'b1', 'then the pit');
 });

@@ -1025,6 +1025,7 @@ function build(board, state, occ, player, cmd) {
   const stock = purseOf(state, player);
   stock.stone -= price.stone;
   stock.metal -= price.metal;
+  if (type.hunger) stock.hunger = Math.min(MAX_HUNGER, stock.hunger + type.hunger);
   return { ok: true };
 }
 

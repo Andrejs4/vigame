@@ -142,6 +142,43 @@ export function heading(b) {
   return next ? Math.sign(next[0] - b.q + (next[1] - b.r) / 2) : 0;
 }
 
+/**
+ * The order to draw buildings in: bands last, as they stand over whatever
+ * they pass (pits, or their own side's buildings), and the viewer's own bands
+ * over anyone else's. Otherwise as they were built.
+ * @param {Record<string, Building>} buildings
+ * @param {number | null} seat The viewer's side, or null for a spectator.
+ */
+export function drawOrder(buildings, seat) {
+  const layer = (/** @type {Building} */ b) => (BUILDING_TYPES[b.type]?.band ? (b.owner === seat ? 2 : 1) : 0);
+  return Object.values(buildings).sort((a, b) => layer(a) - layer(b));
+}
+
+/**
+ * What a click on a cell picks, top first as drawn: bands, which hold no
+ * cell, before the building on it. Selecting, it is the viewer's own band
+ * there, else the building there, anyone's: another side's band can't be
+ * selected (a spectator may select any), so it never hides those. Aiming an
+ * attack, it is another side's band there, else another side's building;
+ * never the viewer's own.
+ * @param {Record<string, Building>} buildings
+ * @param {Map<string, string>} buildingAt Which building holds each cell (`occupancy`).
+ * @param {{ q: number, r: number }} at
+ * @param {number | null} seat
+ * @param {boolean} aiming
+ * @returns {string | null}
+ */
+export function pickAt(buildings, buildingAt, at, seat, aiming) {
+  const bands = Object.values(buildings).filter((b) => BUILDING_TYPES[b.type]?.band && b.q === at.q && b.r === at.r);
+  const held = buildingAt.get(key(at.q, at.r));
+  const building = held === undefined ? null : buildings[held] ?? null;
+  if (aiming) {
+    const theirs = (/** @type {Building | null | undefined} */ b) => Boolean(b) && seat !== null && b?.owner !== seat;
+    return bands.find(theirs)?.id ?? (theirs(building) ? /** @type {Building} */ (building).id : null);
+  }
+  return bands.find((b) => seat === null || b.owner === seat)?.id ?? building?.id ?? null;
+}
+
 /** Past this many, the facings of buildings that are gone are forgotten. */
 const FACING_KEEP = 64;
 
@@ -244,6 +281,7 @@ export class BoardRenderer {
    * @param {import('./net.js').GameView | null} state.view The game, or null before it arrives.
    * @param {number} state.clock Game time in ticks, with a fraction.
    * @param {string | null} state.selected The selected building's id.
+   * @param {number | null} [state.seat] The viewer's side, whose bands are drawn on top.
    * @param {Set<string>} state.highlights Cell keys to highlight, such as where a building could go.
    * @param {{ q: number, r: number } | null} state.hover
    * @param {Array<import('./net.js').NetPeer>} [state.peers] Viewers' picked
@@ -332,7 +370,7 @@ export class BoardRenderer {
     // Pass 5: buildings. Standing ones fill their cells and outline the whole
     // shape, so a castle reads as one thing across its seven cells.
     if (view && occ) {
-      for (const b of Object.values(view.buildings)) {
+      for (const b of drawOrder(view.buildings, state.seat ?? null)) {
         const type = BUILDING_TYPES[b.type];
         const side = sideOf(view, b.owner);
         if (!type || !side) continue;

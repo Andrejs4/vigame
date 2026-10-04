@@ -276,6 +276,9 @@ export const REPAIR_WORK = 500;
  * @property {number} [hpPerGrade] Hit points each grade after the first adds.
  *   At none left, the building collapses at once, and whoever was inside is
  *   left standing on its cell. A band has none: it protects nobody.
+ * @property {number} [ticked] For a new one, the most its crew chooser ticks
+ *   (the best at home, up to half of them), if fewer than its room: a band
+ *   holds more than a tower at its last grade, but sets out with fewer.
  * @property {boolean} [band] A band: a group of units, free, that moves like
  *   a wagon but holds no cell, so it blocks nothing, and breaks up once it
  *   has nobody.
@@ -290,6 +293,9 @@ export const REPAIR_WORK = 500;
  * @property {number} [idleWork] Work it does by itself each tick, crewed or
  *   not: a castle raises a unit now and then even with nobody at home.
  * @property {number} cost Stone to build it.
+ * @property {number} [hunger] Hunger it adds to its side when built, up to
+ *   MAX_HUNGER: a pit costs no stone, so it costs this instead, and can't be
+ *   put down by the dozen for nothing. At MAX_HUNGER it is free.
  * @property {number} [metal] Dark metal to build it.
  * @property {boolean} [nearCastle] Built only within BUILD_RANGE of the castle.
  * @property {number} [loot] Dark metal for the side that brings it down;
@@ -347,7 +353,7 @@ export const BUILDING_TYPES = {
     upgradeMetal: 50, skill: 'ranged', extra: 'melee', speed: 2 * TICKS_PER_SECOND, raise: 9000,
   },
   pit: {
-    name: 'Pit', size: 1, capacity: 8, grades: 1, hp: 250, build: true, cost: 0,
+    name: 'Pit', size: 1, capacity: 8, grades: 1, hp: 250, build: true, cost: 0, hunger: 1,
     skill: 'build', work: 9600, yields: 'stone', perDepth: 40, hpPerDepth: 150, depth: 3, through: 0.25, raise: 3000,
   },
   farm: {
@@ -371,7 +377,7 @@ export const BUILDING_TYPES = {
     skill: 'melee', speed: 4 * TICKS_PER_SECOND, attack: { damage: 50, skill: 35, reach: 1 }, loot: 6, hunts: true, scales: true,
   },
   band: {
-    name: 'Band', size: 1, capacity: 30, grades: 1, hp: 0, build: true, cost: 0,
+    name: 'Band', size: 1, capacity: 80, ticked: 30, grades: 1, hp: 0, build: true, cost: 0,
     skill: 'ranged', extra: 'melee', speed: WALK_TICKS, band: true,
   },
 };

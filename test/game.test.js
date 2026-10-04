@@ -367,7 +367,7 @@ test('any player may rename the game, while it goes on', () => {
 
 // --- stone, food and hit points --------------------------------------------------
 
-test('stone pays for towers, farms and upgrades; pits and wagons are free', () => {
+test('stone pays for towers, farms and upgrades; pits cost hunger and wagons dark metal', () => {
   const board = openBoard(5);
   const state = stateWith([{ id: 'b1', type: 'castle' }]);
   state.players[0].stone = 100;
@@ -377,6 +377,11 @@ test('stone pays for towers, farms and upgrades; pits and wagons are free', () =
   assert.equal(state.players[0].stone, 100 - BUILDING_TYPES.tower.cost - BUILDING_TYPES.farm.cost);
   assert.deepEqual(build('tower', -2), { ok: false, reason: 'not enough stone' });
   assert.deepEqual(build('pit', -2), OK);
+  assert.equal(state.players[0].hunger, BUILDING_TYPES.pit.hunger, 'a pit costs its side hunger');
+  state.players[0].hunger = MAX_HUNGER;
+  assert.deepEqual(build('pit', 4), OK, 'even at its hungriest');
+  assert.equal(state.players[0].hunger, MAX_HUNGER, 'free then: hunger goes no higher');
+  assert.deepEqual(checkState(board, state), []);
   assert.deepEqual(build('wagon', -3), OK);
   assert.deepEqual(applyCommand(board, state, 0, { type: 'upgrade', building: 'b1' }), { ok: false, reason: 'not enough stone' });
   state.players[0].stone = 1000;
@@ -489,6 +494,16 @@ test('a band is free and needs units; it moves them, gives no cover, and breaks 
   run(board, state, 1);
   assert.equal(state.buildings.b13, undefined, 'gone once nobody is in it');
   runUntil(board, state, () => state.units.u10.in === 'b1');
+
+  // Nobody in it yet, its units still on their way: nothing to strike there
+  // but them, and once they are dead it is gone too.
+  assert.deepEqual(applyCommand(board, state, 0, { type: 'build', kind: 'band', q: 4, r: 0, units: ['u10'] }), OK);
+  const waiting = /** @type {string} */ (Object.keys(state.buildings).at(-1));
+  assert.deepEqual([occupancy(state).inside.get(waiting), state.buildings[waiting].hp], [[], undefined]);
+  delete state.units.u10;
+  run(board, state, 1);
+  assert.equal(state.buildings[waiting], undefined, 'gone once its units died on the way');
+  assert.deepEqual(checkState(board, state), []);
 });
 
 test('a building with no hit points left collapses, and leaves its units standing', () => {
