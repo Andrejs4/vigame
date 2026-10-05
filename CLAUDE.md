@@ -22,6 +22,9 @@ graphics work.
   whether the deploy keeps saved games. He deploys with `git pull` and
   `sudo deploy/install.sh` on his server.
 - Open a pull request only when he asks for one; he merges it himself.
+  Its template (`.github/pull_request_template.md`) is for outside
+  contributors (CONTRIBUTING.md): in his, put "The author's own session"
+  under Model, Original prompt and Who you are.
 - His raw pictures never go to GitHub (`art-src/` is ignored).
 
 ## Commands

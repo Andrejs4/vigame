@@ -14,6 +14,9 @@ CLAUDE.md has the rules for working on the code; this is the background.
   `crew.png`, `heroes.png`, `phone*.png`, `game-*.png`, `effects.png`, `lobby*.png`,
   `login*.png`, `settings*.png`, `scores.png`, and `failed-*.png` when a check
   fails.
+- Outside pull requests are considered only as CONTRIBUTING.md says: a
+  few lines, or the model's name and the original prompt, from someone he
+  knows or with references for their reputation. His own aren't bound by it.
 - The work happens in Claude Code cloud sessions, on a `claude/…` branch.
   Each batch of requests becomes one pull request, opened when he asks for
   it. He merges it on GitHub, then deploys on his Debian server with

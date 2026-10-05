@@ -593,6 +593,13 @@ comes next.
 - On a phone, the 29 × 20 board is wider than the screen even at minimum
   zoom. Pinch-to-zoom is not wired up, and the keys are for a keyboard.
 
+## Contributing
+
+Bug reports and ideas are welcome as issues. Pull requests are considered
+only as [CONTRIBUTING.md](CONTRIBUTING.md) says: beyond a few lines, they
+name the AI model used and give the original prompt, and come from someone
+the author knows or who gives references for their reputation.
+
 ## License
 
 Copyright (C) 2026 Andrejs Petrovs.
