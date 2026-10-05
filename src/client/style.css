@@ -280,14 +280,6 @@ dl { margin: 0; }
   color: var(--ink-dim); margin: 4px 0 -2px;
 }
 
-/* A button's key when its label doesn't start with it (in Russian): small,
-   in the button's top right corner, within its padding, so it takes no
-   width. A phone has no keys, so it shows none. */
-#controls button { position: relative; }
-#controls kbd {
-  position: absolute; top: 3px; right: 5px;
-  font: 500 9px/1 var(--mono); color: var(--ink-dim);
-}
 /* A button's price, after its name ("Tower · 60"); on a phone, on a line of its own. */
 #controls .price { white-space: nowrap; }
 
@@ -417,12 +409,13 @@ button.inline:hover:not(:disabled) { background: none; color: var(--amber); }
   #controls {
     top: auto; right: 10px; left: 10px;
     bottom: calc(10px + env(safe-area-inset-bottom, 0px));
-    flex-direction: row; flex-wrap: wrap; justify-content: center; gap: 8px;
+    /* As tight as on a desktop: the first row then holds Upgrade in Russian too. */
+    flex-direction: row; flex-wrap: wrap; justify-content: center; gap: 6px;
   }
   #controls button, #controls .button { flex: 1; text-align: center; padding: 8px 6px; }
   /* The picture above the label, so the label keeps the button's width. */
   #controls :is(button, .button):not(#zoom-in, #zoom-out)::before { display: block; width: 18px; height: 18px; margin: 0 auto 3px; }
-  #controls .group-label, #toggle-coords, #recenter, #controls kbd, #controls .price .dot { display: none; }
+  #controls .group-label, #toggle-coords, #recenter, #controls .price .dot { display: none; }
   #controls .price { display: block; }
   /* The stock and selection across the screen just above the controls, the minimap above them. */
   #tactics {

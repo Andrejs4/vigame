@@ -71,14 +71,28 @@ export function chosenLanguage(setting, auto) {
 }
 
 /**
- * The Latin letter a key press stands for, lower case: the letter typed, or
- * on a keyboard set to another alphabet (Russian), the Latin letter on the
- * same key, so the game's keys (T for Tower…) work there too.
- * @param {{ key: string, code: string }} e A keyboard event.
+ * The standard Russian keyboard (ЙЦУКЕН): the Cyrillic letter on each key,
+ * by the Latin letter or sign on the same key.
  */
-export function keyLetter(e) {
-  const typed = e.key.toLowerCase();
-  if (/^[a-z]$/.test(typed)) return typed;
-  const key = /^Key([A-Z])$/.exec(e.code);
-  return key ? key[1].toLowerCase() : typed;
+export const RUSSIAN_KEYS = {
+  q: 'й', w: 'ц', e: 'у', r: 'к', t: 'е', y: 'н', u: 'г', i: 'ш', o: 'щ', p: 'з', '[': 'х', ']': 'ъ',
+  a: 'ф', s: 'ы', d: 'в', f: 'а', g: 'п', h: 'р', j: 'о', k: 'л', l: 'д', ';': 'ж', "'": 'э',
+  z: 'я', x: 'ч', c: 'с', v: 'м', b: 'и', n: 'т', m: 'ь', ',': 'б', '.': 'ю', '`': 'ё',
+};
+
+/** The Latin sign on each key that isn't a letter, by its `KeyboardEvent.code`. */
+const SIGN_KEYS = { BracketLeft: '[', BracketRight: ']', Semicolon: ';', Quote: "'", Comma: ',', Period: '.', Backquote: '`' };
+
+/**
+ * What a key press can stand for, lower case, the likeliest first: the
+ * character typed, then the Latin and the Cyrillic letter on the same key of
+ * a standard keyboard. So a game key works whichever layout is on: Б (the
+ * comma key) with the keyboard set to English, T where it types "е".
+ * @param {{ key: string, code: string }} e A keyboard event.
+ * @returns {string[]}
+ */
+export function keyCandidates(e) {
+  const latin = /^Key([A-Z])$/.exec(e.code)?.[1].toLowerCase() ?? SIGN_KEYS[/** @type {keyof typeof SIGN_KEYS} */ (e.code)];
+  const russian = latin ? RUSSIAN_KEYS[/** @type {keyof typeof RUSSIAN_KEYS} */ (latin)] : undefined;
+  return [...new Set([e.key.toLowerCase(), latin, russian])].filter((k) => k !== undefined);
 }

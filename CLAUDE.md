@@ -138,11 +138,15 @@ graphics work.
   out in each language. The rest of the game waits until the author asks.
   docs/notes.md has his plan, what to watch for, the Russian names already
   used, and how the buttons' words were measured.
-- The game's keys are Latin letters (`aria-keyshortcuts`), matched with
-  `keyLetter`, so they work on a keyboard set to Russian. A button whose
-  label doesn't start with its key shows it in a corner (`keyLabel`).
-  The smoke check holds the Russian buttons to their fit: no overflow, two
-  lines at most and three rows on a phone, one line on a desktop.
+- A game button's key is a letter of its label, in bold (`keyLabel`),
+  per language (`key…` in words.js); the English keys work in every
+  language, so a Russian key may only sit on its own button's English key
+  or a free one (the tests check, with `RUSSIAN_KEYS`, the ЙЦУКЕН layout).
+  `keyCandidates` matches a press by the character typed, then by the
+  Latin and Russian letters on the same key, so keys work in either
+  layout. The smoke check holds the Russian buttons to their fit: no
+  overflow, two lines at most and three rows on a phone, one line on a
+  desktop.
 
 ## Game server (server/)
 

@@ -216,8 +216,9 @@ author's word), яма (pit), воз (wagon), отряд (band), башня, ф�
 Dark Lord), modes Кооператив, Лёгкий Лорд, Общий Лёгкий Лорд, Все против
 всех, sides Синие, Багровые, Зелёные, Золотые, Бирюзовые, Оранжевые,
 Розовые, Серебряные (plural, as teams: "победили Синие"), and on the
-buttons Строить, Выбрано, Вид, Центр, Тихо, Координаты, Уступить место,
-Занять место, Итоги, Лобби. How to play names the buttons the same way.
+buttons Строить, Выбрано, Вид, Центр, Тихо, Координаты, Отпусти (the
+author's, for fun; Release in English), Занять место, Итоги, Лобби. How to
+play names the buttons the same way.
 
 The author's fallback words for buttons too long: Народ (crew), яма, бить
 (attack), воз, назад (return), стоп (abort). How the choice was made: a
@@ -231,21 +232,30 @@ the first row holds the five build buttons and Upgrade. In Russian, only
 Upgrade to the second row, which then wraps), giving exactly the
 English heights at 390 px. Бригада, Вернуть, Бросить and Атака fit as they
 are. On the phone a price goes on its own line without the dot, in
-English too, or "Воз · 15◆" wrapped onto three lines. At 360 px, English
-itself drops Upgrade to the second row, and Russian is a line taller with
-a building's crew showing ("Уступить место" wraps; Стоп would fix it by
-2 px). On a desktop the key sits in the button's corner, within its
-padding, so it takes no width; the panel is 8 px wider than in English,
-for "Уступить место".
+English too, or "Воз · 15◆" wrapped onto three lines. The phone's gap
+between buttons is 6 px, as on a desktop: at 8 the Russian first row had
+2 px to spare and a bold Я pushed Upgrade down; at 6 it has 11. Отпусти
+and Release (for "Уступить место" and "Release seat") keep the seat button
+on one line, which saved a line at 360 px. Now both languages are exactly
+as tall everywhere measured: 217 px at 390, 234 at 360, and the desktop
+panel 165 and 166 px wide.
+
+The Russian keys: the bold letter, typed in the Russian layout. Where the
+word has the Cyrillic letter that sits on the English key, it is that one
+(Ап**г**рейд on U, Ге**р**ои on H, Ферм**а** on F), so the key is the
+same in both languages; else the first letter (**Б**ашня on the comma key,
+**В**оз on D, **Я**ма on Z, **О**тряд on J); Брига**д**а (L) and А**т**ака
+(N) because Б and А were taken. The English keys work in Russian too, so
+no Russian letter may sit on another button's English key (Бригада's И
+would be B, Band's), and the tests check it.
 
 His plan: translate only the lobby and the game's controls, each text about
 as long as the English so the layout holds, and take care with short texts
 and texts built up as the game goes. Things to watch there:
 
-- A button's bold letter is its key (**T**ower, **U**pgrade): in Russian
-  the keys stay Latin, in the button's corner, and work on a Russian
-  keyboard (done for the buttons; the crew chooser's Enter-or-letter and
-  the Heroes list's H already use `keyLetter`).
+- A button's bold letter is its key (**T**ower, **U**pgrade): done for the
+  buttons, as above; the crew chooser's Enter-or-key and the Heroes list's
+  H take the opening button's keys, in either layout (`keyCandidates`).
 - Short labels padded to line up, such as "Att Lv 15" in the Heroes list.
 - Counts with a noun ("3 heroes died"): Russian has three plural forms.
 - Texts the server sends in English, such as the core's refusals, which

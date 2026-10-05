@@ -18,7 +18,7 @@ import { Camera } from './camera.js';
 import { Effects, fallenHeroes, fallenHeroesNote } from './effects.js';
 import { Minimap } from './minimap.js';
 import { BoardRenderer, COUNT_ZOOM, pickAt } from './render.js';
-import { autoLanguage, browserLanguages, chosenLanguage, keyLetter } from './language.js';
+import { autoLanguage, browserLanguages, chosenLanguage, keyCandidates } from './language.js';
 import { Sounds, soundsFor } from './sounds.js';
 import { Tokens } from './tokens.js';
 import { say, translate } from './words.js';
@@ -73,27 +73,30 @@ function worth(line) {
 const PLENTY = { stone: 60, metal: 30 };
 
 /**
- * Set the label of a button that a key presses (its aria-keyshortcuts), and
- * its price if it has one ("Tower · 60"; on a phone the price goes on a line
- * of its own). The label's first letter is in bold when it is the key, as in
- * English; else the key is in the button's corner, as in Russian.
+ * The keys that press a button (its aria-keyshortcuts), its own first.
+ * @param {Element} button
+ */
+const keysOf = (button) => (button.getAttribute('aria-keyshortcuts') ?? '').split(' ').filter(Boolean);
+
+/**
+ * Set the label of a button that a key presses, with the key's letter in
+ * bold where the label has it ("Tower", "Ферма"), and its price if it has
+ * one ("Tower · 60"; on a phone the price goes on a line of its own).
  * @param {HTMLElement} button
  * @param {string} label
  * @param {string} [price]
  */
 function keyLabel(button, label, price = '') {
-  const key = button.getAttribute('aria-keyshortcuts') ?? '';
-  const shown = `${label}|${price}`;
+  const shown = `${label}|${price}|${button.getAttribute('aria-keyshortcuts')}`;
   if (button.dataset.shown === shown) return;
   button.dataset.shown = shown;
+  const at = label.toLowerCase().indexOf((keysOf(button)[0] ?? '').toLowerCase());
   /** @type {Array<Node | string>} */
-  const parts = [];
-  if (label[0]?.toUpperCase() === key) {
+  const parts = [label];
+  if (at >= 0 && keysOf(button).length) {
     const letter = document.createElement('b');
-    letter.textContent = label[0];
-    parts.push(letter, label.slice(1));
-  } else {
-    parts.push(label);
+    letter.textContent = label[at];
+    parts.splice(0, 1, label.slice(0, at), letter, label.slice(at + 1));
   }
   if (price) {
     const dot = document.createElement('span');
@@ -104,14 +107,7 @@ function keyLabel(button, label, price = '') {
     priced.append(dot, price);
     parts.push(priced);
   }
-  if (parts[0] === label) {
-    const corner = document.createElement('kbd');
-    corner.textContent = key;
-    // Screen readers have aria-keyshortcuts.
-    corner.setAttribute('aria-hidden', 'true');
-    parts.push(corner);
-  }
-  button.replaceChildren(...parts);
+  button.replaceChildren(...parts.filter((part) => part !== ''));
 }
 
 /** @typedef {import('../core/game.js').Building} Building */
@@ -133,6 +129,12 @@ export async function startGame(net, me) {
   const word = (/** @type {import('./words.js').Word} */ w, /** @type {Record<string, string | number>} */ values = {}) => say(language, { word: w, values });
   controls.lang = language;
   translate(controls, language);
+  // Each button's key in the player's language, and the English one, which
+  // works in every language.
+  for (const button of /** @type {NodeListOf<HTMLElement>} */ (controls.querySelectorAll('[data-word-key]'))) {
+    const keyWord = /** @type {import('./words.js').Word} */ (button.dataset.wordKey);
+    button.setAttribute('aria-keyshortcuts', [...new Set([word(keyWord), say('en', { word: keyWord })])].join(' '));
+  }
   const hud = {
     gameName: document.getElementById('game-name'),
     time: document.getElementById('time'),
@@ -718,13 +720,13 @@ export async function startGame(net, me) {
    * @param {string} options.kind The building's type, whose skill ranks the units.
    * @param {number} options.limit How many it takes.
    * @param {string | null} options.target The building, or null for a new one.
-   * @param {string} options.key The letter that confirms it, besides Enter: the
-   *   one that opened it.
+   * @param {string[]} options.keys The keys that confirm it, besides Enter:
+   *   those of the button that opened it.
    * @param {{ q: number, r: number }} options.site Where the crew goes, for the
    *   Nearest order.
    * @returns {Promise<string[] | null>} The chosen unit ids, or null if cancelled.
    */
-  function chooseCrew({ title, hint, action, kind, limit, target, key, site }) {
+  function chooseCrew({ title, hint, action, kind, limit, target, keys, site }) {
     const seat = net.seat();
     if (!view || seat === null) return Promise.resolve(null);
     const { skill, extra, ticked = limit } = BUILDING_TYPES[kind];
@@ -742,7 +744,7 @@ export async function startGame(net, me) {
     crewParts.title.textContent = title;
     crewParts.hint.textContent = hint;
     crewParts.ok.textContent = action;
-    crewParts.ok.title = `${action} (Enter or ${key})`;
+    crewParts.ok.title = `${action} (Enter or ${keys[0]})`;
     /** Each unit's row, by id. */
     /** @type {Map<string, HTMLElement>} */
     const rows = new Map();
@@ -852,7 +854,8 @@ export async function startGame(net, me) {
     crewDialog.onkeydown = (e) => {
       // Closed, it keeps the focus until the next frame: the key is the page's then.
       if (!crewDialog.open || e.repeat || e.ctrlKey || e.metaKey || e.altKey) return;
-      const confirms = e.key === 'Enter' ? !(e.target instanceof HTMLButtonElement) : keyLetter(e) === key.toLowerCase();
+      const confirms = e.key === 'Enter' ? !(e.target instanceof HTMLButtonElement)
+        : keyCandidates(e).some((k) => keys.some((own) => own.toLowerCase() === k));
       if (!confirms) return;
       e.preventDefault();
       crewParts.ok.click();
@@ -942,7 +945,7 @@ export async function startGame(net, me) {
           kind,
           limit: type.capacity,
           target: null,
-          key: type.name[0],
+          keys: keysOf(/** @type {HTMLElement} */ (buildButtons.find((button) => button.dataset.kind === kind))),
           site: at,
         });
         if (!chosen) return;
@@ -1129,9 +1132,9 @@ export async function startGame(net, me) {
   // unless typing or in a dialog, or a dialog just took it to close (it
   // shuts before the key gets here, so it must not open again).
   const shortcuts = new Map([...controls.querySelectorAll('button[aria-keyshortcuts]')]
-    .map((button) => [button.getAttribute('aria-keyshortcuts')?.toLowerCase(), /** @type {HTMLButtonElement} */ (button)]));
+    .flatMap((button) => keysOf(button).map((k) => [k.toLowerCase(), /** @type {HTMLButtonElement} */ (button)])));
   addEventListener('keydown', (e) => {
-    const button = shortcuts.get(keyLetter(e));
+    const button = keyCandidates(e).map((k) => shortcuts.get(k)).find(Boolean);
     if (!button || button.disabled || button.hidden) return;
     if (e.defaultPrevented || e.repeat || e.ctrlKey || e.metaKey || e.altKey) return;
     if (crewDialog.open || heroesDialog.open || scoresDialog.open || renameDialog.open) return;
@@ -1146,7 +1149,7 @@ export async function startGame(net, me) {
     keyLabel(button, label, cost ? String(cost) : metal ? `${metal}◆` : hunger ? `${hunger}%` : '');
     button.title = word('buildTitle', {
       name: label,
-      key: button.getAttribute('aria-keyshortcuts') ?? '',
+      key: keysOf(button)[0] ?? '',
       price: cost ? word('stoneCost', { n: cost }) : metal ? word('metalCost', { n: metal }) : hunger ? word('hungerCost', { n: hunger }) : word('free'),
     });
     button.addEventListener('click', () => {
@@ -1207,7 +1210,7 @@ export async function startGame(net, me) {
       kind: b.type,
       limit: capacityOf(b),
       target: b.id,
-      key: 'C',
+      keys: keysOf(crewButton),
       site: b,
     });
     if (units) give({ type: 'crew', building: b.id, units }, 'send that crew');
@@ -1219,7 +1222,8 @@ export async function startGame(net, me) {
   heroesButton.addEventListener('click', showHeroes);
   heroesDialog.addEventListener('keydown', (e) => {
     // Closed, it keeps the focus until the next frame: the key is the page's then.
-    if (!heroesDialog.open || keyLetter(e) !== 'h' || e.repeat || e.ctrlKey || e.metaKey || e.altKey) return;
+    const own = keysOf(heroesButton).map((k) => k.toLowerCase());
+    if (!heroesDialog.open || !keyCandidates(e).some((k) => own.includes(k)) || e.repeat || e.ctrlKey || e.metaKey || e.altKey) return;
     e.preventDefault();
     heroesDialog.close();
   });

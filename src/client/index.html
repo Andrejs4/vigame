@@ -164,9 +164,9 @@
           досягаемости; нажмите «Атака», затем вражеское здание, чтобы выбрать
           цель.</p>
         <p>Тяните карту, чтобы сдвинуть её, колесом меняйте масштаб; нажмите
-          на мини-карту, чтобы посмотреть в любое место. Буква в углу кнопки
-          — её клавиша (на любой раскладке); при выборе бригады Enter или та
-          же клавиша ещё раз отправляет её.</p>
+          на мини-карту, чтобы посмотреть в любое место. Жирная буква на
+          кнопке — её клавиша, на любой раскладке (английские тоже работают);
+          при выборе бригады Enter или та же клавиша ещё раз отправляет её.</p>
       </div>
     </details>
     <details class="games-list prose" id="lobby-about-section">
@@ -254,22 +254,22 @@
     </div>
   </div>
 
-  <!-- Its words are in words.js (data-word…); the buttons with a key get their labels from play.js. -->
+  <!-- Its words are in words.js (data-word…); the buttons with a key (data-word-key) get their keys and labels from play.js. -->
   <div class="hud" id="controls">
     <div class="group-label" data-word="groupBuild">Build</div>
-    <button id="build-tower" data-kind="tower" aria-pressed="false" aria-keyshortcuts="T">Tower</button>
-    <button id="build-wagon" data-kind="wagon" aria-pressed="false" aria-keyshortcuts="W">Wagon</button>
-    <button id="build-pit" data-kind="pit" aria-pressed="false" aria-keyshortcuts="P">Pit</button>
-    <button id="build-farm" data-kind="farm" aria-pressed="false" aria-keyshortcuts="F">Farm</button>
-    <button id="build-band" data-kind="band" aria-pressed="false" aria-keyshortcuts="B">Band</button>
+    <button id="build-tower" data-kind="tower" data-word-key="keyTower" aria-pressed="false" aria-keyshortcuts="T">Tower</button>
+    <button id="build-wagon" data-kind="wagon" data-word-key="keyWagon" aria-pressed="false" aria-keyshortcuts="W">Wagon</button>
+    <button id="build-pit" data-kind="pit" data-word-key="keyPit" aria-pressed="false" aria-keyshortcuts="P">Pit</button>
+    <button id="build-farm" data-kind="farm" data-word-key="keyFarm" aria-pressed="false" aria-keyshortcuts="F">Farm</button>
+    <button id="build-band" data-kind="band" data-word-key="keyBand" aria-pressed="false" aria-keyshortcuts="B">Band</button>
     <div class="group-label" data-word="groupSelected">Selected</div>
-    <button id="upgrade" disabled aria-keyshortcuts="U" title="Upgrade (U)" data-word-title="upgradeTitle"><b>U</b>pgrade</button>
-    <button id="crew-button" disabled aria-keyshortcuts="C" title="Choose who works here (C)" data-word-title="crewTitle"><b>C</b>rew…</button>
+    <button id="upgrade" data-word-key="keyUpgrade" disabled aria-keyshortcuts="U" title="Upgrade (U)" data-word-title="upgradeTitle"><b>U</b>pgrade</button>
+    <button id="crew-button" data-word-key="keyCrew" disabled aria-keyshortcuts="C" title="Choose who works here (C)" data-word-title="crewTitle"><b>C</b>rew…</button>
     <!-- In the crew button's place while your castle is selected: it has no crew, as everyone at home is. -->
-    <button id="heroes-button" hidden aria-keyshortcuts="H" title="Your heroes, highest level first (H)" data-word-title="heroesTitle"><b>H</b>eroes…</button>
+    <button id="heroes-button" data-word-key="keyHeroes" hidden aria-keyshortcuts="H" title="Your heroes, highest level first (H)" data-word-title="heroesTitle"><b>H</b>eroes…</button>
     <button id="return-button" disabled data-word="return">Return</button>
     <button id="abort-button" disabled title="Give up a building still going up: its crew goes home, and its cost is lost" data-word-title="abortTitle" data-word="abort">Abort</button>
-    <button id="attack-button" disabled aria-pressed="false" aria-keyshortcuts="A" title="Attack (A)" data-word-title="attackTitle"><b>A</b>ttack…</button>
+    <button id="attack-button" data-word-key="keyAttack" disabled aria-pressed="false" aria-keyshortcuts="A" title="Attack (A)" data-word-title="attackTitle"><b>A</b>ttack…</button>
     <div class="group-label" data-word="groupView">View</div>
     <button id="recenter" data-word="recenter">Recenter</button>
     <div class="zoom-row">
@@ -278,7 +278,7 @@
       <button id="mute-button" aria-pressed="false" title="Sounds are on unless this is pressed; your choice is kept in this browser" data-word-title="muteTitle" data-word="mute">Mute</button>
     </div>
     <button id="toggle-coords" aria-pressed="false" data-word="coordinates">Coordinates</button>
-    <button id="seat-button" hidden data-word="releaseSeat">Release seat</button>
+    <button id="seat-button" hidden data-word="releaseSeat">Release</button>
     <button id="scores-button" hidden data-word="scores">Scores</button>
     <a class="button" id="to-lobby" href="" data-word="lobby">Lobby</a>
   </div>

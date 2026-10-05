@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
-import { LANGUAGE_NAMES, autoLanguage, chosenLanguage, keyLetter, loginLanguage } from '../src/client/language.js';
+import { LANGUAGE_NAMES, RUSSIAN_KEYS, autoLanguage, chosenLanguage, keyCandidates, loginLanguage } from '../src/client/language.js';
 import { WORDS, fill, say } from '../src/client/words.js';
 import { LANGUAGES } from '../src/core/player.js';
 
@@ -47,14 +47,35 @@ test('the page is in the language chosen, or for Auto, what Auto stands for ther
   assert.equal(chosenLanguage('toString', 'en'), 'en');
 });
 
-test('a key stands for the letter it types, or on a Russian keyboard, the Latin letter on the same key', () => {
-  assert.equal(keyLetter({ key: 't', code: 'KeyT' }), 't');
-  assert.equal(keyLetter({ key: 'T', code: 'KeyT' }), 't');
-  assert.equal(keyLetter({ key: 'е', code: 'KeyT' }), 't', 'Russian layout');
-  assert.equal(keyLetter({ key: 'Ф', code: 'KeyA' }), 'a');
-  assert.equal(keyLetter({ key: 'a', code: 'KeyQ' }), 'a', 'AZERTY: the letter typed');
-  assert.equal(keyLetter({ key: 'Enter', code: 'Enter' }), 'enter');
-  assert.equal(keyLetter({ key: 'ж', code: 'Semicolon' }), 'ж');
+test('a key press stands for the character typed, then the Latin and the Russian letter on its key', () => {
+  assert.deepEqual(keyCandidates({ key: 't', code: 'KeyT' }), ['t', 'е']);
+  assert.deepEqual(keyCandidates({ key: 'T', code: 'KeyT' }), ['t', 'е']);
+  assert.deepEqual(keyCandidates({ key: 'е', code: 'KeyT' }), ['е', 't'], 'keyboard set to Russian');
+  assert.deepEqual(keyCandidates({ key: 'б', code: 'Comma' }), ['б', ',']);
+  assert.deepEqual(keyCandidates({ key: ',', code: 'Comma' }), [',', 'б'], 'Б on a keyboard set to English');
+  assert.deepEqual(keyCandidates({ key: 'a', code: 'KeyQ' }), ['a', 'q', 'й'], 'AZERTY: the letter typed first');
+  assert.deepEqual(keyCandidates({ key: 'Enter', code: 'Enter' }), ['enter']);
+});
+
+test('each button\'s key is a letter of its label, on a key of its own; English keys work in Russian too', () => {
+  const buttons = Object.keys(WORDS.en).filter((w) => /^key[A-Z]/.test(w));
+  assert.equal(buttons.length, 9);
+  /** @param {string} w keyTower */
+  const labelOf = (w) => /** @type {keyof typeof WORDS.en} */ (w[3].toLowerCase() + w.slice(4));
+  for (const [language, words] of Object.entries(WORDS)) {
+    const keys = buttons.map((w) => String(words[/** @type {keyof typeof WORDS.en} */ (w)]).toLowerCase());
+    assert.equal(new Set(keys).size, keys.length, `${language}: two buttons share a key`);
+    buttons.forEach((w, i) => assert.ok(String(words[labelOf(w)]).toLowerCase().includes(keys[i]), `${language}.${w} is not in its label`));
+  }
+  // A Russian key sits where its button's English key is, or on a key the
+  // English ones leave free.
+  const keyOf = Object.fromEntries(Object.entries(RUSSIAN_KEYS).map(([latin, russian]) => [russian, latin]));
+  const english = Object.fromEntries(buttons.map((w) => [String(WORDS.en[/** @type {keyof typeof WORDS.en} */ (w)]).toLowerCase(), w]));
+  for (const w of buttons) {
+    const at = keyOf[String(WORDS.ru[/** @type {keyof typeof WORDS.ru} */ (w)]).toLowerCase()];
+    assert.ok(at, `ru.${w} is on no key`);
+    assert.ok(!english[at] || english[at] === w, `ru.${w} sits on ${english[at]}'s English key`);
+  }
 });
 
 test('fill puts values in a text\'s {placeholders}, and leaves one with no value', () => {

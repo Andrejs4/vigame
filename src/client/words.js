@@ -109,7 +109,7 @@ export const WORDS = {
     recenter: 'Recenter',
     mute: 'Mute',
     coordinates: 'Coordinates',
-    releaseSeat: 'Release seat',
+    releaseSeat: 'Release',
     takeSeat: 'Take seat',
     lobby: 'Lobby',
     zoomOut: 'Zoom out',
@@ -125,6 +125,17 @@ export const WORDS = {
     abortTitle: 'Give up a building still going up: its crew goes home, and its cost is lost',
     attackTitle: 'Attack (A)',
     muteTitle: 'Sounds are on unless this is pressed; your choice is kept in this browser',
+    // The keys that press the buttons, each a letter of its label, shown in
+    // bold. The English ones work in every language.
+    keyTower: 'T',
+    keyWagon: 'W',
+    keyPit: 'P',
+    keyFarm: 'F',
+    keyBand: 'B',
+    keyUpgrade: 'U',
+    keyCrew: 'C',
+    keyHeroes: 'H',
+    keyAttack: 'A',
   },
   ru: {
     name: 'Ваше имя',
@@ -228,7 +239,7 @@ export const WORDS = {
     recenter: 'Центр',
     mute: 'Тихо',
     coordinates: 'Координаты',
-    releaseSeat: 'Уступить место',
+    releaseSeat: 'Отпусти',
     takeSeat: 'Занять место',
     lobby: 'Лобби',
     zoomOut: 'Отдалить',
@@ -238,12 +249,25 @@ export const WORDS = {
     metalCost: '{n} тёмного металла, возле вашего замка',
     hungerCost: '+{n}% к голоду (бесплатно при 100%)',
     free: 'бесплатно',
-    upgradeTitle: 'Апгрейд (U)',
-    crewTitle: 'Выбрать, кто здесь работает (C)',
-    heroesTitle: 'Ваши герои, сильнейшие первыми (H)',
+    upgradeTitle: 'Апгрейд (Г)',
+    crewTitle: 'Выбрать, кто здесь работает (Д)',
+    heroesTitle: 'Ваши герои, сильнейшие первыми (Р)',
     abortTitle: 'Бросить недостроенное здание: бригада идёт домой, затраты пропадают',
-    attackTitle: 'Атака (A)',
+    attackTitle: 'Атака (Т)',
     muteTitle: 'Звук включён, пока кнопка не нажата; выбор помнит этот браузер',
+    // On the same key as the English one where the word has its letter (Г
+    // is on U, Р on H, А on F), else the first letter, else a letter on a key
+    // English leaves free (Б and А were taken): never on another button's
+    // English key, as those work here too.
+    keyTower: 'Б',
+    keyWagon: 'В',
+    keyPit: 'Я',
+    keyFarm: 'А',
+    keyBand: 'О',
+    keyUpgrade: 'Г',
+    keyCrew: 'Д',
+    keyHeroes: 'Р',
+    keyAttack: 'Т',
   },
 };
 
