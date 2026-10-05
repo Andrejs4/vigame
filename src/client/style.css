@@ -416,6 +416,8 @@ button.inline:hover:not(:disabled) { background: none; color: var(--amber); }
   /* The picture above the label, so the label keeps the button's width. */
   #controls :is(button, .button):not(#zoom-in, #zoom-out)::before { display: block; width: 18px; height: 18px; margin: 0 auto 3px; }
   #controls .group-label, #toggle-coords, #recenter, #controls .price .dot { display: none; }
+  /* A phone has no keys: their letters aren't bold. */
+  #controls b { font-weight: inherit; }
   #controls .price { display: block; }
   /* The stock and selection across the screen just above the controls, the minimap above them. */
   #tactics {

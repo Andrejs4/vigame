@@ -256,7 +256,7 @@ Run `npm start` and open http://127.0.0.1:2567.
   letter, else one on a key the English ones leave free; and the English
   keys work in Russian too. Every key works whichever layout the keyboard
   is set to (Б is the comma key). On a phone a button's price is on a line
-  of its own.
+  of its own, and no letter is bold, as a phone has no keys.
   Choosing a crew, Enter sends it, as does the key that opened the chooser
   again (C, or the key of the building being placed); H closes the heroes
   list.

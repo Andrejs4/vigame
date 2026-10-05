@@ -1164,13 +1164,17 @@ async function phone(browser, url) {
   assert.equal(await page.locator('#seat-button').innerText(), 'Отпусти');
   assert.deepEqual(await page.$$eval('#controls button[aria-keyshortcuts]', (els) => els.map((el) => el.querySelector('b')?.textContent)),
     ['Б', 'В', 'Я', 'а', 'О', 'г', 'д', 'р', 'т']);
+  // A phone has no keys, so the letters aren't bold there.
+  assert.ok(await page.$$eval('#controls button b', (els) => els.every((b) => getComputedStyle(b).fontWeight === getComputedStyle(/** @type {Element} */ (b.parentElement)).fontWeight)),
+    'key letters are bold on a phone');
   const phoneFit = await controlsFit(page);
   assert.deepEqual(phoneFit.over, [], 'a button\'s label overflows it on a phone');
   assert.ok(Object.values(phoneFit.lines).every((n) => n <= 2), `a label takes three lines on a phone: ${JSON.stringify(phoneFit.lines)}`);
   assert.ok(phoneFit.rows <= 3, `the buttons take ${phoneFit.rows} rows on a phone`);
-  // On a desktop each label keeps to one line, and the tooltips are in
-  // Russian.
+  // On a desktop each label keeps to one line, its key in bold, and the
+  // tooltips are in Russian.
   assert.equal(await other.locator('#build-tower').innerText(), 'Башня · 60');
+  assert.equal(await other.$eval('#build-tower b', (b) => Number(getComputedStyle(b).fontWeight) > 500), true, 'key letters are not bold on a desktop');
   assert.equal(await other.getAttribute('#build-tower', 'title'), 'Башня (Б): 60 камней');
   assert.equal(await other.getAttribute('#build-wagon', 'title'), 'Воз (В): 15 тёмного металла, возле вашего замка');
   await waitText(other, '#controls .group-label', 'Строить');

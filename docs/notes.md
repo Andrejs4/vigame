@@ -247,7 +247,9 @@ same in both languages; else the first letter (**Б**ашня on the comma key,
 **В**оз on D, **Я**ма on Z, **О**тряд on J); Брига**д**а (L) and А**т**ака
 (N) because Б and А were taken. The English keys work in Russian too, so
 no Russian letter may sit on another button's English key (Бригада's И
-would be B, Band's), and the tests check it.
+would be B, Band's), and the tests check it. A phone shows no bold letters
+(the author: no keys there), which also leaves its labels a little more
+room.
 
 His plan: translate only the lobby and the game's controls, each text about
 as long as the English so the layout holds, and take care with short texts
