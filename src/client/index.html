@@ -148,7 +148,7 @@
           замок.</p>
         <p>Стройте рядом со своими готовыми зданиями. Выбранная бригада
           возводит здание, когда доберётся до него; до тех пор у него половина
-          прочности и оно никого не укрывает. Бригада карьера добывает камень,
+          прочности и оно никого не укрывает. Бригада в яме добывает камень,
           на него строят башни, фермы и улучшения; фермы растят еду. Воду не
           пересечь, на кустарнике нельзя строить, и идти по нему вдвое
           медленнее.</p>
@@ -157,16 +157,16 @@
           ваших героев, которые растут в уровне быстрее остальных. Каждую
           минуту юниты едят: скудные обеды делают их голодными, а при полном
           голоде они могут умереть.</p>
-        <p>Выберите повозку или отряд, затем клетку, чтобы двинуть их;
-          бригада едет с ними. Повозка не проходит сквозь здания; отряд
+        <p>Выберите воз или отряд, затем клетку, чтобы двинуть их; бригада
+          едет с ними. Воз не проходит сквозь здания; отряд
           проходит сквозь всё ваше, не даёт укрытия и распадается, когда в
           нём никого нет. Юниты в зданиях и отрядах бьют врагов в пределах
           досягаемости; нажмите «Атака», затем вражеское здание, чтобы выбрать
           цель.</p>
         <p>Тяните карту, чтобы сдвинуть её, колесом меняйте масштаб; нажмите
-          на мини-карту, чтобы посмотреть в любое место. Жирная буква на
-          кнопке — её клавиша; при выборе бригады Enter или та же буква ещё
-          раз отправляет её.</p>
+          на мини-карту, чтобы посмотреть в любое место. Буква в углу кнопки
+          — её клавиша (на любой раскладке); при выборе бригады Enter или та
+          же клавиша ещё раз отправляет её.</p>
       </div>
     </details>
     <details class="games-list prose" id="lobby-about-section">
@@ -254,32 +254,33 @@
     </div>
   </div>
 
+  <!-- Its words are in words.js (data-word…); the buttons with a key get their labels from play.js. -->
   <div class="hud" id="controls">
-    <div class="group-label">Build</div>
+    <div class="group-label" data-word="groupBuild">Build</div>
     <button id="build-tower" data-kind="tower" aria-pressed="false" aria-keyshortcuts="T">Tower</button>
     <button id="build-wagon" data-kind="wagon" aria-pressed="false" aria-keyshortcuts="W">Wagon</button>
     <button id="build-pit" data-kind="pit" aria-pressed="false" aria-keyshortcuts="P">Pit</button>
     <button id="build-farm" data-kind="farm" aria-pressed="false" aria-keyshortcuts="F">Farm</button>
     <button id="build-band" data-kind="band" aria-pressed="false" aria-keyshortcuts="B">Band</button>
-    <div class="group-label">Selected</div>
-    <button id="upgrade" disabled aria-keyshortcuts="U" title="Upgrade (U)"><b>U</b>pgrade</button>
-    <button id="crew-button" disabled aria-keyshortcuts="C" title="Choose who works here (C)"><b>C</b>rew…</button>
+    <div class="group-label" data-word="groupSelected">Selected</div>
+    <button id="upgrade" disabled aria-keyshortcuts="U" title="Upgrade (U)" data-word-title="upgradeTitle"><b>U</b>pgrade</button>
+    <button id="crew-button" disabled aria-keyshortcuts="C" title="Choose who works here (C)" data-word-title="crewTitle"><b>C</b>rew…</button>
     <!-- In the crew button's place while your castle is selected: it has no crew, as everyone at home is. -->
-    <button id="heroes-button" hidden aria-keyshortcuts="H" title="Your heroes, highest level first (H)"><b>H</b>eroes…</button>
-    <button id="return-button" disabled>Return</button>
-    <button id="abort-button" disabled title="Give up a building still going up: its crew goes home, and its cost is lost">Abort</button>
-    <button id="attack-button" disabled aria-pressed="false" aria-keyshortcuts="A" title="Attack (A)"><b>A</b>ttack…</button>
-    <div class="group-label">View</div>
-    <button id="recenter">Recenter</button>
+    <button id="heroes-button" hidden aria-keyshortcuts="H" title="Your heroes, highest level first (H)" data-word-title="heroesTitle"><b>H</b>eroes…</button>
+    <button id="return-button" disabled data-word="return">Return</button>
+    <button id="abort-button" disabled title="Give up a building still going up: its crew goes home, and its cost is lost" data-word-title="abortTitle" data-word="abort">Abort</button>
+    <button id="attack-button" disabled aria-pressed="false" aria-keyshortcuts="A" title="Attack (A)" data-word-title="attackTitle"><b>A</b>ttack…</button>
+    <div class="group-label" data-word="groupView">View</div>
+    <button id="recenter" data-word="recenter">Recenter</button>
     <div class="zoom-row">
-      <button id="zoom-out" aria-label="Zoom out">&minus;</button>
-      <button id="zoom-in" aria-label="Zoom in">+</button>
-      <button id="mute-button" aria-pressed="false" title="Sounds are on unless this is pressed; your choice is kept in this browser">Mute</button>
+      <button id="zoom-out" aria-label="Zoom out" data-word-label="zoomOut">&minus;</button>
+      <button id="zoom-in" aria-label="Zoom in" data-word-label="zoomIn">+</button>
+      <button id="mute-button" aria-pressed="false" title="Sounds are on unless this is pressed; your choice is kept in this browser" data-word-title="muteTitle" data-word="mute">Mute</button>
     </div>
-    <button id="toggle-coords" aria-pressed="false">Coordinates</button>
-    <button id="seat-button" hidden>Release seat</button>
-    <button id="scores-button" hidden>Scores</button>
-    <a class="button" id="to-lobby" href="">Lobby</a>
+    <button id="toggle-coords" aria-pressed="false" data-word="coordinates">Coordinates</button>
+    <button id="seat-button" hidden data-word="releaseSeat">Release seat</button>
+    <button id="scores-button" hidden data-word="scores">Scores</button>
+    <a class="button" id="to-lobby" href="" data-word="lobby">Lobby</a>
   </div>
 
   <div class="hud" id="minimap">

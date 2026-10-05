@@ -69,3 +69,16 @@ export function browserLanguages() {
 export function chosenLanguage(setting, auto) {
   return Object.hasOwn(LANGUAGE_NAMES, setting) ? /** @type {PageLanguage} */ (setting) : auto;
 }
+
+/**
+ * The Latin letter a key press stands for, lower case: the letter typed, or
+ * on a keyboard set to another alphabet (Russian), the Latin letter on the
+ * same key, so the game's keys (T for Tower…) work there too.
+ * @param {{ key: string, code: string }} e A keyboard event.
+ */
+export function keyLetter(e) {
+  const typed = e.key.toLowerCase();
+  if (/^[a-z]$/.test(typed)) return typed;
+  const key = /^Key([A-Z])$/.exec(e.code);
+  return key ? key[1].toLowerCase() : typed;
+}

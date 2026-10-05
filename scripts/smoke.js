@@ -282,6 +282,32 @@ async function report() {
   return lines.join('\n');
 }
 
+/**
+ * How the game's buttons fit: those whose text overflows, each one's lines
+ * of text (its key in the corner aside), the rows they make, and the
+ * panel's width.
+ * @param {import('playwright').Page} page
+ */
+const controlsFit = (page) => page.evaluate(() => {
+  const range = document.createRange();
+  const lines = (/** @type {Element} */ button) => {
+    const bottoms = new Set();
+    for (const node of button.childNodes) {
+      if (node.nodeName === 'KBD') continue;
+      range.selectNodeContents(node);
+      for (const rect of range.getClientRects()) if (rect.width) bottoms.add(Math.round(rect.bottom));
+    }
+    return bottoms.size;
+  };
+  const buttons = /** @type {HTMLElement[]} */ ([...document.querySelectorAll('#controls :is(button, .button)')]).filter((b) => b.offsetParent);
+  return {
+    over: buttons.filter((b) => b.scrollWidth > b.clientWidth + 1).map((b) => b.id),
+    lines: Object.fromEntries(buttons.map((b) => [b.id, lines(b)])),
+    rows: new Set(buttons.map((b) => Math.round(b.getBoundingClientRect().top))).size,
+    width: Math.round(/** @type {HTMLElement} */ (document.getElementById('controls')).getBoundingClientRect().width),
+  };
+});
+
 /** Wait until the page shows a game. */
 const inGame = (page) => page.waitForFunction(() => /** @type {any} */ (window).__vigame?.view, null, { timeout: 10000 });
 
@@ -709,6 +735,7 @@ async function threeBrowsers(browser, url, { full, label }) {
   // Each button with a key shows its letter in bold.
   assert.deepEqual(await a.$$eval('#controls button[aria-keyshortcuts]', (els) => els.map((el) => el.querySelector('b')?.textContent)),
     ['T', 'W', 'P', 'F', 'B', 'U', 'C', 'H', 'A']);
+  assert.equal(await a.locator('#controls kbd').count(), 0, 'in English no key sits in a corner');
   // The upgrade is work for the crew too. U upgrades, as the button does.
   await a.keyboard.press('u');
   await waitSelection(a, /^Tower \(grade 1\) \| crew \d+\/\d+ · upgrading\s+\d+%/);
@@ -1093,7 +1120,8 @@ async function phone(browser, url) {
   await page.selectOption('#lobby-players', '2');
   await page.tap('#lobby-new');
   await inGame(page);
-  const other = await newPlayer(browser, page.url(), 'phone-opponent', 'Oli');
+  // Oli's browser is in Russian too, on a desktop.
+  const other = await newPlayer(browser, page.url(), 'phone-opponent', 'Oli', { viewport: { width: 1280, height: 800 }, locale: 'ru-RU' });
   await inGame(other);
   await waitMatch(page, '#time', /^0:0[1-9]$/);
   // Shared Easy Lord: both see the team's stock, both starts' stone together.
@@ -1126,6 +1154,36 @@ async function phone(browser, url) {
   await selectBuilding(page, castle, { touch: true });
   // With no hover on a touch screen, the last tapped hex is the tile readout.
   assert.notEqual(await text(page, '#tile'), '—', 'tile readout cleared after a tap');
+
+  // The buttons in Russian. On the phone a price is on its own line and the
+  // keys don't show; every label fits its button in two lines at most, in
+  // three rows, as in English (Воз, Яма and Апгрейд keep the first row).
+  await waitMatch(page, '#upgrade', /^Апгрейд · \d+U$/);
+  assert.equal(await page.locator('#build-tower').innerText(), 'Башня\n60');
+  assert.equal(await page.locator('#build-band').innerText(), 'Отряд');
+  assert.equal(await page.locator('#heroes-button').innerText(), 'Герои…');
+  assert.equal(await page.locator('#seat-button').innerText(), 'Уступить место');
+  const phoneFit = await controlsFit(page);
+  assert.deepEqual(phoneFit.over, [], 'a button\'s label overflows it on a phone');
+  assert.ok(Object.values(phoneFit.lines).every((n) => n <= 2), `a label takes three lines on a phone: ${JSON.stringify(phoneFit.lines)}`);
+  assert.ok(phoneFit.rows <= 3, `the buttons take ${phoneFit.rows} rows on a phone`);
+  // On a desktop each label keeps to one line, with its key in the corner;
+  // the tooltips are in Russian; a key works on a Russian keyboard (the
+  // T key types "е" there).
+  assert.equal(await other.locator('#build-tower').innerText(), 'Башня · 60\nT');
+  assert.equal(await other.locator('#build-tower kbd').isVisible(), true);
+  assert.equal(await other.getAttribute('#build-tower', 'title'), 'Башня (T): 60 камней');
+  assert.equal(await other.getAttribute('#build-wagon', 'title'), 'Воз (W): 15 тёмного металла, возле вашего замка');
+  await waitText(other, '#controls .group-label', 'Строить');
+  const desktopFit = await controlsFit(other);
+  assert.deepEqual(desktopFit.over, [], 'a button\'s label overflows it on a desktop');
+  assert.ok(Object.values(desktopFit.lines).every((n) => n === 1), `a label wraps on a desktop: ${JSON.stringify(desktopFit.lines)}`);
+  assert.ok(desktopFit.width <= 200, `the buttons' panel is ${desktopFit.width} px wide`);
+  await other.screenshot({ path: join(OUT, 'game-ru.png') });
+  await other.evaluate(() => dispatchEvent(new KeyboardEvent('keydown', { key: 'е', code: 'KeyT', bubbles: true })));
+  assert.equal(await other.getAttribute('#build-tower', 'aria-pressed'), 'true', 'T on a Russian keyboard picks Tower');
+  await other.keyboard.press('Escape');
+  assert.equal(await other.getAttribute('#build-tower', 'aria-pressed'), 'false');
   await buildWith(page, 'tower', castle, { touch: true });
   await frames(page);
   await page.screenshot({ path: join(OUT, 'phone.png') });

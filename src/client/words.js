@@ -1,11 +1,13 @@
 /**
  * The page's words in each language: so far the login page's, the settings
- * page's and the lobby's. Each is about as long as the English, so the page
- * keeps its shape; `{…}` is filled in. A word that goes with a count has a
+ * page's, the lobby's and the game's buttons. Each is about as long as the
+ * English, so the page keeps its shape (the buttons' Russian was measured
+ * to keep the phone's rows as the English has them); `{…}` is filled in. A word that goes with a count has a
  * form for each of the language's plural kinds (`Intl.PluralRules`: one,
  * few, many, other), picked by `{n}`.
  *
- * Static texts in index.html say which word they are with `data-word`
+ * Static texts in index.html say which word they are with `data-word`, and
+ * their tooltips and labels with `data-word-title` and `data-word-label`
  * (`translate`); the lobby's How to play and About are written out in each
  * language there instead, as they hold links.
  */
@@ -89,6 +91,40 @@ export const WORDS = {
     orange: 'Orange',
     rose: 'Rose',
     silver: 'Silver',
+    // The game's buttons. A building's is its name and price ("Tower · 60").
+    groupBuild: 'Build',
+    groupSelected: 'Selected',
+    groupView: 'View',
+    tower: 'Tower',
+    wagon: 'Wagon',
+    pit: 'Pit',
+    farm: 'Farm',
+    band: 'Band',
+    upgrade: 'Upgrade',
+    crew: 'Crew…',
+    heroes: 'Heroes…',
+    return: 'Return',
+    abort: 'Abort',
+    attack: 'Attack…',
+    recenter: 'Recenter',
+    mute: 'Mute',
+    coordinates: 'Coordinates',
+    releaseSeat: 'Release seat',
+    takeSeat: 'Take seat',
+    lobby: 'Lobby',
+    zoomOut: 'Zoom out',
+    zoomIn: 'Zoom in',
+    buildTitle: '{name} ({key}): {price}',
+    stoneCost: { one: '{n} stone', other: '{n} stone' },
+    metalCost: '{n} dark metal, near your castle',
+    hungerCost: '{n}% more hunger (free once it is 100%)',
+    free: 'free',
+    upgradeTitle: 'Upgrade (U)',
+    crewTitle: 'Choose who works here (C)',
+    heroesTitle: 'Your heroes, highest level first (H)',
+    abortTitle: 'Give up a building still going up: its crew goes home, and its cost is lost',
+    attackTitle: 'Attack (A)',
+    muteTitle: 'Sounds are on unless this is pressed; your choice is kept in this browser',
   },
   ru: {
     name: 'Ваше имя',
@@ -172,6 +208,42 @@ export const WORDS = {
     orange: 'Оранжевые',
     rose: 'Розовые',
     silver: 'Серебряные',
+    groupBuild: 'Строить',
+    groupSelected: 'Выбрано',
+    groupView: 'Вид',
+    tower: 'Башня',
+    // Воз and Яма, not Повозка and Карьер: with either, Upgrade no longer
+    // fits in the phone's first row of buttons, and the second row wraps.
+    wagon: 'Воз',
+    pit: 'Яма',
+    farm: 'Ферма',
+    band: 'Отряд',
+    // Апгрейд, not Улучшить: it keeps Upgrade in the phone's first row.
+    upgrade: 'Апгрейд',
+    crew: 'Бригада…',
+    heroes: 'Герои…',
+    return: 'Вернуть',
+    abort: 'Бросить',
+    attack: 'Атака…',
+    recenter: 'Центр',
+    mute: 'Тихо',
+    coordinates: 'Координаты',
+    releaseSeat: 'Уступить место',
+    takeSeat: 'Занять место',
+    lobby: 'Лобби',
+    zoomOut: 'Отдалить',
+    zoomIn: 'Приблизить',
+    buildTitle: '{name} ({key}): {price}',
+    stoneCost: { one: '{n} камень', few: '{n} камня', many: '{n} камней', other: '{n} камня' },
+    metalCost: '{n} тёмного металла, возле вашего замка',
+    hungerCost: '+{n}% к голоду (бесплатно при 100%)',
+    free: 'бесплатно',
+    upgradeTitle: 'Апгрейд (U)',
+    crewTitle: 'Выбрать, кто здесь работает (C)',
+    heroesTitle: 'Ваши герои, сильнейшие первыми (H)',
+    abortTitle: 'Бросить недостроенное здание: бригада идёт домой, затраты пропадают',
+    attackTitle: 'Атака (A)',
+    muteTitle: 'Звук включён, пока кнопка не нажата; выбор помнит этот браузер',
   },
 };
 
@@ -199,13 +271,21 @@ export function say(language, { word, values = {} }) {
 }
 
 /**
- * Put every element under `root` that names its word (`data-word`) in a
- * language.
+ * Put every element under `root` that names its words in a language: its
+ * text (`data-word`), tooltip (`data-word-title`) and label for screen
+ * readers (`data-word-label`).
  * @param {ParentNode} root
  * @param {import('./language.js').PageLanguage} language
  */
 export function translate(root, language) {
+  const word = (/** @type {string | undefined} */ key) => say(language, { word: /** @type {Word} */ (key) });
   for (const element of /** @type {NodeListOf<HTMLElement>} */ (root.querySelectorAll('[data-word]'))) {
-    element.textContent = say(language, { word: /** @type {Word} */ (element.dataset.word) });
+    element.textContent = word(element.dataset.word);
+  }
+  for (const element of /** @type {NodeListOf<HTMLElement>} */ (root.querySelectorAll('[data-word-title]'))) {
+    element.title = word(element.dataset.wordTitle);
+  }
+  for (const element of /** @type {NodeListOf<HTMLElement>} */ (root.querySelectorAll('[data-word-label]'))) {
+    element.setAttribute('aria-label', word(element.dataset.wordLabel));
   }
 }

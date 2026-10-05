@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
-import { LANGUAGE_NAMES, autoLanguage, chosenLanguage, loginLanguage } from '../src/client/language.js';
+import { LANGUAGE_NAMES, autoLanguage, chosenLanguage, keyLetter, loginLanguage } from '../src/client/language.js';
 import { WORDS, fill, say } from '../src/client/words.js';
 import { LANGUAGES } from '../src/core/player.js';
 
@@ -45,6 +45,16 @@ test('the page is in the language chosen, or for Auto, what Auto stands for ther
   assert.equal(chosenLanguage('en', 'ru'), 'en');
   assert.equal(chosenLanguage('auto', 'ru'), 'ru');
   assert.equal(chosenLanguage('toString', 'en'), 'en');
+});
+
+test('a key stands for the letter it types, or on a Russian keyboard, the Latin letter on the same key', () => {
+  assert.equal(keyLetter({ key: 't', code: 'KeyT' }), 't');
+  assert.equal(keyLetter({ key: 'T', code: 'KeyT' }), 't');
+  assert.equal(keyLetter({ key: 'е', code: 'KeyT' }), 't', 'Russian layout');
+  assert.equal(keyLetter({ key: 'Ф', code: 'KeyA' }), 'a');
+  assert.equal(keyLetter({ key: 'a', code: 'KeyQ' }), 'a', 'AZERTY: the letter typed');
+  assert.equal(keyLetter({ key: 'Enter', code: 'Enter' }), 'enter');
+  assert.equal(keyLetter({ key: 'ж', code: 'Semicolon' }), 'ж');
 });
 
 test('fill puts values in a text\'s {placeholders}, and leaves one with no value', () => {
@@ -97,6 +107,15 @@ test('the page\'s texts name words that exist, in their English; How to play and
   for (const [, word, text] of named) {
     assert.ok(Object.hasOwn(WORDS.en, word), `no word "${word}"`);
     assert.equal(text.replace(/\s+/g, ' ').trim(), WORDS.en[/** @type {keyof typeof WORDS.en} */ (word)], word);
+  }
+  // Tooltips and labels for screen readers, likewise.
+  for (const [attribute, named] of [['title', 'data-word-title'], ['aria-label', 'data-word-label']]) {
+    const tags = [...page.matchAll(new RegExp(`<\\w+[^>]*\\b${named}="(\\w+)"[^>]*>`, 'g'))];
+    assert.ok(tags.length > 0, named);
+    for (const [tag, word] of tags) {
+      assert.ok(Object.hasOwn(WORDS.en, word), `no word "${word}"`);
+      assert.equal(new RegExp(`\\s${attribute}="([^"]*)"`).exec(tag)?.[1], WORDS.en[/** @type {keyof typeof WORDS.en} */ (word)], word);
+    }
   }
   for (const id of ['lobby-how-section', 'lobby-about-section']) {
     const section = page.slice(page.indexOf(`id="${id}"`), page.indexOf('</details>', page.indexOf(`id="${id}"`)));

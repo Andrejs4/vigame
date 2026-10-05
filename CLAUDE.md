@@ -130,12 +130,19 @@ graphics work.
   player's name and language, anything else the lobby, and the login page
   comes first while the browser isn't signed in.
 - Each player has a language (Auto, English or Russian), kept on the
-  server. The login page, the settings page and the lobby are translated:
-  their words are `WORDS` in words.js, which the tests keep complete and
-  about as long as the English; a static text in index.html names its word
-  with `data-word`, and the lobby's How to play and About are written out
-  in each language. The game waits until the author asks. docs/notes.md
-  has his plan, what to watch for, and the Russian names already used.
+  server. The login page, the settings page, the lobby and the game's
+  buttons are translated: their words are `WORDS` in words.js, which the
+  tests keep complete and about as long as the English; a static text in
+  index.html names its word with `data-word` (`-title`, `-label` for its
+  tooltip and label), and the lobby's How to play and About are written
+  out in each language. The rest of the game waits until the author asks.
+  docs/notes.md has his plan, what to watch for, the Russian names already
+  used, and how the buttons' words were measured.
+- The game's keys are Latin letters (`aria-keyshortcuts`), matched with
+  `keyLetter`, so they work on a keyboard set to Russian. A button whose
+  label doesn't start with its key shows it in a corner (`keyLabel`).
+  The smoke check holds the Russian buttons to their fit: no overflow, two
+  lines at most and three rows on a phone, one line on a desktop.
 
 ## Game server (server/)
 

@@ -206,23 +206,46 @@ field says "Visible name (15)" when empty, as on the login page. Why New
 game is refused comes from the server as counts (`waiting`, `seated`) for
 the page to word.
 
-The game's controls are next, when the author asks. Russian names already
-in use (the author said to estimate the game's terms), so the controls
-should match them: юниты (units), бригада (crew; the button «Бригада»),
-«Вернуть» (Return), «Герои» (Heroes), «Атака» (Attack), карьер (pit),
-повозка (wagon), отряд (band), прочность (a building's hit points),
-кустарник (scrub), Тёмный Лорд (the Dark Lord), modes Кооператив, Лёгкий
-Лорд, Общий Лёгкий Лорд, Все против всех, and sides Синие, Багровые,
-Зелёные, Золотые, Бирюзовые, Оранжевые, Розовые, Серебряные (plural, as
-teams: "победили Синие"). How to play already names those buttons in
-Russian.
+The game's buttons are translated too (the author asked for special care
+that they fit). Russian names in use (the author said to estimate the
+game's terms), which the rest of the game should match: юниты (units),
+бригада (crew; the button «Бригада…»), «Вернуть» (Return), «Бросить»
+(Abort), «Герои…» (Heroes), «Атака…» (Attack), «Апгрейд» (Upgrade, the
+author's word), яма (pit), воз (wagon), отряд (band), башня, ферма,
+прочность (a building's hit points), кустарник (scrub), Тёмный Лорд (the
+Dark Lord), modes Кооператив, Лёгкий Лорд, Общий Лёгкий Лорд, Все против
+всех, sides Синие, Багровые, Зелёные, Золотые, Бирюзовые, Оранжевые,
+Розовые, Серебряные (plural, as teams: "победили Синие"), and on the
+buttons Строить, Выбрано, Вид, Центр, Тихо, Координаты, Уступить место,
+Занять место, Итоги, Лобби. How to play names the buttons the same way.
+
+The author's fallback words for buttons too long: Народ (crew), яма, бить
+(attack), воз, назад (return), стоп (abort). How the choice was made: a
+page with the real stylesheet and IBM Plex Sans served locally (the cloud
+browser can't reach Google Fonts; fetch the font files with curl), each
+label's narrowest width measured, on a 390 px and a 360 px phone and a
+desktop. A phone's buttons wrap into rows by their narrowest widths
+(flex 1, basis 0), and a row is as tall as its tallest label. In English
+the first row holds the five build buttons and Upgrade. In Russian, only
+Воз and Яма with Апгрейд keep it so (Повозка, Карьер or Улучшить push
+Upgrade to the second row, which then wraps), giving exactly the
+English heights at 390 px. Бригада, Вернуть, Бросить and Атака fit as they
+are. On the phone a price goes on its own line without the dot, in
+English too, or "Воз · 15◆" wrapped onto three lines. At 360 px, English
+itself drops Upgrade to the second row, and Russian is a line taller with
+a building's crew showing ("Уступить место" wraps; Стоп would fix it by
+2 px). On a desktop the key sits in the button's corner, within its
+padding, so it takes no width; the panel is 8 px wider than in English,
+for "Уступить место".
 
 His plan: translate only the lobby and the game's controls, each text about
 as long as the English so the layout holds, and take care with short texts
 and texts built up as the game goes. Things to watch there:
 
-- A button's bold letter is its key (**T**ower, **U**pgrade): a Russian
-  word either marks its own letter, or the keys stay Latin.
+- A button's bold letter is its key (**T**ower, **U**pgrade): in Russian
+  the keys stay Latin, in the button's corner, and work on a Russian
+  keyboard (done for the buttons; the crew chooser's Enter-or-letter and
+  the Heroes list's H already use `keyLetter`).
 - Short labels padded to line up, such as "Att Lv 15" in the Heroes list.
 - Counts with a noun ("3 heroes died"): Russian has three plural forms.
 - Texts the server sends in English, such as the core's refusals, which

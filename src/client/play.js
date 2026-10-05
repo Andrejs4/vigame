@@ -18,8 +18,10 @@ import { Camera } from './camera.js';
 import { Effects, fallenHeroes, fallenHeroesNote } from './effects.js';
 import { Minimap } from './minimap.js';
 import { BoardRenderer, COUNT_ZOOM, pickAt } from './render.js';
+import { autoLanguage, browserLanguages, chosenLanguage, keyLetter } from './language.js';
 import { Sounds, soundsFor } from './sounds.js';
 import { Tokens } from './tokens.js';
+import { say, translate } from './words.js';
 
 /** @param {number} tick */
 function formatTime(tick) {
@@ -71,15 +73,45 @@ function worth(line) {
 const PLENTY = { stone: 60, metal: 30 };
 
 /**
- * Set a button's label with its first letter in bold: the key that presses it.
+ * Set the label of a button that a key presses (its aria-keyshortcuts), and
+ * its price if it has one ("Tower · 60"; on a phone the price goes on a line
+ * of its own). The label's first letter is in bold when it is the key, as in
+ * English; else the key is in the button's corner, as in Russian.
  * @param {HTMLElement} button
  * @param {string} label
+ * @param {string} [price]
  */
-function keyLabel(button, label) {
-  if (button.textContent === label && button.firstChild?.nodeName === 'B') return;
-  const key = document.createElement('b');
-  key.textContent = label[0];
-  button.replaceChildren(key, label.slice(1));
+function keyLabel(button, label, price = '') {
+  const key = button.getAttribute('aria-keyshortcuts') ?? '';
+  const shown = `${label}|${price}`;
+  if (button.dataset.shown === shown) return;
+  button.dataset.shown = shown;
+  /** @type {Array<Node | string>} */
+  const parts = [];
+  if (label[0]?.toUpperCase() === key) {
+    const letter = document.createElement('b');
+    letter.textContent = label[0];
+    parts.push(letter, label.slice(1));
+  } else {
+    parts.push(label);
+  }
+  if (price) {
+    const dot = document.createElement('span');
+    dot.className = 'dot';
+    dot.textContent = ' · ';
+    const priced = document.createElement('span');
+    priced.className = 'price';
+    priced.append(dot, price);
+    parts.push(priced);
+  }
+  if (parts[0] === label) {
+    const corner = document.createElement('kbd');
+    corner.textContent = key;
+    // Screen readers have aria-keyshortcuts.
+    corner.setAttribute('aria-hidden', 'true');
+    parts.push(corner);
+  }
+  button.replaceChildren(...parts);
 }
 
 /** @typedef {import('../core/game.js').Building} Building */
@@ -87,7 +119,7 @@ function keyLabel(button, label) {
 /**
  * Show the game and play it.
  * @param {Awaited<ReturnType<typeof import('./net.js').createServerNet>>} net A joined game.
- * @param {import('./api.js').Player} me
+ * @param {import('./api.js').Me} me
  */
 export async function startGame(net, me) {
   const stage = /** @type {HTMLElement} */ (document.getElementById('stage'));
@@ -95,6 +127,12 @@ export async function startGame(net, me) {
   const mapCanvas = /** @type {HTMLCanvasElement} */ (document.getElementById('minimap-canvas'));
   const mapFrame = /** @type {HTMLElement} */ (document.getElementById('minimap-frame'));
   const controls = /** @type {HTMLElement} */ (document.getElementById('controls'));
+  // The buttons are in the player's language; the rest of the game isn't
+  // translated yet.
+  const language = chosenLanguage(me.language, autoLanguage(browserLanguages(), me.name));
+  const word = (/** @type {import('./words.js').Word} */ w, /** @type {Record<string, string | number>} */ values = {}) => say(language, { word: w, values });
+  controls.lang = language;
+  translate(controls, language);
   const hud = {
     gameName: document.getElementById('game-name'),
     time: document.getElementById('time'),
@@ -122,6 +160,9 @@ export async function startGame(net, me) {
   const abortButton = /** @type {HTMLButtonElement} */ (document.getElementById('abort-button'));
   const attackButton = /** @type {HTMLButtonElement} */ (document.getElementById('attack-button'));
   const muteButton = /** @type {HTMLButtonElement} */ (document.getElementById('mute-button'));
+  keyLabel(crewButton, word('crew'));
+  keyLabel(heroesButton, word('heroes'));
+  keyLabel(attackButton, word('attack'));
   const scoresButton = /** @type {HTMLButtonElement} */ (document.getElementById('scores-button'));
   const scoresDialog = /** @type {HTMLDialogElement} */ (document.getElementById('scores'));
   const gameId = new URLSearchParams(location.search).get('game') ?? '';
@@ -501,7 +542,8 @@ export async function startGame(net, me) {
     const over = view?.over !== undefined;
     seatButton.hidden = over || (seat === null && !net.canClaimSeat());
     scoresButton.hidden = !over;
-    seatButton.textContent = seat === null ? 'Take seat' : 'Release seat';
+    const seatLabel = word(seat === null ? 'takeSeat' : 'releaseSeat');
+    if (seatButton.textContent !== seatLabel) seatButton.textContent = seatLabel;
 
     const can = canCommand();
     for (const button of buildButtons) {
@@ -514,7 +556,7 @@ export async function startGame(net, me) {
     upgradeButton.disabled = !upgradable;
     const price = upgradable && b ? upgradeCost(b) : null;
     const priced = [price?.stone ? String(price.stone) : '', price?.metal ? `${price.metal}◆` : ''].filter(Boolean);
-    keyLabel(upgradeButton, priced.length ? `Upgrade · ${priced.join(' + ')}` : 'Upgrade');
+    keyLabel(upgradeButton, word('upgrade'), priced.join(' + '));
     const crewed = Boolean(mine && b && b.type !== 'castle' && !isDugOut(b));
     crewButton.disabled = !crewed;
     // Your castle has no crew (everyone at home is in it): Heroes takes its place.
@@ -810,7 +852,7 @@ export async function startGame(net, me) {
     crewDialog.onkeydown = (e) => {
       // Closed, it keeps the focus until the next frame: the key is the page's then.
       if (!crewDialog.open || e.repeat || e.ctrlKey || e.metaKey || e.altKey) return;
-      const confirms = e.key === 'Enter' ? !(e.target instanceof HTMLButtonElement) : e.key.toLowerCase() === key.toLowerCase();
+      const confirms = e.key === 'Enter' ? !(e.target instanceof HTMLButtonElement) : keyLetter(e) === key.toLowerCase();
       if (!confirms) return;
       e.preventDefault();
       crewParts.ok.click();
@@ -1089,7 +1131,7 @@ export async function startGame(net, me) {
   const shortcuts = new Map([...controls.querySelectorAll('button[aria-keyshortcuts]')]
     .map((button) => [button.getAttribute('aria-keyshortcuts')?.toLowerCase(), /** @type {HTMLButtonElement} */ (button)]));
   addEventListener('keydown', (e) => {
-    const button = shortcuts.get(e.key.toLowerCase());
+    const button = shortcuts.get(keyLetter(e));
     if (!button || button.disabled || button.hidden) return;
     if (e.defaultPrevented || e.repeat || e.ctrlKey || e.metaKey || e.altKey) return;
     if (crewDialog.open || heroesDialog.open || scoresDialog.open || renameDialog.open) return;
@@ -1100,9 +1142,13 @@ export async function startGame(net, me) {
 
   for (const button of buildButtons) {
     const { name, cost, metal, hunger } = BUILDING_TYPES[button.dataset.kind ?? ''];
-    keyLabel(button, cost ? `${name} · ${cost}` : metal ? `${name} · ${metal}◆` : hunger ? `${name} · ${hunger}%` : name);
-    button.title = `${name} (${name[0]}): ${cost ? `${cost} stone` : metal ? `${metal} dark metal, near your castle`
-      : hunger ? `${hunger}% more hunger (free once it is 100%)` : 'free'}`;
+    const label = word(/** @type {import('./words.js').Word} */ (button.dataset.kind));
+    keyLabel(button, label, cost ? String(cost) : metal ? `${metal}◆` : hunger ? `${hunger}%` : '');
+    button.title = word('buildTitle', {
+      name: label,
+      key: button.getAttribute('aria-keyshortcuts') ?? '',
+      price: cost ? word('stoneCost', { n: cost }) : metal ? word('metalCost', { n: metal }) : hunger ? word('hungerCost', { n: hunger }) : word('free'),
+    });
     button.addEventListener('click', () => {
       const kind = button.dataset.kind ?? null;
       // Short of its price, say so now, not after a cell and a crew are chosen.
@@ -1173,7 +1219,7 @@ export async function startGame(net, me) {
   heroesButton.addEventListener('click', showHeroes);
   heroesDialog.addEventListener('keydown', (e) => {
     // Closed, it keeps the focus until the next frame: the key is the page's then.
-    if (!heroesDialog.open || e.key.toLowerCase() !== 'h' || e.repeat || e.ctrlKey || e.metaKey || e.altKey) return;
+    if (!heroesDialog.open || keyLetter(e) !== 'h' || e.repeat || e.ctrlKey || e.metaKey || e.altKey) return;
     e.preventDefault();
     heroesDialog.close();
   });

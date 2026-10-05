@@ -35,9 +35,12 @@ Run `npm start` and open http://127.0.0.1:2567.
   pages turn at once when Russian is chosen. On the login page, Auto goes
   by the first of the browser's languages that is English or Russian, else
   picks Russian for a name typed in Cyrillic letters, else English. Once
-  signed in (settings, lobby), Auto picks Russian for a name in Cyrillic
-  letters first, then goes by the browser, else English. The game itself
-  is in English for now.
+  signed in (settings, lobby, game), Auto picks Russian for a name in
+  Cyrillic letters first, then goes by the browser, else English. In a
+  game the buttons are in Russian too (Башня, Воз, Яма, Ферма, Отряд,
+  Апгрейд, Бригада…, Герои…, Вернуть, Бросить, Атака…), chosen short
+  enough that a phone's rows of buttons stay as in English; the panels,
+  messages and dialogs are in English for now.
 - **The lobby** lists your games under way, games with a free seat, other
   people's under way with every seat taken (**Watch** opens one as an
   observer), and the finished ones (anyone's; **Scores** opens one at its
@@ -246,7 +249,10 @@ Run `npm start` and open http://127.0.0.1:2567.
 - **Keys**: a button's bold letter presses it: **T**ower, **W**agon, **P**it,
   **F**arm and **B**and pick what to place (again to stop), **U**pgrade,
   **C**rew and **A**ttack act on the selected building, **H**eroes on your
-  castle, and Escape lets go.
+  castle, and Escape lets go. In Russian the same Latin letter sits small
+  in the button's corner. The keys work on a keyboard set to Russian too
+  (T is the key that types "е" there). On a phone a button's price is on
+  a line of its own, and no keys show.
   Choosing a crew, Enter sends it, as does the letter that opened the
   chooser again (C, or the letter of the building being placed); H closes
   the heroes list.
