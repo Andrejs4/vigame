@@ -12,7 +12,7 @@ CLAUDE.md has the rules for working on the code; this is the background.
   player sees it, show screenshots, and say whether a deploy keeps saved
   games. `npm run smoke` leaves screenshots in `smoke-output/`: `game-blue.png`,
   `crew.png`, `heroes.png`, `phone.png`, `effects.png`, `lobby*.png`,
-  `login.png`, `settings.png`, `scores.png`, and `failed-*.png` when a check
+  `login*.png`, `settings.png`, `scores.png`, and `failed-*.png` when a check
   fails.
 - The work happens in Claude Code cloud sessions, on a `claude/…` branch.
   Each batch of requests becomes one pull request, opened when he asks for
@@ -178,16 +178,25 @@ Agreed in outline; nothing built yet.
 
 ### Russian for the lobby and the game's controls
 
-The first step is built: each player has a language, Auto (the default),
-English or Russian, chosen on the login page and the settings page and kept
-on the server (`language` in the players table, `/api/me`). Auto stands for
-Russian when the name has Cyrillic letters, else the first of the
-browser's languages that the page has, else English (`autoLanguage` in
-src/client/language.js; its Auto option says which). Nothing is translated
-yet; the author asked to wait. His plan: translate only the lobby and the
-game's controls, each text about as long as the English so the layout
-holds, and take care with short texts and texts built up as the game goes.
-Things to watch there:
+Built so far: each player has a language, Auto (the default), English or
+Russian, chosen on the login page and the settings page and kept on the
+server (`language` in the players table, `/api/me`). Its Auto option says
+which language Auto picked (src/client/language.js):
+
+- On the login page the browser comes first (the author's choice): the
+  first of its languages that the page has, else Russian for a name typed
+  in Cyrillic letters, else English (`loginLanguage`).
+- Once signed in, the name comes first: Russian for Cyrillic letters, else
+  the browser's, else English (`autoLanguage`).
+
+The login page is translated: its words are `LOGIN_WORDS` in login.js, one
+table per language with `{…}` filled in (`fill`), all drawn by one `show()`
+that runs again when the language or the name changes. The tests check
+every language has every word with the same `{…}`, at most half again as
+long as the English. The lobby and the game wait until the author asks.
+His plan: translate only the lobby and the game's controls, each text about
+as long as the English so the layout holds, and take care with short texts
+and texts built up as the game goes. Things to watch there:
 
 - A button's bold letter is its key (**T**ower, **U**pgrade): a Russian
   word either marks its own letter, or the keys stay Latin.

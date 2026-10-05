@@ -94,7 +94,7 @@ commands.
 | `client/main.js` | Picks the view: the login page while the browser isn't signed in, then a game (`?game=<id>`), the settings (`?settings`) or the lobby. Views switch with a page load, so leaving a game always leaves its room. |
 | `client/api.js` | The browser's token and the HTTP calls, all by addresses relative to the page. |
 | `client/login.js`, `lobby.js`, `settings.js` | The login page, the lobby, and the settings page (name and language). |
-| `client/language.js` | Which language Auto stands for. Nothing is translated yet. |
+| `client/language.js` | Which language Auto stands for: on the login page (the browser first), and once signed in (the name first). Only the login page is translated so far. |
 | `client/play.js` | The game view: input, HUD, controls. |
 | `client/net.js` | The connection to a game: commands out, the core's view in. |
 | `client/camera.js`, `render.js` | Pan and zoom, and canvas drawing. The renderer sits behind a small interface so PixiJS can replace it. |

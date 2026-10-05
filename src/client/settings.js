@@ -5,7 +5,7 @@
 
 import { PLAYER_NAME_MAX, cleanPlayerName } from '../core/player.js';
 import { post, reason, saveName, serverBase } from './api.js';
-import { showAutoLanguage } from './language.js';
+import { LANGUAGE_NAMES, autoLanguage, browserLanguages } from './language.js';
 
 /**
  * Show the settings page. It stays up until the player saves or goes back,
@@ -21,9 +21,15 @@ export function showSettings(token, me) {
   const error = /** @type {HTMLElement} */ (document.getElementById('settings-error'));
   const save = /** @type {HTMLButtonElement} */ (document.getElementById('settings-save'));
 
+  // Auto says which language it stands for, following the name typed.
+  const auto = /** @type {HTMLOptionElement} */ (languageSelect.querySelector('option[value="auto"]'));
+  const showAuto = () => {
+    auto.textContent = `Auto (${LANGUAGE_NAMES[autoLanguage(browserLanguages(), nameInput.value)]})`;
+  };
+  nameInput.addEventListener('input', showAuto);
   nameInput.value = me.name;
   languageSelect.value = me.language;
-  showAutoLanguage(languageSelect, nameInput);
+  showAuto();
   error.textContent = '';
   page.hidden = false;
 

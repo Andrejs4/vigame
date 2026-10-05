@@ -1,7 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { LANGUAGE_NAMES, autoLanguage } from '../src/client/language.js';
+import { LANGUAGE_NAMES, autoLanguage, fill, loginLanguage } from '../src/client/language.js';
+import { LOGIN_WORDS } from '../src/client/login.js';
 import { LANGUAGES } from '../src/core/player.js';
 
 test('the page offers each language a player may choose, by its own name', () => {
@@ -9,23 +10,52 @@ test('the page offers each language a player may choose, by its own name', () =>
   assert.deepEqual(LANGUAGE_NAMES, { en: 'English', ru: 'Русский' });
 });
 
-test('Auto: Russian for a name in Cyrillic letters, whatever the browser says', () => {
+test('Auto, once signed in: Russian for a name in Cyrillic letters, whatever the browser says', () => {
   assert.equal(autoLanguage(['en-US', 'en'], 'Анна'), 'ru');
   assert.equal(autoLanguage([], 'Jānis Ёлкин'), 'ru', 'one Cyrillic letter is enough');
   assert.equal(autoLanguage(['de'], 'Иван 2'), 'ru');
 });
 
-test('Auto: else the first of the browser\'s languages the page has', () => {
-  // The registration page, before a name is typed.
+test('Auto, once signed in: else the first of the browser\'s languages the page has', () => {
   assert.equal(autoLanguage(['ru-RU', 'ru', 'en-US', 'en']), 'ru');
   assert.equal(autoLanguage(['lv', 'ru', 'en'], ''), 'ru');
   assert.equal(autoLanguage(['lv', 'en-GB', 'ru'], 'Jānis'), 'en');
   assert.equal(autoLanguage(['RU'], 'Ann'), 'ru', 'tags in any case');
 });
 
-test('Auto: else English', () => {
+test('Auto, once signed in: else English', () => {
   assert.equal(autoLanguage([]), 'en');
   assert.equal(autoLanguage(['de-DE', 'fr'], 'Ann'), 'en');
   assert.equal(autoLanguage([''], '李小龍'), 'en');
   assert.equal(autoLanguage(['uk'], 'Ann'), 'en');
+});
+
+test('Auto on the login page: the browser first, then the name typed, then English', () => {
+  assert.equal(loginLanguage(['en-US', 'en'], 'Анна'), 'en');
+  assert.equal(loginLanguage(['ru-RU'], 'Ann'), 'ru');
+  assert.equal(loginLanguage(['lv', 'ru', 'en'], ''), 'ru');
+  assert.equal(loginLanguage(['de'], 'Анна'), 'ru');
+  assert.equal(loginLanguage(['de'], 'Ann'), 'en');
+  assert.equal(loginLanguage([]), 'en');
+});
+
+test('fill puts values in a text\'s {placeholders}, and leaves one with no value', () => {
+  assert.equal(fill('What is {sum}?', { sum: '3 + 4' }), 'What is 3 + 4?');
+  assert.equal(fill('Use 1–{max} of {max}', { max: 15 }), 'Use 1–15 of 15');
+  assert.equal(fill('{why} {else}', { why: 'no' }), 'no {else}');
+  assert.equal(fill('Play'), 'Play');
+});
+
+test('the login page has every word in every language, about as long as the English', () => {
+  assert.deepEqual(Object.keys(LOGIN_WORDS), Object.keys(LANGUAGE_NAMES));
+  const placeholders = (/** @type {string} */ text) => [...text.matchAll(/\{\w+\}/g)].map((m) => m[0]).sort();
+  for (const [language, words] of Object.entries(LOGIN_WORDS)) {
+    assert.deepEqual(Object.keys(words), Object.keys(LOGIN_WORDS.en), language);
+    for (const [key, text] of Object.entries(words)) {
+      const english = LOGIN_WORDS.en[/** @type {keyof typeof LOGIN_WORDS.en} */ (key)];
+      assert.deepEqual(placeholders(text), placeholders(english), `${language}.${key}`);
+      assert.ok(text.length <= Math.ceil(english.length * 1.5), `${language}.${key} is much longer than the English`);
+    }
+  }
+  assert.equal(fill(LOGIN_WORDS.en.namePlaceholder, { max: 15 }), 'Visible name (15)');
 });

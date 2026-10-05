@@ -301,7 +301,7 @@ async function logIn(page, name, { touch = false } = {}) {
     return banners.length === 2 && banners.every((b) => b.complete && b.naturalWidth === 1040);
   });
   const question = await page.waitForFunction(() => {
-    const m = /What is (\d+) \+ (\d+)\?/.exec(document.getElementById('login-question')?.textContent ?? '');
+    const m = /(\d+) \+ (\d+)\?/.exec(document.getElementById('login-question')?.textContent ?? '');
     return m && Number(m[1]) + Number(m[2]);
   });
   await page.fill('#login-name', name);
@@ -456,12 +456,25 @@ async function threeBrowsers(browser, url, { full, label }) {
   await a.waitForFunction(() => /What is/.test(document.getElementById('login-question')?.textContent ?? ''));
   await a.waitForFunction(() => [...document.querySelectorAll('#login .banner')].every((b) => /** @type {HTMLImageElement} */ (b).complete));
   if (full) await a.screenshot({ path: join(OUT, 'login.png') });
-  // The language is Auto at first, which says what it stands for: English
-  // in this browser, Russian once the name is in Cyrillic letters.
+  // The name field says what it is for. The language is Auto at first,
+  // which says what it stands for: on the login page the browser comes
+  // first, so English here, even for a name in Cyrillic letters.
+  assert.equal(await a.getAttribute('#login-name', 'placeholder'), 'Visible name (15)');
   assert.equal(await a.inputValue('#login-language'), 'auto');
   await waitText(a, '#login-language option[value="auto"]', 'Auto (English)');
   await a.fill('#login-name', 'Анна');
-  await waitText(a, '#login-language option[value="auto"]', 'Auto (Русский)');
+  await waitText(a, '#login-language option[value="auto"]', 'Auto (English)');
+  await waitText(a, '#login-submit', 'Play');
+  // Choosing Russian turns the page Russian at once, and Auto turns it back.
+  await a.selectOption('#login-language', 'ru');
+  await waitText(a, '#login-submit', 'Играть');
+  await waitMatch(a, '#login-question', /^Сколько будет \d+ \+ \d+\?$/);
+  assert.equal(await a.getAttribute('#login-name', 'placeholder'), 'Имя в игре (15)');
+  await waitText(a, '#login-language option[value="auto"]', 'Авто (English)');
+  assert.equal(await a.evaluate(() => document.documentElement.lang), 'ru');
+  if (full) await a.screenshot({ path: join(OUT, 'login-ru.png') });
+  await a.selectOption('#login-language', 'auto');
+  await waitText(a, '#login-submit', 'Play');
   await a.fill('#login-name', 'Ann \u{1F642}');
   await a.fill('#login-answer', '1');
   await a.click('#login-submit');
@@ -478,6 +491,7 @@ async function threeBrowsers(browser, url, { full, label }) {
   // its address is the invitation. Alone, she waits for a second player.
   await inLobby(a);
   assert.equal(await text(a, '#lobby-name'), 'Ann');
+  assert.equal(await a.evaluate(() => document.documentElement.lang), 'en', 'the lobby is in English');
   await a.waitForSelector('#lobby-mine-empty:not([hidden])');
   if (full) await a.screenshot({ path: join(OUT, 'lobby.png') });
   // Under the lists, How to play and About, folded at first; About links
@@ -1020,9 +1034,16 @@ async function threeBrowsers(browser, url, { full, label }) {
 
 /** The login page, the lobby, settings and a Shared Easy Lord game on a phone, with a desktop teammate. */
 async function phone(browser, url) {
-  // A browser in Russian: Auto stands for Russian, even for a name in
-  // Latin letters.
-  const page = await newPlayer(browser, url, 'phone', 'Pia', { ...PHONE, locale: 'ru-RU' });
+  // A browser in Russian: the login page is in Russian, and Auto stands
+  // for Russian, even for a name in Latin letters.
+  const page = await openPage(browser, 'phone', { ...PHONE, locale: 'ru-RU' });
+  await page.goto(url);
+  await page.waitForSelector('#login:not([hidden])');
+  await waitText(page, '#login-submit', 'Играть');
+  await waitMatch(page, '#login-question', /^Сколько будет \d+ \+ \d+\?$/);
+  await waitText(page, '#login-language option[value="auto"]', 'Авто (Русский)');
+  await page.screenshot({ path: join(OUT, 'login-phone.png') });
+  await logIn(page, 'Pia', { touch: true });
   await inLobby(page);
   const fits = () => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth);
   assert.ok(await fits(), 'the lobby scrolls sideways on a phone');

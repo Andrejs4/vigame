@@ -27,11 +27,11 @@
   <img class="banner" src="client/art/banner.webp" width="1040" height="400" alt="">
   <form class="card" novalidate>
     <h1>Vigame</h1>
-    <p class="hint">The name other players see: up to 15 letters or digits.</p>
-    <label>Your name
-      <input id="login-name" name="name" autocomplete="nickname" spellcheck="false" required>
+    <!-- Its words are in login.js, in each language. -->
+    <label><span id="login-name-label">Your name</span>
+      <input id="login-name" name="name" placeholder="Visible name (15)" autocomplete="nickname" spellcheck="false" required>
     </label>
-    <label>Language
+    <label><span id="login-language-label">Language</span>
       <select id="login-language" name="language">
         <option value="auto" selected>Auto</option>
         <option value="en" lang="en">English</option>
@@ -62,8 +62,8 @@
       </select>
     </label>
     <p class="hint">Auto picks Russian for a name in Cyrillic letters, or
-      follows your browser; English otherwise. Nothing is translated yet,
-      so for now it is all in English.</p>
+      follows your browser; English otherwise. Only the login page is in
+      Russian so far.</p>
     <p class="error" id="settings-error" role="alert"></p>
     <div class="buttons">
       <a class="button" id="settings-back" href="./">Back</a>

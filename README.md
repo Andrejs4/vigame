@@ -29,11 +29,13 @@ Run `npm start` and open http://127.0.0.1:2567.
 - **Log in** with a name, a language and the answer to a small sum. A
   browser stays logged in across visits. **Settings**, next to your name
   in the lobby, changes the name and the language.
-- **Language**: Auto (the default), English or Russian. Auto picks Russian
-  for a name in Cyrillic letters, else the first of the browser's
-  languages that is English or Russian, else English; its option says which
-  it picked.
-  Nothing is translated yet, so for now everything is in English.
+- **Language**: Auto (the default), English or Russian; Auto's option says
+  which it picked. The login page is in Russian already: for Auto, when
+  the first of the browser's languages that is English or Russian is
+  Russian (or, with neither, for a name typed in Cyrillic letters), and at
+  once when Russian is chosen. Once signed in, Auto picks Russian for a
+  name in Cyrillic letters, else goes by the browser as above, else
+  English. The rest of the page is in English for now.
 - **The lobby** lists your games under way, games with a free seat, other
   people's under way with every seat taken (**Watch** opens one as an
   observer), and the finished ones (anyone's; **Scores** opens one at its
