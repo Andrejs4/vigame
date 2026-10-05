@@ -52,6 +52,14 @@ const START_SPOTS = [
   [{ fx: 0.14, fy: 0.5 }, { fx: 0.32, fy: 0.188 }, { fx: 0.68, fy: 0.188 }, { fx: 0.86, fy: 0.5 }, { fx: 0.68, fy: 0.812 }, { fx: 0.32, fy: 0.812 }],
   [{ fx: 0.14, fy: 0.5 }, { fx: 0.276, fy: 0.219 }, { fx: 0.58, fy: 0.149 }, { fx: 0.824, fy: 0.344 }, { fx: 0.824, fy: 0.656 }, { fx: 0.58, fy: 0.851 }, { fx: 0.276, fy: 0.781 }],
   [{ fx: 0.14, fy: 0.5 }, { fx: 0.245, fy: 0.245 }, { fx: 0.5, fy: 0.14 }, { fx: 0.755, fy: 0.245 }, { fx: 0.86, fy: 0.5 }, { fx: 0.755, fy: 0.755 }, { fx: 0.5, fy: 0.86 }, { fx: 0.245, fy: 0.755 }],
+  [{ fx: 0.14, fy: 0.5 }, { fx: 0.224, fy: 0.269 }, { fx: 0.437, fy: 0.145 }, { fx: 0.68, fy: 0.188 }, { fx: 0.838, fy: 0.377 }, { fx: 0.838, fy: 0.623 }, { fx: 0.68, fy: 0.812 }, { fx: 0.437, fy: 0.855 }, { fx: 0.224, fy: 0.731 }],
+  [{ fx: 0.14, fy: 0.5 }, { fx: 0.209, fy: 0.288 }, { fx: 0.389, fy: 0.158 }, { fx: 0.611, fy: 0.158 }, { fx: 0.791, fy: 0.288 }, { fx: 0.86, fy: 0.5 }, { fx: 0.791, fy: 0.712 }, { fx: 0.611, fy: 0.842 }, { fx: 0.389, fy: 0.842 }, { fx: 0.209, fy: 0.712 }],
+  [{ fx: 0.14, fy: 0.5 }, { fx: 0.197, fy: 0.305 }, { fx: 0.35, fy: 0.173 }, { fx: 0.551, fy: 0.144 }, { fx: 0.736, fy: 0.228 }, { fx: 0.845, fy: 0.399 }, { fx: 0.845, fy: 0.601 }, { fx: 0.736, fy: 0.772 }, { fx: 0.551, fy: 0.856 }, { fx: 0.35, fy: 0.827 }, { fx: 0.197, fy: 0.695 }],
+  [{ fx: 0.14, fy: 0.5 }, { fx: 0.188, fy: 0.32 }, { fx: 0.32, fy: 0.188 }, { fx: 0.5, fy: 0.14 }, { fx: 0.68, fy: 0.188 }, { fx: 0.812, fy: 0.32 }, { fx: 0.86, fy: 0.5 }, { fx: 0.812, fy: 0.68 }, { fx: 0.68, fy: 0.812 }, { fx: 0.5, fy: 0.86 }, { fx: 0.32, fy: 0.812 }, { fx: 0.188, fy: 0.68 }],
+  [{ fx: 0.14, fy: 0.5 }, { fx: 0.181, fy: 0.333 }, { fx: 0.295, fy: 0.204 }, { fx: 0.457, fy: 0.143 }, { fx: 0.628, fy: 0.163 }, { fx: 0.769, fy: 0.261 }, { fx: 0.85, fy: 0.414 }, { fx: 0.85, fy: 0.586 }, { fx: 0.769, fy: 0.739 }, { fx: 0.628, fy: 0.837 }, { fx: 0.457, fy: 0.857 }, { fx: 0.295, fy: 0.796 }, { fx: 0.181, fy: 0.667 }],
+  [{ fx: 0.14, fy: 0.5 }, { fx: 0.176, fy: 0.344 }, { fx: 0.276, fy: 0.219 }, { fx: 0.42, fy: 0.149 }, { fx: 0.58, fy: 0.149 }, { fx: 0.724, fy: 0.219 }, { fx: 0.824, fy: 0.344 }, { fx: 0.86, fy: 0.5 }, { fx: 0.824, fy: 0.656 }, { fx: 0.724, fy: 0.781 }, { fx: 0.58, fy: 0.851 }, { fx: 0.42, fy: 0.851 }, { fx: 0.276, fy: 0.781 }, { fx: 0.176, fy: 0.656 }],
+  [{ fx: 0.14, fy: 0.5 }, { fx: 0.171, fy: 0.354 }, { fx: 0.259, fy: 0.232 }, { fx: 0.389, fy: 0.158 }, { fx: 0.538, fy: 0.142 }, { fx: 0.68, fy: 0.188 }, { fx: 0.791, fy: 0.288 }, { fx: 0.852, fy: 0.425 }, { fx: 0.852, fy: 0.575 }, { fx: 0.791, fy: 0.712 }, { fx: 0.68, fy: 0.812 }, { fx: 0.538, fy: 0.858 }, { fx: 0.389, fy: 0.842 }, { fx: 0.259, fy: 0.768 }, { fx: 0.171, fy: 0.646 }],
+  [{ fx: 0.14, fy: 0.5 }, { fx: 0.167, fy: 0.362 }, { fx: 0.245, fy: 0.245 }, { fx: 0.362, fy: 0.167 }, { fx: 0.5, fy: 0.14 }, { fx: 0.638, fy: 0.167 }, { fx: 0.755, fy: 0.245 }, { fx: 0.833, fy: 0.362 }, { fx: 0.86, fy: 0.5 }, { fx: 0.833, fy: 0.638 }, { fx: 0.755, fy: 0.755 }, { fx: 0.638, fy: 0.833 }, { fx: 0.5, fy: 0.86 }, { fx: 0.362, fy: 0.833 }, { fx: 0.245, fy: 0.755 }, { fx: 0.167, fy: 0.638 }],
 ];
 const LAIR_SPOT = { fx: 0.5, fy: 0.5 };
 
@@ -61,8 +69,8 @@ const GROUND = 1.5;
 /**
  * The map's size for a number of players: 29 by 20 for one or two (GROUND
  * times 24 by 16), growing with the square root of the players beyond, so
- * each has about as much ground (59 by 39 for eight). Big enough that
- * castles start out of the lair's reach and of each other's (a test in
+ * each has about as much ground (59 by 39 for eight, 83 by 55 for
+ * sixteen). Big enough that castles start out of the lair's reach and of each other's (a test in
  * board.test.js keeps it so).
  * @param {number} players
  */
@@ -179,7 +187,7 @@ function connected(terrain, from, to) {
  *
  * @param {object} [options]
  * @param {'rectangle' | 'hexagon'} [options.shape='rectangle']
- * @param {number} [options.players=2] How many players' castles it has sites for (1 to 8).
+ * @param {number} [options.players=2] How many players' castles it has sites for (1 to 16).
  * @param {number} [options.width] Columns, when shape is 'rectangle'; by default from `boardSize`.
  * @param {number} [options.height] Rows, likewise.
  * @param {number} [options.radius=7] Radius, when shape is 'hexagon'.

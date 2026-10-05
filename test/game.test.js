@@ -4,10 +4,10 @@ import assert from 'node:assert/strict';
 import { BOARD_OPTIONS, createBoard } from '../src/core/board.js';
 import {
   advance, applyCommand, capacityOf, checkState, crewOf, footprint, levelXp, newGame, occupancy, publicView, random,
-  depthOf, fullMeal, isRising, killChance, maxHp, pointsOf, seatsOf, starveChance,
+  breedRate, depthOf, fullMeal, sharesStock, isRising, killChance, maxHp, pointsOf, seatsOf, starveChance, ROOM_COMMANDS,
 } from '../src/core/game.js';
 import {
-  BUILDING_TYPES, COMBAT_PERIOD, DARK_LORD, HORDE_PERIOD, HORDE_START, RAIDERS, RAID_PERIOD, RAID_PER_PLAYER, SALVAGE, FOOD_PER_UNIT, FOOD_PERIOD, KILL_XP, LEVEL_RATE, RANGED_DAMAGE, LEVEL_XP, MAX_HUNGER, MAX_LEVEL, SKILL_RATE, SKILL_XP, START_UNITS, UNIT_LIMIT, WAGON_PATIENCE,
+  BUILDING_TYPES, COMBAT_PERIOD, DARK_LORD, HORDE_PERIOD, HORDE_START, RAIDERS, RAID_PERIOD, RAID_PER_PLAYER, SALVAGE, SIDES, FOOD_PER_UNIT, FOOD_PERIOD, KILL_XP, LEVEL_RATE, RANGED_DAMAGE, LEVEL_XP, MAX_HUNGER, MAX_LEVEL, SKILL_RATE, SKILL_XP, START_UNITS, UNIT_LIMIT, WAGON_PATIENCE,
   WALK_TICKS, WORK_BASE,
 } from '../src/core/rules.js';
 import { distance } from '../src/core/hex.js';
@@ -48,17 +48,23 @@ test('a new game has a castle per player on the start sites, with named units in
   assert.deepEqual(newGame(board), state, 'the same seed names the same units');
 });
 
-test('games seat 1 to 8 players, on maps that grow with them', () => {
-  for (const players of [1, 8]) {
+test('games seat 1 to 16 players, on maps that grow with them', () => {
+  for (const players of [1, 8, 9, 16]) {
     const board = createBoard({ ...BOARD_OPTIONS, seed: 9, players });
     assert.equal(board.starts.length, players + 1, 'a site per player, and the lair\'s');
-    for (const mode of players > 1 ? ['coop', 'easy', 'shared', 'ffa'] : ['coop', 'easy', 'shared']) {
+    for (const mode of players > 1 ? ['coop', 'easy', 'veryEasy', 'shared', 'ffa'] : ['coop', 'easy', 'veryEasy', 'shared']) {
       const state = newGame(board, { mode });
       assert.deepEqual(checkState(board, state), [], `${players} players, ${mode}`);
       assert.equal(seatsOf(state), players);
       assert.equal(Object.values(state.buildings).filter((b) => b.type === 'castle').length, players);
+      // Each seat has a colour of its own, never the Dark Lord's or the raiders'.
+      const seats = state.players.slice(0, players).map((p) => p.side);
+      assert.equal(new Set(seats).size, players);
+      assert.ok(seats.every((side) => !SIDES[side].npc), `${players} players, ${mode}`);
     }
   }
+  assert.deepEqual(newGame(createBoard({ ...BOARD_OPTIONS, seed: 9, players: 2 })).players.map((p) => p.side), [0, 1, DARK_LORD, RAIDERS],
+    'the first eight seats keep the colours they had before there were more');
   assert.ok(createBoard({ ...BOARD_OPTIONS, seed: 9, players: 8 }).list.length > 3 * createBoard({ ...BOARD_OPTIONS, seed: 9 }).list.length);
 });
 
@@ -666,11 +672,12 @@ test('in cooperation the Dark Lord\'s lair sends out ever bigger waves of ghouls
   assert.ok(!Object.values(alone.buildings).some((b) => BUILDING_TYPES[b.type].hunts), 'no horde without the Dark Lord');
 });
 
-test('the Dark Lord grows with the players: four times the hit points and twice the waves at eight', () => {
+test('the Dark Lord grows with the players: four times the hit points and twice the waves at eight, and no more past', () => {
   const lairOf = (/** @type {number} */ players) => Object.values(newGame(createBoard({ ...BOARD_OPTIONS, seed: 3, players })).buildings)
     .find((b) => b.type === 'lair');
   assert.equal(lairOf(2)?.hp, BUILDING_TYPES.lair.hp);
   assert.equal(lairOf(8)?.hp, 4 * BUILDING_TYPES.lair.hp);
+  assert.equal(lairOf(16)?.hp, 4 * BUILDING_TYPES.lair.hp);
 
   // Eight seats around a lair of the Dark Lord's, only one of them with a castle.
   const board = openBoard(9);
@@ -704,6 +711,44 @@ test('in Easy Lord the Dark Lord\'s lair and horde have half the hit points, and
   const usual = horde('coop');
   assert.ok(usual.some(([type]) => type === 'ogre'), 'ghouls and an ogre by then');
   assert.deepEqual(horde('easy'), usual.map(([type, hp]) => [type, /** @type {number} */ (hp) / 2]));
+});
+
+test('in Very Easy Lord castles raise units twice as fast, otherwise as in Shared Easy Lord', () => {
+  const map = createBoard({ ...BOARD_OPTIONS, seed: 3 });
+  const game = newGame(map, { mode: 'veryEasy' });
+  assert.deepEqual(checkState(map, game), []);
+  assert.deepEqual(game.players.map((p) => p.team), [0, 0, 1, -1], 'the players together against him');
+  assert.deepEqual(game.players.map((p) => p.stone), [400, 0, 0, 0], 'one stock for the team, on its first side');
+  assert.equal(sharesStock('veryEasy'), true);
+  assert.equal(Object.values(game.buildings).find((b) => b.type === 'lair')?.hp, BUILDING_TYPES.lair.hp / 2);
+
+  const board = openBoard(4);
+  const { work = 0, idleWork = 0 } = BUILDING_TYPES.castle;
+  /**
+   * @param {string} mode
+   * @param {Array<Partial<import('../src/core/game.js').Unit> & { id: string }>} units
+   */
+  const firstBirth = (mode, units) => {
+    const state = stateWith([{ id: 'b1', type: 'castle' }], units);
+    state.mode = mode;
+    const before = Object.keys(state.units).length;
+    return runUntil(board, state, () => Object.keys(state.units).length > before, 2 * work);
+  };
+  const ten = unitsIn('b1', 10, 10);
+  assert.equal(firstBirth('easy', ten), Math.ceil(work / (10 * WORK_BASE + idleWork)));
+  assert.equal(firstBirth('veryEasy', ten), Math.ceil(work / (2 * (10 * WORK_BASE + idleWork))));
+  assert.equal(firstBirth('veryEasy', []), Math.ceil(work / (2 * idleWork)), 'and by itself, with nobody at home');
+
+  // The units learn breeding no faster.
+  const state = stateWith([{ id: 'b1', type: 'castle' }], ten);
+  const easy = structuredClone(state);
+  state.mode = 'veryEasy';
+  easy.mode = 'easy';
+  run(board, state, 100);
+  run(board, easy, 100);
+  assert.deepEqual(state.units.u10.practice, easy.units.u10.practice);
+  assert.equal(breedRate('veryEasy'), 2);
+  assert.equal(breedRate('easy'), 1);
 });
 
 test('in Shared Easy Lord the team lives off one stock, kept by its first side, against an easy Lord', () => {
@@ -764,6 +809,56 @@ test('the horde goes for the nearest farm, turns on a building that strikes it, 
   const bare = stateWith([sites[0], sites[3]]);
   run(board, bare, COMBAT_PERIOD);
   assert.equal(bare.buildings.b4.target, 'b1', 'no farm left: the castle');
+});
+
+test('the horde leaves a side whose player is away alone, but fights it on its way', () => {
+  const board = openBoard(7);
+  // The ogre's nearest farm is the third side's, whose player may be away.
+  const sites = [
+    { id: 'b1', type: 'castle', q: -5, r: 0 },
+    { id: 'b2', owner: 2, type: 'farm', q: 3, r: 0 },
+    { id: 'b3', type: 'farm', q: 6, r: -3 },
+    { id: 'b4', owner: 1, type: 'ogre', q: 5, r: 0 },
+  ];
+  const game = (/** @type {Array<Partial<import('../src/core/game.js').Building> & { id: string }>} */ buildings, units = /** @type {any[]} */ ([])) => {
+    const state = stateWith(buildings, units);
+    state.players[1].side = DARK_LORD;
+    // Teammates, as in cooperation.
+    state.players.push({ id: 2, side: 2, team: 0, stone: 0, metal: 0, food: 0, hunger: 0, tally: noTally() });
+    return state;
+  };
+  const here = game(sites);
+  run(board, here, COMBAT_PERIOD);
+  assert.equal(here.buildings.b4.target, 'b2', 'the nearest farm, while its player is here');
+
+  const away = game(sites);
+  assert.deepEqual(applyCommand(board, away, 2, { type: 'away' }), OK);
+  assert.deepEqual(checkState(board, away), []);
+  run(board, away, COMBAT_PERIOD);
+  assert.equal(away.buildings.b4.target, 'b3', 'the nearest farm of a side whose player is here');
+
+  // Going away, a side is let go by the horde already after it.
+  assert.deepEqual(applyCommand(board, here, 2, { type: 'away' }), OK);
+  assert.equal(here.buildings.b4.target, undefined);
+  run(board, here, COMBAT_PERIOD);
+  assert.equal(here.buildings.b4.target, 'b3');
+  assert.deepEqual(applyCommand(board, here, 2, { type: 'back' }), OK);
+  assert.equal(here.players[2].away, undefined);
+  assert.deepEqual(applyCommand(board, here, 2, { type: 'back' }), { ok: false, reason: 'not away' });
+
+  // A tower of the side away that strikes it is fought all the same.
+  const struck = game([...sites, { id: 'b5', owner: 2, q: 5, r: -3 }], unitsIn('b5', 2, 10, 2));
+  assert.deepEqual(applyCommand(board, struck, 2, { type: 'away' }), OK);
+  run(board, struck, COMBAT_PERIOD);
+  assert.equal(struck.buildings.b4.target, 'b5', 'the tower that struck it');
+
+  assert.deepEqual(applyCommand(board, away, 2, { type: 'away' }), { ok: false, reason: 'already away' });
+  assert.deepEqual(applyCommand(board, away, 1, { type: 'away' }), { ok: false, reason: 'not a seat' }, 'the Dark Lord is never away');
+  assert.deepEqual(ROOM_COMMANDS, ['away', 'back']);
+  const odd = structuredClone(away);
+  /** @type {any} */ (odd.players[2]).away = false;
+  /** @type {any} */ (odd.players[1]).away = true;
+  assert.deepEqual(checkState(board, odd), ['side 1: bad away', 'side 2: bad away']);
 });
 
 test('wagons cost dark metal and go up only near the castle; bands can be aimed at', () => {
@@ -1104,6 +1199,7 @@ test('the same commands at the same ticks give the same game, saved and reloaded
   const reloaded = randomGame(11, 1000, () => {});
   assert.deepEqual(randomGame(11, 1000, () => {}, 'coop').state, randomGame(11, 1000, undefined, 'coop').state);
   assert.deepEqual(randomGame(11, 1000, () => {}, 'easy').state, randomGame(11, 1000, undefined, 'easy').state);
+  assert.deepEqual(randomGame(11, 1000, () => {}, 'veryEasy').state, randomGame(11, 1000, undefined, 'veryEasy').state);
   assert.deepEqual(randomGame(11, 1000, () => {}, 'shared').state, randomGame(11, 1000, undefined, 'shared').state);
   assert.deepEqual(reloaded.state, straight.state);
   assert.notDeepEqual(randomGame(12, 1000).state, straight.state);

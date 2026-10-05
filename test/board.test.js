@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { TERRAIN, boardSize, createBoard, tileAt } from '../src/core/board.js';
 import { findPath } from '../src/core/game.js';
 import { distance, hexagon } from '../src/core/hex.js';
-import { BUILDING_TYPES, RANGED_RANGE } from '../src/core/rules.js';
+import { BUILDING_TYPES, MAX_PLAYERS, RANGED_RANGE } from '../src/core/rules.js';
 
 /** @param {ReturnType<typeof createBoard>} b */
 const terrainOf = (b) => b.list.map((t) => `${t.q},${t.r}:${t.terrain}`).join(' ');
@@ -26,6 +26,7 @@ test('the shipped seed has a mix of terrain, mostly passable', () => {
 test('board shape and size follow the options', () => {
   assert.equal(createBoard().list.length, 29 * 20);
   assert.deepEqual(boardSize(8), { width: 59, height: 39 });
+  assert.deepEqual(boardSize(16), { width: 83, height: 55 });
   assert.equal(createBoard({ width: 5, height: 3 }).list.length, 15);
   assert.equal(createBoard({ shape: 'hexagon', radius: 7 }).list.length, 169);
   assert.equal(createBoard({ hexSize: 20 }).hexSize, 20);
@@ -65,7 +66,7 @@ test('castles start out of the lair\'s reach, and of each other\'s', () => {
   // Reaches count from the edge of seven-cell footprints: one cell each side.
   const castleReach = RANGED_RANGE + /** @type {number} */ (BUILDING_TYPES.castle.reach) + 2;
   const lairReach = /** @type {{ reach: number }} */ (BUILDING_TYPES.lair.attack).reach + 2;
-  for (let players = 1; players <= 8; players++) {
+  for (let players = 1; players <= MAX_PLAYERS; players++) {
     for (const seed of [1, 3, 7]) {
       const { starts } = createBoard({ seed, players });
       const lair = /** @type {{ q: number, r: number }} */ (starts.at(-1));

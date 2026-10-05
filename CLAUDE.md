@@ -22,6 +22,9 @@ graphics work.
   whether the deploy keeps saved games. He deploys with `git pull` and
   `sudo deploy/install.sh` on his server.
 - Open a pull request only when he asks for one; he merges it himself.
+  Its template (`.github/pull_request_template.md`) is for outside
+  contributors (CONTRIBUTING.md): in his, put "The author's own session"
+  under Model, Original prompt and Who you are.
 - His raw pictures never go to GitHub (`art-src/` is ignored).
 
 ## Commands
@@ -70,7 +73,9 @@ graphics work.
   then in cooperation the Dark Lord, then always the raiders. A record's
   `side` picks its name and colours in `SIDES` (use `sideOf`, never
   `SIDES[owner]`), its `team` who fights whom (use `allied`). Seats are the
-  sides whose palette isn't `npc` (`seatsOf`).
+  sides whose palette isn't `npc` (`seatsOf`). A seat's palette is
+  `SEAT_SIDES[seat]`: seats 9 to 16 came after the Dark Lord's (8) and the
+  raiders' (9), so they have 10 to 17, and saved games keep their colours.
 - The map depends on the seed and the number of players. Castle sites come
   from a table in board.js, not from sines and cosines, so the browser and
   the server build exactly the same map; keep it that way.
@@ -126,8 +131,28 @@ graphics work.
 - The HUD's pictures are the art/ SVGs used as CSS masks: `--icon` set on
   an element or its parent, the mask on a `::before`. A mask rule reaching
   an element with no `--icon` paints a solid square.
-- Views switch with a page load: `?game=<id>` is a game, anything else the
-  lobby, and the login page comes first while the browser isn't signed in.
+- Views switch with a page load: `?game=<id>` is a game, `?settings` the
+  player's name and language, anything else the lobby, and the login page
+  comes first while the browser isn't signed in.
+- Each player has a language (Auto, English, Russian, Latvian or Finnish:
+  `LANGUAGES` in player.js, `LANGUAGE_NAMES` in language.js), kept on the
+  server. The login page, the settings page, the lobby and the game's
+  buttons are translated: their words are `WORDS` in words.js, which the
+  tests keep complete and about as long as the English; a static text in
+  index.html names its word with `data-word` (`-title`, `-label` for its
+  tooltip and label), and the lobby's How to play and About are written
+  out in each language. The rest of the game waits until the author asks.
+  docs/notes.md has his plan, what to watch for, the Russian names already
+  used, and how the buttons' words were measured.
+- A game button's key is a letter of its label, in bold (`keyLabel`),
+  per language (`key…` in words.js); the English keys work in every
+  language, so a Russian key may only sit on its own button's English key
+  or a free one (the tests check, with `RUSSIAN_KEYS`, the ЙЦУКЕН layout).
+  `keyCandidates` matches a press by the character typed, then by the
+  Latin and Russian letters on the same key, so keys work in either
+  layout. The smoke check holds the Russian buttons to their fit: no
+  overflow, two lines at most and three rows on a phone, one line on a
+  desktop.
 
 ## Game server (server/)
 
@@ -140,11 +165,17 @@ graphics work.
 - The room is an adapter: it feeds commands to the core, runs `advance` on a
   fixed timestep (`setFixedTimestep`), and mirrors `publicView` into the room
   state (`server/schema.js`). It holds no game rules.
-- Keep the order in `GameRoom.play`: apply on a copy, log the command with its
-  tick, then adopt the copy. The tests check that a failed write changes
-  nothing.
-- The clock runs only while every seat is held by a player who is here, and
-  never again once the game is over (`over` in the state). While it is
+- Keep the order in `GameRoom.commit`, which players' commands and the
+  room's own go through: apply on a copy, log the command with its tick,
+  then adopt the copy. The tests check that a failed write changes nothing.
+- The clock runs only while every seat it waits for is held by a player who
+  is here, and never again once the game is over (`over` in the state). It
+  waits for no seat whose castle has fallen, nor for one marked away: the
+  game's creator has it go on without the players missing (`startNow`),
+  and a player who is here again is back. Who is away reaches the core
+  (the Dark Lord leaves them alone) only as `away` and `back` commands that
+  the room gives and logs (`ROOM_COMMANDS`), so replays agree; the room
+  refuses them from players. While it is
   paused the room refuses commands, except `rename`, which needs no clock;
   after a rename it saves a snapshot at once, since the lobby reads a game's
   name from its snapshot and a paused game takes none.

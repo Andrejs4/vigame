@@ -56,7 +56,7 @@ button[aria-pressed="true"] { background: rgba(255, 216, 77, 0.18); border-color
 .waiting { animation: fade-blink 1.6s ease-in-out infinite; }
 
 @media (prefers-reduced-motion: reduce) {
-  button, .button { transition: none; }
+  button, .button, .chevron { transition: none; }
   .waiting { animation: none; color: var(--amber); }
 }
 
@@ -77,6 +77,9 @@ button[aria-pressed="true"] { background: rgba(255, 216, 77, 0.18); border-color
 .card.wide { width: min(520px, 100%); }
 /* The login page: a banner above the form and one below, as wide as the lobby's card. */
 #login { flex-direction: column; gap: 16px; }
+/* The login and settings forms have no hint under the title: the name
+   field says what it is for. */
+#login h1, #settings h1 { margin-bottom: 14px; }
 .banner {
   display: block; width: min(520px, 100%); height: auto;
   border: 1px solid var(--panel-edge); border-radius: 10px;
@@ -105,9 +108,14 @@ button[aria-pressed="true"] { background: rgba(255, 216, 77, 0.18); border-color
   border: 1px solid var(--panel-edge); border-radius: 7px;
 }
 .card select option { background: var(--panel-solid); }
+/* A chooser inside its label sits like an input. */
+.card label select { margin-bottom: 0; }
 .card form button, .card > .primary, .card > .button { width: 100%; }
 .card .error { color: var(--amber); min-height: 1.5em; margin: 0 0 10px; font-size: 13px; }
 .card .empty { margin: 0; color: var(--ink-dim); font-size: 13px; }
+/* The settings page's Back and Save, side by side. */
+.card .buttons { display: flex; gap: 8px; }
+.card .buttons > * { flex: 1; text-align: center; }
 
 /* The lobby's lists fold away; each heading says how many games it has. */
 .games-list { margin-top: 20px; }
@@ -187,6 +195,39 @@ button[aria-pressed="true"] { background: rgba(255, 216, 77, 0.18); border-color
   margin-bottom: 7px;
   border-bottom: 1px solid var(--panel-edge);
 }
+/* The status panel's header folds it away and back, its arrow on the right. */
+button.masthead {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  width: 100%; padding: 0 0 7px;
+  font: 11px var(--sans); letter-spacing: 0.10em; color: var(--ink-dim);
+  background: none; border: 0; border-bottom: 1px solid var(--panel-edge); border-radius: 0;
+}
+button.masthead:hover:not(:disabled) { background: none; color: var(--ink); }
+/* No tap flash on a phone: these have no background of their own. */
+button.masthead, .corner-toggle { -webkit-tap-highlight-color: transparent; }
+#status.folded button.masthead { padding-bottom: 0; margin-bottom: 0; border-bottom: 0; }
+#status.folded .notice { margin-top: 7px; }
+
+/* An arrow pointing where its panel goes when pressed: up to fold away, down
+   to unfold (or, for the minimap above the stock on a phone, the other way). */
+.chevron {
+  flex: none; width: 7px; height: 7px; margin: 2px 2px 0;
+  border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor;
+  transform: rotate(-135deg); transition: transform 120ms ease;
+}
+[aria-expanded="false"] > .chevron { transform: rotate(45deg); margin: -3px 2px 0; }
+
+/* The minimap's arrow, in the stock panel's top right corner, so it stays to
+   bring the minimap back. */
+.corner-toggle {
+  position: absolute; top: 3px; right: 3px; z-index: 1;
+  display: flex; align-items: center; justify-content: center;
+  width: 24px; height: 24px; padding: 0;
+  color: var(--ink-dim); background: none; border: 0; border-radius: 6px;
+}
+.corner-toggle .chevron { transform: rotate(45deg); margin: -3px 0 0; }
+.corner-toggle[aria-expanded="false"] .chevron { transform: rotate(-135deg); margin: 3px 0 0; }
+.corner-toggle:hover:not(:disabled) { color: var(--ink); }
 
 dl { margin: 0; }
 .row { display: flex; justify-content: space-between; gap: 18px; }
@@ -272,6 +313,9 @@ dl { margin: 0; }
   color: var(--ink-dim); margin: 4px 0 -2px;
 }
 
+/* A button's price, after its name ("Tower · 60"); on a phone, on a line of its own. */
+#controls .price { white-space: nowrap; }
+
 .zoom-row { display: flex; gap: 6px; }
 .zoom-row button { flex: 1; text-align: center; font-size: 15px; padding: 5px 0; }
 .zoom-row #mute-button { flex: 1.6; font-size: 13px; white-space: nowrap; }
@@ -320,6 +364,9 @@ button.inline {
   color: var(--ink-dim); font-size: 12px; line-height: inherit;
 }
 button.inline:hover:not(:disabled) { background: none; color: var(--amber); }
+/* The creator's Start, beside the players: the one thing to do while they wait. */
+#start-button { color: var(--amber); font-weight: 600; }
+#start-button:hover:not(:disabled) { text-decoration: underline; }
 
 /* The table at a game's end: a row a side, winners first, a column a line of points. */
 #scores { width: min(760px, calc(100vw - 32px)); }
@@ -398,12 +445,16 @@ button.inline:hover:not(:disabled) { background: none; color: var(--amber); }
   #controls {
     top: auto; right: 10px; left: 10px;
     bottom: calc(10px + env(safe-area-inset-bottom, 0px));
-    flex-direction: row; flex-wrap: wrap; justify-content: center; gap: 8px;
+    /* As tight as on a desktop: the first row then holds Upgrade in Russian too. */
+    flex-direction: row; flex-wrap: wrap; justify-content: center; gap: 6px;
   }
   #controls button, #controls .button { flex: 1; text-align: center; padding: 8px 6px; }
   /* The picture above the label, so the label keeps the button's width. */
   #controls :is(button, .button):not(#zoom-in, #zoom-out)::before { display: block; width: 18px; height: 18px; margin: 0 auto 3px; }
-  #controls .group-label, #toggle-coords, #recenter { display: none; }
+  #controls .group-label, #toggle-coords, #recenter, #controls .price .dot { display: none; }
+  /* A phone has no keys: their letters aren't bold. */
+  #controls b { font-weight: inherit; }
+  #controls .price { display: block; }
   /* The stock and selection across the screen just above the controls, the minimap above them. */
   #tactics {
     left: 10px; right: 10px; width: auto; gap: 8px;

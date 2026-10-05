@@ -282,6 +282,32 @@ async function report() {
   return lines.join('\n');
 }
 
+/**
+ * How the game's buttons fit: those whose text overflows, each one's lines
+ * of text (its key in the corner aside), the rows they make, and the
+ * panel's width.
+ * @param {import('playwright').Page} page
+ */
+const controlsFit = (page) => page.evaluate(() => {
+  const range = document.createRange();
+  const lines = (/** @type {Element} */ button) => {
+    const bottoms = new Set();
+    for (const node of button.childNodes) {
+      if (node.nodeName === 'KBD') continue;
+      range.selectNodeContents(node);
+      for (const rect of range.getClientRects()) if (rect.width) bottoms.add(Math.round(rect.bottom));
+    }
+    return bottoms.size;
+  };
+  const buttons = /** @type {HTMLElement[]} */ ([...document.querySelectorAll('#controls :is(button, .button)')]).filter((b) => b.offsetParent);
+  return {
+    over: buttons.filter((b) => b.scrollWidth > b.clientWidth + 1).map((b) => b.id),
+    lines: Object.fromEntries(buttons.map((b) => [b.id, lines(b)])),
+    rows: new Set(buttons.map((b) => Math.round(b.getBoundingClientRect().top))).size,
+    width: Math.round(/** @type {HTMLElement} */ (document.getElementById('controls')).getBoundingClientRect().width),
+  };
+});
+
 /** Wait until the page shows a game. */
 const inGame = (page) => page.waitForFunction(() => /** @type {any} */ (window).__vigame?.view, null, { timeout: 10000 });
 
@@ -301,7 +327,7 @@ async function logIn(page, name, { touch = false } = {}) {
     return banners.length === 2 && banners.every((b) => b.complete && b.naturalWidth === 1040);
   });
   const question = await page.waitForFunction(() => {
-    const m = /What is (\d+) \+ (\d+)\?/.exec(document.getElementById('login-question')?.textContent ?? '');
+    const m = /(\d+) \+ (\d+)\?/.exec(document.getElementById('login-question')?.textContent ?? '');
     return m && Number(m[1]) + Number(m[2]);
   });
   await page.fill('#login-name', name);
@@ -392,6 +418,86 @@ async function finished(browser, url) {
 }
 
 /**
+ * Ann's settings, from the lobby and back: a name with a symbol is refused,
+ * a new name and language are kept, then she puts hers back; Back changes
+ * nothing. The page is in the language chosen, or the one Auto stands for,
+ * and turns as either changes; so is the lobby.
+ * @param {import('playwright').Page} a
+ * @param {{ full: boolean }} options
+ */
+async function settings(a, { full }) {
+  const open = async () => {
+    await a.click('#lobby-settings');
+    await a.waitForSelector('#settings:not([hidden])');
+    assert.match(new URL(a.url()).search, /^\?settings$/);
+  };
+  const saved = async (name) => {
+    await a.click('#settings-save');
+    await inLobby(a);
+    await waitText(a, '#lobby-name', name);
+    assert.equal(new URL(a.url()).search, '', 'the address is the lobby again');
+  };
+  const lang = () => a.evaluate(() => document.documentElement.lang);
+  await open();
+  assert.equal(await a.inputValue('#settings-name'), 'Ann');
+  assert.equal(await a.inputValue('#settings-language'), 'auto');
+  await waitText(a, '#settings-language option[value="auto"]', 'Auto (English)');
+  await waitText(a, '#settings-title', 'Settings');
+  await a.fill('#settings-name', 'Ann \u{1F642}');
+  await a.click('#settings-save');
+  await waitMatch(a, '#settings-error', /letters or digits/);
+  // Once signed in, Auto puts the name first: a name in Cyrillic letters
+  // turns the page Russian, error and all.
+  await a.fill('#settings-name', 'Анна');
+  await waitText(a, '#settings-language option[value="auto"]', 'Авто (Русский)');
+  await waitText(a, '#settings-title', 'Настройки');
+  await waitText(a, '#settings-save', 'Сохранить');
+  await waitMatch(a, '#settings-error', /букв или цифр/);
+  assert.equal(await lang(), 'ru');
+  // Choosing English turns it back, whatever the name.
+  await a.selectOption('#settings-language', 'en');
+  await waitText(a, '#settings-title', 'Settings');
+  await a.selectOption('#settings-language', 'ru');
+  await saved('Анна');
+  // The lobby is in Russian now, How to play and About too.
+  assert.equal(await lang(), 'ru');
+  await waitText(a, '#lobby-new', 'Новая игра');
+  await waitText(a, '#lobby-settings', 'Настройки');
+  await waitText(a, '#lobby-mine-section h2 [data-word]', 'Ваши игры');
+  await waitText(a, '#lobby-mode option[value="ffa"]', 'Все против всех: каждый сам за себя');
+  await waitText(a, '#lobby-mode option[value="veryEasy"]', 'Очень Лёгкий Лорд: как Общий Лёгкий, и юниты плодятся вдвое быстрее');
+  await a.click('#lobby-how-section summary');
+  await a.click('#lobby-about-section summary');
+  assert.equal(await a.locator('#lobby-how-section [lang="ru"]').isVisible(), true);
+  assert.equal(await a.locator('#lobby-how-section [lang="en"]').isVisible(), false);
+  assert.ok(await a.locator('#lobby-about-section [lang="ru"] a[href="https://github.com/Andrejs4/vigame"]').isVisible(), 'the Russian About links the source');
+  if (full) await a.screenshot({ path: join(OUT, 'lobby-ru.png'), fullPage: true });
+  await a.click('#lobby-how-section summary');
+  await a.click('#lobby-about-section summary');
+
+  await open();
+  assert.equal(await a.inputValue('#settings-name'), 'Анна');
+  assert.equal(await a.inputValue('#settings-language'), 'ru');
+  await waitText(a, '#settings-back', 'Назад');
+  if (full) await a.screenshot({ path: join(OUT, 'settings.png') });
+  await a.fill('#settings-name', 'Ann');
+  await waitText(a, '#settings-title', 'Настройки');
+  await a.selectOption('#settings-language', 'auto');
+  await waitText(a, '#settings-title', 'Settings');
+  if (full) await a.screenshot({ path: join(OUT, 'settings-en.png') });
+  await saved('Ann');
+  assert.equal(await lang(), 'en', 'the lobby is in English again');
+  await waitText(a, '#lobby-new', 'New game');
+
+  await open();
+  assert.equal(await a.inputValue('#settings-language'), 'auto');
+  await a.fill('#settings-name', 'Nobody');
+  await a.click('#settings-back');
+  await inLobby(a);
+  await waitText(a, '#lobby-name', 'Ann');
+}
+
+/**
  * Three browsers through the game server: login, lobby, a game, and the
  * game's commands. With `full`, everything; without, the path from login to
  * two players seeing each other's moves.
@@ -409,6 +515,25 @@ async function threeBrowsers(browser, url, { full, label }) {
   await a.waitForFunction(() => /What is/.test(document.getElementById('login-question')?.textContent ?? ''));
   await a.waitForFunction(() => [...document.querySelectorAll('#login .banner')].every((b) => /** @type {HTMLImageElement} */ (b).complete));
   if (full) await a.screenshot({ path: join(OUT, 'login.png') });
+  // The name field says what it is for. The language is Auto at first,
+  // which says what it stands for: on the login page the browser comes
+  // first, so English here, even for a name in Cyrillic letters.
+  assert.equal(await a.getAttribute('#login-name', 'placeholder'), 'Visible name (15)');
+  assert.equal(await a.inputValue('#login-language'), 'auto');
+  await waitText(a, '#login-language option[value="auto"]', 'Auto (English)');
+  await a.fill('#login-name', 'Анна');
+  await waitText(a, '#login-language option[value="auto"]', 'Auto (English)');
+  await waitText(a, '#login-submit', 'Play');
+  // Choosing Russian turns the page Russian at once, and Auto turns it back.
+  await a.selectOption('#login-language', 'ru');
+  await waitText(a, '#login-submit', 'Играть');
+  await waitMatch(a, '#login-question', /^Сколько будет \d+ \+ \d+\?$/);
+  assert.equal(await a.getAttribute('#login-name', 'placeholder'), 'Имя в игре (15)');
+  await waitText(a, '#login-language option[value="auto"]', 'Авто (English)');
+  assert.equal(await a.evaluate(() => document.documentElement.lang), 'ru');
+  if (full) await a.screenshot({ path: join(OUT, 'login-ru.png') });
+  await a.selectOption('#login-language', 'auto');
+  await waitText(a, '#login-submit', 'Play');
   await a.fill('#login-name', 'Ann \u{1F642}');
   await a.fill('#login-answer', '1');
   await a.click('#login-submit');
@@ -425,6 +550,7 @@ async function threeBrowsers(browser, url, { full, label }) {
   // its address is the invitation. Alone, she waits for a second player.
   await inLobby(a);
   assert.equal(await text(a, '#lobby-name'), 'Ann');
+  assert.equal(await a.evaluate(() => document.documentElement.lang), 'en', 'the lobby is in English');
   await a.waitForSelector('#lobby-mine-empty:not([hidden])');
   if (full) await a.screenshot({ path: join(OUT, 'lobby.png') });
   // Under the lists, How to play and About, folded at first; About links
@@ -437,10 +563,12 @@ async function threeBrowsers(browser, url, { full, label }) {
     const res = await fetch(/** @type {HTMLLinkElement} */ (document.querySelector('link[rel=icon]')).href);
     return `${res.status} ${res.headers.get('content-type')}`;
   }), '200 image/png', 'the icon loads');
-  assert.ok(await a.locator('#lobby-about-section a[href="https://github.com/Andrejs4/vigame"]').isVisible(), 'About links the source');
+  assert.ok(await a.locator('#lobby-about-section [lang="en"] a[href="https://github.com/Andrejs4/vigame"]').isVisible(), 'About links the source');
+  assert.equal(await a.locator('#lobby-about-section [lang="ru"]').isVisible(), false, 'only the English About shows');
   if (full) await a.screenshot({ path: join(OUT, 'lobby-about.png'), fullPage: true });
   await a.click('#lobby-how-section summary');
   await a.click('#lobby-about-section summary');
+  await settings(a, { full });
   assert.equal(await a.inputValue('#lobby-players'), '1', 'one player against the Dark Lord by default');
   await a.selectOption('#lobby-players', '2');
   await a.click('#lobby-new');
@@ -451,6 +579,8 @@ async function threeBrowsers(browser, url, { full, label }) {
   // Alone of two, and the Players line blinks while the game waits.
   await waitText(a, '#players', '1/2');
   assert.equal(await a.locator('#players.waiting').count(), 1, 'Players does not blink while waiting');
+  // She started it, so she could start it without Bēla; she waits.
+  await waitText(a, '#start-button', 'Start');
   // Recenter looks at her own castle, close enough to read unit counts.
   const home = await a.evaluate(() => {
     const v = /** @type {any} */ (window).__vigame;
@@ -489,6 +619,8 @@ async function threeBrowsers(browser, url, { full, label }) {
   await openFromLobby(b, 'open', 'Ann & —');
   await waitText(b, '#seat', 'Bēla · Crimson');
   await waitMatch(a, '#time', /^0:0[1-9]$/);
+  assert.equal(await a.locator('#start-button').isVisible(), false, 'nobody missing, nothing to start');
+  assert.equal(await b.locator('#start-button').isVisible(), false, 'Start is the creator\'s');
 
   // Ann builds a tower with a crew of six, who go to raise it; Bēla sees
   // them march, and Ann's pick. The rest stay home, for the pit below.
@@ -964,17 +1096,128 @@ async function threeBrowsers(browser, url, { full, label }) {
   for (const p of [a, b, c, lost]) await p.context().close();
 }
 
-/** The login page, the lobby and a Shared Easy Lord game on a phone, with a desktop teammate. */
+/**
+ * Latvian on a phone and Finnish on a desktop, each by its browser: the
+ * login page, the lobby, and a game's buttons, their bold keys and their fit.
+ * @param {import('playwright').Browser} browser
+ * @param {string} url
+ */
+async function latvianFinnish(browser, url) {
+  const lv = await openPage(browser, 'latvian', { ...PHONE, locale: 'lv-LV' });
+  await lv.goto(url);
+  await lv.waitForSelector('#login:not([hidden])');
+  await waitText(lv, '#login-submit', 'Spēlēt');
+  await waitText(lv, '#login-language option[value="auto"]', 'Auto (Latviešu)');
+  await logIn(lv, 'Līga', { touch: true });
+  await inLobby(lv);
+  await waitText(lv, '#lobby-new', 'Jauna spēle');
+  await waitText(lv, '#lobby-mode option[value="coop"]', 'Sadarbība: kopā pret Tumšo Kungu');
+  assert.equal(await lv.evaluate(() => document.documentElement.lang), 'lv');
+  assert.equal(await lv.locator('#lobby-how-section [lang="lv"]').count(), 1);
+  // A Very Easy Lord game: one stock for both, and castles raise units twice as fast.
+  await lv.selectOption('#lobby-mode', 'veryEasy');
+  assert.equal(await lv.locator('#lobby-mode option:checked').textContent(), 'Ļoti Vieglais Kungs: kā Kopīgais Vieglais, un vienības vairojas divreiz ātrāk');
+  await lv.screenshot({ path: join(OUT, 'lobby-lv.png') });
+  await lv.selectOption('#lobby-players', '2');
+  await lv.tap('#lobby-new');
+  await inGame(lv);
+  assert.equal(await lv.evaluate(() => /** @type {any} */ (window).__vigame.view.mode), 'veryEasy');
+  const fi = await newPlayer(browser, lv.url(), 'finnish', 'Aino', { viewport: { width: 1280, height: 800 }, locale: 'fi-FI' });
+  await inGame(fi);
+  await waitMatch(lv, '#time', /^0:0[1-9]$/);
+
+  // Each key's letter in bold (on the phone, not bold), every label fitting.
+  const bold = (/** @type {import('playwright').Page} */ page) => page.$$eval('#controls button[aria-keyshortcuts]', (els) => els.map((el) => el.querySelector('b')?.textContent));
+  assert.equal(await lv.locator('#build-tower').innerText(), 'Tornis\n60');
+  assert.equal(await lv.locator('#seat-button').innerText(), 'Atlaist');
+  assert.deepEqual(await bold(lv), ['T', 'R', 'e', 'F', 'B', 'U', 'K', 'V', 'A']);
+  const lvFit = await controlsFit(lv);
+  assert.deepEqual(lvFit.over, [], 'a Latvian label overflows its button');
+  assert.ok(Object.values(lvFit.lines).every((n) => n <= 2) && lvFit.rows <= 3, `Latvian buttons: ${JSON.stringify(lvFit)}`);
+  await lv.screenshot({ path: join(OUT, 'game-lv-phone.png') });
+
+  assert.equal(await fi.locator('#build-farm').innerText(), 'Farmi · 30');
+  assert.equal(await fi.getAttribute('#build-farm', 'title'), 'Farmi (F): 30 kiveä');
+  assert.deepEqual(await bold(fi), ['T', 'V', 'p', 'F', 'J', 'K', 'R', 'S', 'y']);
+  const fiFit = await controlsFit(fi);
+  assert.deepEqual(fiFit.over, [], 'a Finnish label overflows its button');
+  assert.ok(Object.values(fiFit.lines).every((n) => n === 1) && fiFit.width <= 200, `Finnish buttons: ${JSON.stringify(fiFit)}`);
+  await fi.screenshot({ path: join(OUT, 'game-fi.png') });
+  // Its keys, and the English ones too (B is Joukko's). (Vaunu, a wagon,
+  // wants dark metal the side hasn't got.)
+  for (const [key, id] of [['f', 'build-farm'], ['j', 'build-band'], ['p', 'build-pit'], ['b', 'build-band']]) {
+    await fi.keyboard.press(key);
+    assert.equal(await fi.getAttribute(`#${id}`, 'aria-pressed'), 'true', `${key} doesn't press ${id}`);
+    await fi.keyboard.press('Escape');
+  }
+  for (const p of [lv, fi]) await p.context().close();
+}
+
+/**
+ * A game for sixteen, which its creator starts with one other player
+ * there: the other fourteen are away, and the Dark Lord is as strong as
+ * for eight.
+ */
+async function sixteen(browser, url) {
+  const page = await newPlayer(browser, url, 'sixteen', 'Sven');
+  await inLobby(page);
+  await page.selectOption('#lobby-players', '16');
+  await page.click('#lobby-new');
+  await inGame(page);
+  await waitText(page, '#players', '1/16');
+  const other = await newPlayer(browser, page.url(), 'sixteen-b', 'Tove');
+  await inGame(other);
+  await waitText(other, '#seat', 'Tove · Crimson');
+  await waitText(page, '#start-button', 'Start');
+  assert.equal(await other.locator('#start-button').isVisible(), false, 'Start is the creator\'s');
+  assert.equal(await page.locator('#time').textContent(), '0:00 · paused');
+  await page.locator('#status').screenshot({ path: join(OUT, 'start-button.png') });
+
+  await page.click('#start-button');
+  await waitMatch(page, '#time', /^0:0[1-9]$/);
+  await waitText(page, '#players', '2/16, 14 away');
+  assert.equal(await page.locator('#start-button').isVisible(), false);
+  const view = await page.evaluate(() => /** @type {any} */ (window).__vigame.view);
+  assert.equal(view.players.filter((/** @type {any} */ p) => p.away).length, 14);
+  assert.equal(Object.values(view.buildings).filter((/** @type {any} */ b) => b.type === 'castle').length, 16);
+  assert.equal(/** @type {any} */ (Object.values(view.buildings).find((/** @type {any} */ b) => b.type === 'lair')).hp, 4 * BUILDING_TYPES.lair.hp, 'the Dark Lord as strong as for eight');
+  // The whole ring of castles, each side in its own colour.
+  for (let i = 0; i < 6; i++) await page.click('#zoom-out');
+  await frames(page);
+  await page.screenshot({ path: join(OUT, 'game-sixteen.png') });
+  for (const p of [page, other]) await p.context().close();
+}
+
+/** The login page, the lobby, settings and a Shared Easy Lord game on a phone, with a desktop teammate. */
 async function phone(browser, url) {
-  const page = await newPlayer(browser, url, 'phone', 'Pia', PHONE);
+  // A browser in Russian: the login page is in Russian, and Auto stands
+  // for Russian, even for a name in Latin letters.
+  const page = await openPage(browser, 'phone', { ...PHONE, locale: 'ru-RU' });
+  await page.goto(url);
+  await page.waitForSelector('#login:not([hidden])');
+  await waitText(page, '#login-submit', 'Играть');
+  await waitMatch(page, '#login-question', /^Сколько будет \d+ \+ \d+\?$/);
+  await waitText(page, '#login-language option[value="auto"]', 'Авто (Русский)');
+  await page.screenshot({ path: join(OUT, 'login-phone.png') });
+  await logIn(page, 'Pia', { touch: true });
   await inLobby(page);
   const fits = () => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth);
+  await waitText(page, '#lobby-new', 'Новая игра');
   assert.ok(await fits(), 'the lobby scrolls sideways on a phone');
+  await page.screenshot({ path: join(OUT, 'lobby-phone.png') });
+  await page.tap('#lobby-settings');
+  await page.waitForSelector('#settings:not([hidden])');
+  await waitText(page, '#settings-language option[value="auto"]', 'Авто (Русский)');
+  await waitText(page, '#settings-title', 'Настройки');
+  assert.ok(await fits(), 'the settings page scrolls sideways on a phone');
+  await page.tap('#settings-back');
+  await inLobby(page);
   await page.selectOption('#lobby-mode', 'shared');
   await page.selectOption('#lobby-players', '2');
   await page.tap('#lobby-new');
   await inGame(page);
-  const other = await newPlayer(browser, page.url(), 'phone-opponent', 'Oli');
+  // Oli's browser is in Russian too, on a desktop.
+  const other = await newPlayer(browser, page.url(), 'phone-opponent', 'Oli', { viewport: { width: 1280, height: 800 }, locale: 'ru-RU' });
   await inGame(other);
   await waitMatch(page, '#time', /^0:0[1-9]$/);
   // Shared Easy Lord: both see the team's stock, both starts' stone together.
@@ -1003,10 +1246,93 @@ async function phone(browser, url) {
   assert.ok(layout.minimap.top > layout.status.bottom && layout.minimap.bottom < layout.tactics.top
     && layout.minimap.right <= layout.innerWidth, 'the minimap overlaps the panels or the screen edge');
 
+  // The status panel folds to its header, and the minimap hides by the arrow
+  // in the stock panel's corner, which stays to bring it back.
+  const statusHeight = () => page.evaluate(() => /** @type {HTMLElement} */ (document.getElementById('status')).offsetHeight);
+  const unfolded = await statusHeight();
+  await page.tap('#status-toggle');
+  assert.equal(await page.locator('#status-body').isHidden(), true, 'the status panel does not fold');
+  assert.equal(await page.getAttribute('#status-toggle', 'aria-expanded'), 'false');
+  assert.ok(await statusHeight() < unfolded / 3, 'the folded status panel is still tall');
+  await page.tap('#minimap-toggle');
+  assert.equal(await page.locator('#minimap').isHidden(), true, 'the minimap does not hide');
+  assert.equal(await page.locator('#minimap-toggle').isVisible(), true, 'the minimap\'s arrow went with it');
+  assert.equal(await page.getAttribute('#minimap-toggle', 'title'), 'Показать миникарту (M)');
+  await frames(page);
+  await page.screenshot({ path: join(OUT, 'phone-folded.png') });
+  await page.tap('#status-toggle');
+  await page.tap('#minimap-toggle');
+  assert.equal(await page.locator('#status-body').isVisible(), true);
+  assert.equal(await page.locator('#minimap').isVisible(), true);
+  assert.equal(await statusHeight(), unfolded);
+
   const castle = await castleOf(page, 0);
   await selectBuilding(page, castle, { touch: true });
   // With no hover on a touch screen, the last tapped hex is the tile readout.
   assert.notEqual(await text(page, '#tile'), '—', 'tile readout cleared after a tap');
+
+  // The buttons in Russian, each key's letter in bold. On the phone a price
+  // is on its own line; every label fits its button in two lines at most, in
+  // three rows, as in English (Воз, Яма and Апгрейд keep the first row).
+  await waitMatch(page, '#upgrade', /^Апгрейд · \d+$/);
+  assert.equal(await page.locator('#build-tower').innerText(), 'Башня\n60');
+  assert.equal(await page.locator('#build-band').innerText(), 'Отряд');
+  assert.equal(await page.locator('#heroes-button').innerText(), 'Герои…');
+  assert.equal(await page.locator('#seat-button').innerText(), 'Отпусти');
+  assert.deepEqual(await page.$$eval('#controls button[aria-keyshortcuts]', (els) => els.map((el) => el.querySelector('b')?.textContent)),
+    ['Б', 'В', 'Я', 'а', 'О', 'г', 'д', 'р', 'т']);
+  // A phone has no keys, so the letters aren't bold there.
+  assert.ok(await page.$$eval('#controls button b', (els) => els.every((b) => getComputedStyle(b).fontWeight === getComputedStyle(/** @type {Element} */ (b.parentElement)).fontWeight)),
+    'key letters are bold on a phone');
+  const phoneFit = await controlsFit(page);
+  assert.deepEqual(phoneFit.over, [], 'a button\'s label overflows it on a phone');
+  assert.ok(Object.values(phoneFit.lines).every((n) => n <= 2), `a label takes three lines on a phone: ${JSON.stringify(phoneFit.lines)}`);
+  assert.ok(phoneFit.rows <= 3, `the buttons take ${phoneFit.rows} rows on a phone`);
+  // Once a castle falls, the seat button offers a new base: it fits as well
+  // (put in its place for one measure, as no castle falls here).
+  const newBase = await page.evaluate(() => {
+    const button = /** @type {HTMLElement} */ (document.getElementById('seat-button'));
+    const label = button.textContent;
+    button.textContent = 'Новая база';
+    const range = document.createRange();
+    range.selectNodeContents(button);
+    const lines = new Set([...range.getClientRects()].filter((r) => r.width).map((r) => Math.round(r.bottom))).size;
+    const rows = new Set([...document.querySelectorAll('#controls :is(button, .button)')]
+      .filter((b) => /** @type {HTMLElement} */ (b).offsetParent).map((b) => Math.round(b.getBoundingClientRect().top))).size;
+    const over = button.scrollWidth > button.clientWidth + 1;
+    button.textContent = label;
+    return { lines, rows, over };
+  });
+  assert.deepEqual(newBase, { lines: newBase.lines, rows: phoneFit.rows, over: false }, 'New base does not fit on a phone');
+  assert.ok(newBase.lines <= 2, `New base takes ${newBase.lines} lines on a phone`);
+  // On a desktop each label keeps to one line, its key in bold, and the
+  // tooltips are in Russian.
+  assert.equal(await other.locator('#build-tower').innerText(), 'Башня · 60');
+  assert.equal(await other.$eval('#build-tower b', (b) => Number(getComputedStyle(b).fontWeight) > 500), true, 'key letters are not bold on a desktop');
+  assert.equal(await other.getAttribute('#build-tower', 'title'), 'Башня (Б): 60 камней');
+  assert.equal(await other.getAttribute('#build-wagon', 'title'), 'Воз (В): 15 тёмного металла, возле вашего замка');
+  await waitText(other, '#controls .group-label', 'Строить');
+  const desktopFit = await controlsFit(other);
+  assert.deepEqual(desktopFit.over, [], 'a button\'s label overflows it on a desktop');
+  assert.ok(Object.values(desktopFit.lines).every((n) => n === 1), `a label wraps on a desktop: ${JSON.stringify(desktopFit.lines)}`);
+  assert.ok(desktopFit.width <= 200, `the buttons' panel is ${desktopFit.width} px wide`);
+  await other.screenshot({ path: join(OUT, 'game-ru.png') });
+  // M hides the minimap and shows it again, also where it types "ь"; this
+  // browser keeps the choice.
+  await other.keyboard.press('m');
+  assert.equal(await other.locator('#minimap').isHidden(), true, 'M does not hide the minimap');
+  assert.equal(await other.evaluate(() => JSON.parse(localStorage.getItem('vigame.folded') ?? '{}').minimap), true, 'the choice is not kept');
+  await other.evaluate(() => dispatchEvent(new KeyboardEvent('keydown', { key: 'ь', code: 'KeyM', bubbles: true })));
+  assert.equal(await other.locator('#minimap').isVisible(), true, 'M on a Russian keyboard does not show the minimap');
+  // Б picks Башня whichever layout the keyboard is set to (Б is the comma
+  // key), and so does the English T; А (the F key) picks Ферма.
+  for (const [key, code, id] of [['б', 'Comma', 'build-tower'], [',', 'Comma', 'build-tower'], ['е', 'KeyT', 'build-tower'],
+    ['t', 'KeyT', 'build-tower'], ['а', 'KeyF', 'build-farm']]) {
+    await other.evaluate(([key, code]) => dispatchEvent(new KeyboardEvent('keydown', { key, code, bubbles: true })), [key, code]);
+    assert.equal(await other.getAttribute(`#${id}`, 'aria-pressed'), 'true', `${key} (${code}) doesn't press ${id}`);
+    await other.keyboard.press('Escape');
+    assert.equal(await other.getAttribute(`#${id}`, 'aria-pressed'), 'false');
+  }
   await buildWith(page, 'tower', castle, { touch: true });
   await frames(page);
   await page.screenshot({ path: join(OUT, 'phone.png') });
@@ -1076,7 +1402,9 @@ const scenarios = /** @type {Array<[string, () => Promise<void>]>} */ ([
   ['login, lobby and a game, three browsers', () => threeBrowsers(browser, games.url, { full: true, label: 'direct' })],
   ['the same under a subfolder, behind a proxy', () => threeBrowsers(browser, proxied.url, { full: false, label: 'proxied' })],
   ['on a phone', () => phone(browser, games.url)],
+  ['Latvian on a phone, Finnish on a desktop', () => latvianFinnish(browser, games.url)],
   ['a finished game\'s points', () => finished(browser, games.url)],
+  ['sixteen players, started without the missing', () => sixteen(browser, games.url)],
 ]).filter(([name]) => name.includes(only));
 
 let failed = 0;

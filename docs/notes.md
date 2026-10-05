@@ -11,16 +11,21 @@ CLAUDE.md has the rules for working on the code; this is the background.
   result on his server; he doesn't read the code. So say what changed as a
   player sees it, show screenshots, and say whether a deploy keeps saved
   games. `npm run smoke` leaves screenshots in `smoke-output/`: `game-blue.png`,
-  `crew.png`, `heroes.png`, `phone.png`, `effects.png`, `lobby*.png`,
-  `scores.png`, and `failed-*.png` when a check fails.
+  `crew.png`, `heroes.png`, `phone*.png`, `game-*.png`, `effects.png`, `lobby*.png`,
+  `login*.png`, `settings*.png`, `scores.png`, and `failed-*.png` when a check
+  fails.
+- Outside pull requests are considered only as CONTRIBUTING.md says: a
+  few lines, or the model's name and the original prompt, from someone he
+  knows or with references for their reputation. His own aren't bound by it.
 - The work happens in Claude Code cloud sessions, on a `claude/…` branch.
   Each batch of requests becomes one pull request, opened when he asks for
   it. He merges it on GitHub, then deploys on his Debian server with
   `git pull` and `sudo deploy/install.sh` (deploy/README.md). After a merge,
   the next work starts from a fresh `main`.
 - A deploy keeps saved games unless it bumps `STATE_VERSION` (games are then
-  rebuilt from their command logs) or adds a database step (README, "Not
-  done yet", says what that drops). A rule change that keeps the state's
+  rebuilt from their command logs) or adds a database step that drops them
+  (`migrate()` in server/storage.js says what each step does; adding a
+  column, such as players' language, keeps them). A rule change that keeps the state's
   shape applies to games under way from then on.
 - It began as a turn-based claude.ai artifact ("Vigame Hex Board"), was
   recovered from it into this repository, and was rebuilt as a real-time
@@ -139,6 +144,11 @@ stay sharp on high-density screens. The icon is a 32 × 32 PNG.
   keep them as they are: change them only when he asks.
 - No need to fit windows under about 800 px tall: there the minimap may
   cover the Lobby button.
+- The status panel folds to its header (the arrow on its right), and the
+  minimap hides by M or the arrow in the stock panel's top right corner,
+  where the author asked for it: on a phone the minimap sits just above
+  that corner, and the arrow stays to bring it back. Both choices are kept
+  per browser (`vigame.folded`); a hidden minimap doesn't repaint.
 
 ## Plans not built yet
 
@@ -174,6 +184,117 @@ Agreed in outline; nothing built yet.
   from noise, to check the approach and the speed; then his four ground
   textures; then the decorations.
 
+### Translations: Russian, Latvian, Finnish
+
+Built so far: each player has a language, Auto (the default), English or
+Russian, chosen on the login page and the settings page and kept on the
+server (`language` in the players table, `/api/me`). Its Auto option says
+which language Auto picked (src/client/language.js):
+
+- On the login page the browser comes first (the author's choice): the
+  first of its languages that the page has, else Russian for a name typed
+  in Cyrillic letters, else English (`loginLanguage`).
+- Once signed in, the name comes first: Russian for Cyrillic letters, else
+  the browser's, else English (`autoLanguage`).
+
+The login page, the settings page and the lobby are translated. Their words
+are `WORDS` in src/client/words.js, one table per language with `{…}`
+filled in (`say`); a word that goes with a count has a form per plural kind
+(`Intl.PluralRules`), picked by `{n}`. A static text in index.html names its
+word with `data-word` (`translate`); the lobby's How to play and About are
+written out in each language there, as they hold links, and the page shows
+the reader's. The login and settings pages draw their texts in one
+`show()`, which runs again when the language chosen or the name changes,
+so they turn at once; the lobby reads its language once. The tests check
+every language has every word with the same `{…}`, at most half again as
+long as the English (five letters more for a short word: "Save",
+"Сохранить"), every plural form, and that index.html's English matches the
+table. The settings page lost its two hints at the author's word: the name
+field says "Visible name (15)" when empty, as on the login page. Why New
+game is refused comes from the server as counts (`waiting`, `seated`) for
+the page to word.
+
+The game's buttons are translated too (the author asked for special care
+that they fit). Russian names in use (the author said to estimate the
+game's terms), which the rest of the game should match: юниты (units),
+бригада (crew; the button «Бригада…»), «Вернуть» (Return), «Бросить»
+(Abort), «Герои…» (Heroes), «Атака…» (Attack), «Апгрейд» (Upgrade, the
+author's word), яма (pit), воз (wagon), отряд (band), башня, ферма,
+прочность (a building's hit points), кустарник (scrub), Тёмный Лорд (the
+Dark Lord), modes Кооператив, Лёгкий Лорд, Общий Лёгкий Лорд, Очень Лёгкий Лорд, Все против
+всех, sides Синие, Багровые, Зелёные, Золотые, Бирюзовые, Оранжевые,
+Розовые, Серебряные (plural, as teams: "победили Синие"), and for seats 9
+to 16 Лазурные, Салатовые, Индиго, Вишнёвые, Оливковые, Коралловые, Белые,
+Мятные (Azure, Lime, Indigo, Cherry, Olive, Coral, White, Mint; Latvian
+Debeszilie, Laima, Indigo, Ķiršu, Olīvu, Koraļļu, Baltie, Mētru; Finnish
+Asuurit, Limetit, Indigot, Kirsikat, Oliivit, Korallit, Valkoiset,
+Mintut), and on the
+buttons Строить, Выбрано, Вид, Центр, Тихо, Координаты, Отпусти (the
+author's, for fun; Release in English), Занять место, Новая база (New
+base, in the seat button's place once your castle has fallen; it fits a
+phone's rows, which the smoke check measures), Итоги, Лобби. In the status
+panel the creator's Старт / Дальше (Start, or Go on once the game has
+begun). How to play names the buttons the same way.
+
+The author's fallback words for buttons too long: Народ (crew), яма, бить
+(attack), воз, назад (return), стоп (abort). How the choice was made: a
+page with the real stylesheet and IBM Plex Sans served locally (the cloud
+browser can't reach Google Fonts; fetch the font files with curl), each
+label's narrowest width measured, on a 390 px and a 360 px phone and a
+desktop. A phone's buttons wrap into rows by their narrowest widths
+(flex 1, basis 0), and a row is as tall as its tallest label. In English
+the first row holds the five build buttons and Upgrade. In Russian, only
+Воз and Яма with Апгрейд keep it so (Повозка, Карьер or Улучшить push
+Upgrade to the second row, which then wraps), giving exactly the
+English heights at 390 px. Бригада, Вернуть, Бросить and Атака fit as they
+are. On the phone a price goes on its own line without the dot, in
+English too, or "Воз · 15◆" wrapped onto three lines. The phone's gap
+between buttons is 6 px, as on a desktop: at 8 the Russian first row had
+2 px to spare and a bold Я pushed Upgrade down; at 6 it has 11. Отпусти
+and Release (for "Уступить место" and "Release seat") keep the seat button
+on one line, which saved a line at 360 px. Now both languages are exactly
+as tall everywhere measured: 217 px at 390, 234 at 360, and the desktop
+panel 165 and 166 px wide.
+
+The Russian keys: the bold letter, typed in the Russian layout. Where the
+word has the Cyrillic letter that sits on the English key, it is that one
+(Ап**г**рейд on U, Ге**р**ои on H, Ферм**а** on F), so the key is the
+same in both languages; else the first letter (**Б**ашня on the comma key,
+**В**оз on D, **Я**ма on Z, **О**тряд on J); Брига**д**а (L) and А**т**ака
+(N) because Б and А were taken. The English keys work in Russian too, so
+no Russian letter may sit on another button's English key (Бригада's И
+would be B, Band's), and the tests check it. A phone shows no bold letters
+(the author: no keys there), which also leaves its labels a little more
+room.
+
+Latvian and Finnish followed, with every word Russian has. Their buttons
+were measured the same way, and fit as English does on both phones (more
+room than Russian in the first row: Latvian 30 px, Finnish 14); the
+longer words (Vezums, Karjers, Pulks; Louhos, Maatila, Paranna) push
+Upgrade off the first row. Keys by the same rule, and the author chose
+words that keep the English key over nicer ones ("slightly lame, to buy
+consistent keys"): Atakot (A) over Uzbrukt, Farmi (F) over Tila. Their
+keyboards have the English letters where English ones do, so no layout
+table is needed; no key is a letter with a diacritic (ā, ņ, ä, ö).
+Latvian has three plural kinds (zero, one, other), Finnish two. A browser
+listing Latvian before Russian now gets Latvian for Auto (a Cyrillic name
+still picks Russian once signed in).
+
+His plan: translate only the lobby and the game's controls, each text about
+as long as the English so the layout holds, and take care with short texts
+and texts built up as the game goes. Things to watch there:
+
+- A button's bold letter is its key (**T**ower, **U**pgrade): done for the
+  buttons, as above; the crew chooser's Enter-or-key and the Heroes list's
+  H take the opening button's keys, in either layout (`keyCandidates`).
+- Short labels padded to line up, such as "Att Lv 15" in the Heroes list.
+- Counts with a noun ("3 heroes died"): Russian has three plural forms.
+- Texts the server sends in English, such as the core's refusals, which
+  the page would have to put in its own words (why New game is refused
+  already comes as counts).
+- Every view switch is a page load, so the page can read its language once,
+  as it loads.
+
 ### Less drawing during play
 
 While anything moves, which is nearly always, the board redraws at the
@@ -185,6 +306,26 @@ screen's refresh rate (60 or 144 times a second). The author put these off
 2. Redraw for movement only when something moving is on screen.
 3. Keep the terrain drawn in a buffer, redrawn only on a pan or zoom. This
    fits the Painted graphics best, as textures make each redraw dearer.
+
+### Faster fighting for big games
+
+Measured for 16 players (a scratch benchmark, 100 ms a tick to spend):
+before the band fix, a big battle on an 8-player map took 28 ms a tick on
+average, and on a 16-player map (83 × 55, 8 sides of 600 units, 48 bands)
+127 ms. Most of it (two thirds) was each band asking which units were its
+crew. That fix is in (`advance`: one pass over the units for all bands),
+giving 7 ms and 23 ms, with the same results, so saved games replay.
+
+Left for later: once a second (`COMBAT_PERIOD`), each unit out walking
+looks through every enemy for the nearest one in reach, so the work grows
+with the square of the units out. With about 2,900 units walking out at
+once, one round took up to 2.9 s and froze the game for that long. The fix:
+in `fight`, sort the targets once into a lookup by cell (or by a coarse
+grid of cells), and have a walker look only at the cells within its reach.
+It must pick exactly the same target as now, including which of two at the
+same distance comes first (the targets' order in the list), or old games
+replay differently. Check it as the band fix was: a recorded big battle
+must end in the same state, tick for tick.
 
 ### Further off
 

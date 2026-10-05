@@ -41,7 +41,7 @@ import { tileAt } from './board.js';
 import { gameName, unitName } from './names.js';
 import { GAME_NAME_MAX, cleanGameName } from './player.js';
 import {
-  BUILDING_TYPES, BUILD_RANGE, DARK_LORD, HERO_LEVEL_GROWTH, HERO_LEVEL_XP, HERO_SHARE, LORD_HP, SHARED_STOCK, HORDE_MAX, HORDE_PERIOD, HORDE_START, POINTS, RAIDERS, SALVAGE, RAID_CHANCE, RAID_CLEAR, RAID_PER_PLAYER, RAID_PERIOD, RAID_ROAM, START_METAL, DEFAULT_MODE, MAX_PLAYERS, MODES, COMBAT_PERIOD, DEPART_GAP, FOOD_PER_UNIT, KILL_EVEN, KILL_MAX, KILL_STEP, KILL_XP, MELEE_DAMAGE, MELEE_RANGE,
+  BREED_RATE, BUILDING_TYPES, BUILD_RANGE, DARK_LORD, HERO_LEVEL_GROWTH, HERO_LEVEL_XP, HERO_SHARE, LORD_HP, LORD_PLAYERS_MAX, SHARED_STOCK, HORDE_MAX, HORDE_PERIOD, HORDE_START, POINTS, RAIDERS, SALVAGE, SEAT_SIDES, RAID_CHANCE, RAID_CLEAR, RAID_PER_PLAYER, RAID_PERIOD, RAID_ROAM, START_METAL, DEFAULT_MODE, MAX_PLAYERS, MODES, COMBAT_PERIOD, DEPART_GAP, FOOD_PER_UNIT, KILL_EVEN, KILL_MAX, KILL_STEP, KILL_XP, MELEE_DAMAGE, MELEE_RANGE,
   RANGED_DAMAGE, RANGED_RANGE, REPAIR_WORK, FOOD_PERIOD, FOOD_STORE, HUNGER_PULL, LEVEL_GROWTH,
   LEVEL_RATE, LEVEL_XP, MAX_HUNGER, MAX_LEVEL, SIDES, SKILLS, SKILL_RATE, SKILL_XP, START_STONE, START_UNITS, STARVE_CHANCE,
   UNIT_LIMIT, WAGON_PATIENCE, WALK_TICKS, WORK_BASE,
@@ -125,6 +125,10 @@ import {
  * @property {number} side Its name and colours: an index into SIDES.
  * @property {number} team Sides on one team don't fight each other.
  * @property {number} [lost] The tick its castle (or lair) fell: the side is out of the game.
+ * @property {true} [away] Its player is away, and the game goes on without
+ *   them (`away` and `back`, which only the game server gives): the Dark
+ *   Lord's horde doesn't go for its buildings, though it fights them on its
+ *   way.
  * @property {Tally} tally What it has done, for its points (see POINTS in
  *   rules.js). Players see it only once the game is over.
  */
@@ -138,7 +142,8 @@ import {
  *   | { type: 'upgrade', building: string }
  *   | { type: 'abort', building: string }
  *   | { type: 'move', building: string, q: number, r: number }
- *   | { type: 'rename', name: string }} Command
+ *   | { type: 'rename', name: string }
+ *   | { type: 'away' } | { type: 'back' }} Command
  * @typedef {{ ok: true } | { ok: false, reason: string }} Outcome
  */
 
@@ -150,6 +155,12 @@ import {
  * @property {Map<string, string[]>} onCell Cell key to the units out on it.
  * @property {number[]} unitCount Units per side.
  */
+
+/**
+ * The commands only the game server gives, for a side whose player went
+ * away or came back (see `Player.away`); a player's own are refused.
+ */
+export const ROOM_COMMANDS = Object.freeze(['away', 'back']);
 
 /** Bump when GameState changes shape, and teach `checkState` the new one. */
 export const STATE_VERSION = 12;
@@ -207,7 +218,7 @@ export function newGame(board, { mode = DEFAULT_MODE } = {}) {
   const players = board.starts.length - 1;
   board.starts.slice(0, coop ? players + 1 : players).forEach((start, owner) => {
     const npc = owner === players;
-    const side = npc ? DARK_LORD : owner;
+    const side = npc ? DARK_LORD : SEAT_SIDES[owner];
     state.players.push({
       id: owner, side, team: coop ? Number(npc) : owner, stone: npc ? 0 : START_STONE, metal: START_METAL, food: 0, hunger: 0,
       tally: newTally(),
@@ -386,12 +397,12 @@ export function capacityOf(b) {
 
 /**
  * How much stronger the Dark Lord is for the number of players: players / 2,
- * never less than 1, so 4 at eight players. His buildings' hit points grow
- * by it, and his waves by its square root.
+ * never less than 1, and 4 at eight players or more (LORD_PLAYERS_MAX). His
+ * buildings' hit points grow by it, and his waves by its square root.
  * @param {Pick<GameState, 'players'>} state
  */
 export function lordScale(state) {
-  return Math.max(1, seatsOf(state) / 2);
+  return Math.max(1, Math.min(seatsOf(state), LORD_PLAYERS_MAX) / 2);
 }
 
 /**
@@ -444,6 +455,15 @@ export function raiseWork(b) {
  */
 export function depthOf(b) {
   return Math.floor((b.dug ?? 0) / (BUILDING_TYPES[b.type].perDepth ?? 1));
+}
+
+/**
+ * How fast castles raise units in this mode, as a multiple of the usual
+ * (BREED_RATE): twice as fast in Very Easy Lord.
+ * @param {string} mode
+ */
+export function breedRate(mode) {
+  return Object.hasOwn(BREED_RATE, mode) ? BREED_RATE[mode] : 1;
 }
 
 /**
@@ -874,8 +894,42 @@ export function applyCommand(board, state, player, command) {
     case 'abort': return abort(board, state, occ, player, cmd);
     case 'move': return moveBuilding(board, state, occ, player, cmd);
     case 'rename': return rename(state, cmd);
+    case 'away': return goAway(state, player);
+    case 'back': return comeBack(state, player);
     default: return refuse('unknown command');
   }
+}
+
+/**
+ * The side's player is away and the game goes on without them: the horde
+ * gives up going for the side's buildings, and picks other prey.
+ * @param {GameState} state
+ * @param {number} player
+ * @returns {Outcome}
+ */
+function goAway(state, player) {
+  const p = state.players[player];
+  if (SIDES[p.side]?.npc) return refuse('not a seat');
+  if (p.away) return refuse('already away');
+  p.away = true;
+  for (const b of Object.values(state.buildings)) {
+    if (!BUILDING_TYPES[b.type].hunts || b.target === undefined || state.buildings[b.target]?.owner !== player) continue;
+    delete b.target;
+    stopAfterStep(b);
+  }
+  return { ok: true };
+}
+
+/**
+ * The side's player is back.
+ * @param {GameState} state
+ * @param {number} player
+ * @returns {Outcome}
+ */
+function comeBack(state, player) {
+  if (!state.players[player].away) return refuse('not away');
+  delete state.players[player].away;
+  return { ok: true };
 }
 
 /**
@@ -1162,8 +1216,15 @@ export function advance(board, state) {
     harvest(state);
     for (const p of state.players) if (purseOf(state, p.id) === p) eat(state, p);
   }
+  // A band with nobody in it or on the way is gone. One pass over the units
+  // for all bands: asking each band's crew in turn was most of a tick's time.
+  const manned = new Set();
+  for (const u of Object.values(state.units)) {
+    if (u.in !== undefined) manned.add(u.in);
+    if (u.to !== undefined) manned.add(u.to);
+  }
   for (const b of Object.values(state.buildings)) {
-    if (BUILDING_TYPES[b.type].band && !crewOf(state, b.id).length) delete state.buildings[b.id];
+    if (BUILDING_TYPES[b.type].band && !manned.has(b.id)) delete state.buildings[b.id];
   }
   const occ = occupancy(state);
   if (state.tick % COMBAT_PERIOD === 0) roam(board, state, occ);
@@ -1408,6 +1469,14 @@ function chase(board, state, occ, b) {
  */
 function turnTo(b, target) {
   b.target = target;
+  stopAfterStep(b);
+}
+
+/**
+ * A moving building drops its way: it finishes the step it is taking.
+ * @param {Building} b
+ */
+function stopAfterStep(b) {
   if (b.until !== undefined && b.path?.length) b.path = [b.path[0]];
   else delete b.path;
   delete b.waiting;
@@ -1436,12 +1505,13 @@ function nearestEnemy(state, b, which) {
 
 /**
  * One of the horde with nothing to go for picks the nearest enemy farm, or
- * castle once no farm is left.
+ * castle once no farm is left, of the sides whose players are here.
  * @param {GameState} state
  * @param {Building} b
  */
 function hunt(state, b) {
-  const prey = nearestEnemy(state, b, (t) => t.type === 'farm') ?? nearestEnemy(state, b, (t) => t.type === 'castle');
+  const here = (/** @type {Building} */ t) => !state.players[t.owner]?.away;
+  const prey = nearestEnemy(state, b, (t) => t.type === 'farm' && here(t)) ?? nearestEnemy(state, b, (t) => t.type === 'castle' && here(t));
   if (prey) turnTo(b, prey.id);
 }
 
@@ -1673,10 +1743,12 @@ function work(board, state, occ) {
     const workers = elsewhere ? [] : inside;
     if (!workers.length && !type.idleWork) continue;
 
-    let done = /** @type {number} */ (b.work) + (type.idleWork ?? 0);
+    // Some modes raise units faster; the units learn as fast as ever.
+    const rate = type.yields === 'unit' ? breedRate(state.mode) : 1;
+    let done = /** @type {number} */ (b.work) + (type.idleWork ?? 0) * rate;
     for (const id of workers) {
       const u = state.units[id];
-      done += WORK_BASE + u.skills[type.skill];
+      done += (WORK_BASE + u.skills[type.skill]) * rate;
       practise(u, type.skill);
     }
     if (done < type.work) {
@@ -1908,6 +1980,7 @@ export function checkState(board, raw) {
     if (!isRecord(tally) || Object.keys(tally).sort().join() !== Object.keys(POINTS).sort().join()
       || !Object.values(tally).every((n) => isCount(n, Infinity)) || Number(tally.won) > 1) fail(`side ${i}: bad tally`);
     if (p.lost !== undefined && !isCount(p.lost, state.tick + 1)) fail(`side ${i}: bad lost`);
+    if (p.away !== undefined && (p.away !== true || SIDES[p.side]?.npc)) fail(`side ${i}: bad away`);
   });
   if (!isRecord(state.buildings) || !isRecord(state.units)) return [...problems, 'bad buildings or units'];
 

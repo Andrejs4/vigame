@@ -74,15 +74,19 @@ test('a player may start a game unless three of theirs wait for a player, or the
   const tooManyGamesNow = (/** @type {ReturnType<typeof game>[]} */ games, /** @type {string} */ pid, /** @type {number} */ limit) => tooManyGames(games, pid, limit, now);
   assert.equal(tooManyGamesNow(mine, 'p', 3), null, 'two waiting, two seats');
   assert.equal(tooManyGamesNow([...mine, { ...game('w3', 'p', [null]), updatedAt: now - IDLE_MS }], 'p', 3), null, 'one idle for days does not count');
+  assert.equal(tooManyGamesNow([...mine, { ...game('w3', 'p', ['q', null]), fallen: [1] }], 'p', 3), null, 'nor one whose free seat has fallen');
   const waiting = tooManyGamesNow([...mine, game('w3', 'p', [null])], 'p', 3);
   assert.deepEqual(waiting?.games.map((g) => g.id), ['w1', 'w2', 'w3']);
   assert.match(waiting?.error ?? '', /^You have 3 games of yours waiting for a player\./);
+  assert.deepEqual([waiting?.waiting, waiting?.seated], [3, 0], 'how many, for the page to say in its words');
   const seated = tooManyGamesNow([...mine, game('s2', 'q', ['p', 'q'])], 'p', 3);
   assert.deepEqual(seated?.games.map((g) => g.id), ['w1', 's1', 's2'], 'the games they sit in');
   assert.match(seated?.error ?? '', /^You have a seat in 3 games under way\./);
+  assert.deepEqual([seated?.waiting, seated?.seated], [0, 3]);
   const both = tooManyGamesNow([...mine, game('w3', 'p', ['p'])].map((g) => (g.id === 'w3' ? { ...g, seats: ['p', null] } : g)), 'p', 3);
   assert.deepEqual(both?.games.map((g) => g.id), ['w1', 'w2', 's1', 'w3']);
   assert.match(both?.error ?? '', /waiting for a player, and a seat in 3 games/);
+  assert.deepEqual([both?.waiting, both?.seated], [3, 3]);
   // What each can do with one: delete their own that nobody else plays, else leave it.
   assert.deepEqual(['w1', 'w2', 's1'].map((id) => clearing(/** @type {any} */ (mine.find((g) => g.id === id)), 'p')), ['delete', 'delete', 'leave']);
   assert.equal(clearing(game('x', 'p', ['p', 'q']), 'p'), 'leave', 'someone else plays it');
@@ -268,11 +272,14 @@ test('new games are stored with a castle per side, and listed; unknown ones are 
   assert.equal(easy.status, 201);
   const easyGame = await (await fetch(`${base}/api/games/${(await easy.json()).id}`)).json();
   assert.deepEqual([easyGame.state.mode, easyGame.seats.length], ['easy', 1], 'Easy Lord, one player by default');
+  const veryEasy = await post('/api/games', { token: TOKENS.a, mode: 'veryEasy', players: 2 });
+  assert.equal(veryEasy.status, 201);
+  assert.equal((await (await fetch(`${base}/api/games/${(await veryEasy.json()).id}`)).json()).state.mode, 'veryEasy');
   assert.equal((await post('/api/games', { token: TOKENS.a, mode: 'solo' })).status, 400);
-  const eight = await post('/api/games', { token: TOKENS.a, players: 8 });
-  assert.equal(eight.status, 201);
-  assert.equal((await (await fetch(`${base}/api/games/${(await eight.json()).id}`)).json()).seats.length, 8);
-  for (const bad of [{ players: 0 }, { players: 9 }, { players: 1, mode: 'ffa' }]) {
+  const sixteen = await post('/api/games', { token: TOKENS.a, players: 16 });
+  assert.equal(sixteen.status, 201);
+  assert.equal((await (await fetch(`${base}/api/games/${(await sixteen.json()).id}`)).json()).seats.length, 16);
+  for (const bad of [{ players: 0 }, { players: 17 }, { players: 1, mode: 'ffa' }]) {
     assert.equal((await post('/api/games', { token: TOKENS.a, ...bad })).status, 400, JSON.stringify(bad));
   }
   assert.equal(lobby.find((g) => g.id === id)?.tick, 0);
@@ -312,10 +319,15 @@ test('signing in takes a name and the answer to the server\'s sum', async () => 
   assert.deepEqual(await badName.json(), { error: 'bad name' });
   assert.equal(server.storage.loadPlayer(playerId(token)), null);
 
-  // A bad name didn't use the challenge up, so it still works.
+  const badLanguage = await post('/api/players', { token, name: 'Sam', language: 'de', challenge: sum.id, answer: sum.answer });
+  assert.equal(badLanguage.status, 400);
+  assert.deepEqual(await badLanguage.json(), { error: 'bad language' });
+
+  // A bad name or language didn't use the challenge up, so it still works.
+  // Without a language, the player gets Auto.
   const ok = await post('/api/players', { token, name: '  Sam   Lee ', challenge: sum.id, answer: String(sum.answer) });
   assert.equal(ok.status, 200);
-  assert.deepEqual(await ok.json(), { pid: playerId(token), name: 'Sam Lee' });
+  assert.deepEqual(await ok.json(), { pid: playerId(token), name: 'Sam Lee', language: 'auto' });
   assert.equal(server.storage.loadPlayer(playerId(token)).name, 'Sam Lee');
 
   // Every challenge answers once, and a wrong answer uses one up too.
@@ -332,14 +344,47 @@ test('signing in takes a name and the answer to the server\'s sum', async () => 
   }
   assert.equal(server.storage.loadPlayer(playerId(token)).name, 'Sam Lee', 'refusals change nothing');
 
-  // Signing in again, with a new sum, renames.
+  // Signing in again, with a new sum, renames, and takes the language chosen.
   const rename = await challenge();
-  assert.equal((await post('/api/players', { token, name: 'Samuel', challenge: rename.id, answer: rename.answer })).status, 200);
-  assert.equal(server.storage.loadPlayer(playerId(token)).name, 'Samuel');
+  const renamed = await post('/api/players', { token, name: 'Самуил', language: 'en', challenge: rename.id, answer: rename.answer });
+  assert.deepEqual(await renamed.json(), { pid: playerId(token), name: 'Самуил', language: 'en' });
+  assert.equal(server.storage.loadPlayer(playerId(token)).name, 'Самуил');
+});
+
+test('the settings page changes a player\'s name and language, with no sum', async () => {
+  const token = 'e'.repeat(32);
+  const pid = playerId(token);
+  const stranger = await post('/api/settings', { token, name: 'Eve' });
+  assert.equal(stranger.status, 401);
+  assert.deepEqual(await stranger.json(), { error: 'sign in first' });
+  assert.equal(server.storage.loadPlayer(pid), null);
+
+  server.storage.savePlayer(pid, 'Eve');
+  const both = await post('/api/settings', { token, name: '  Eve   Ray ', language: 'ru' });
+  assert.equal(both.status, 200);
+  assert.deepEqual(await both.json(), { pid, name: 'Eve Ray', language: 'ru' });
+  assert.deepEqual(await (await post('/api/me', { token })).json(), { pid, name: 'Eve Ray', language: 'ru' });
+
+  // What isn't given stays as it was.
+  assert.deepEqual(await (await post('/api/settings', { token, language: 'auto' })).json(), { pid, name: 'Eve Ray', language: 'auto' });
+  assert.deepEqual(await (await post('/api/settings', { token, name: 'Eve' })).json(), { pid, name: 'Eve', language: 'auto' });
+
+  for (const [body, error] of [
+    [{ token, name: 'Eve 🙂' }, 'bad name'],
+    [{ token, name: null, language: 'en' }, 'bad name'],
+    [{ token, language: 'EN' }, 'bad language'],
+    [{ token, name: 'Eva', language: 'de' }, 'bad language'],
+  ]) {
+    const res = await post('/api/settings', body);
+    assert.equal(res.status, 400, JSON.stringify(body));
+    assert.deepEqual(await res.json(), { error });
+  }
+  const kept = server.storage.loadPlayer(pid);
+  assert.deepEqual([kept.name, kept.language], ['Eve', 'auto'], 'refusals change nothing');
 });
 
 test('a token can ask who it belongs to', async () => {
-  assert.deepEqual(await (await post('/api/me', { token: TOKENS.a })).json(), { pid: playerId(TOKENS.a), name: 'Ann' });
+  assert.deepEqual(await (await post('/api/me', { token: TOKENS.a })).json(), { pid: playerId(TOKENS.a), name: 'Ann', language: 'auto' });
   for (const body of [{ token: 'y'.repeat(32) }, { token: 'short' }, {}]) {
     const res = await post('/api/me', body);
     assert.equal(res.status, 200, 'not signed in is an answer, not an error');
@@ -418,6 +463,72 @@ test('the clock runs only while both seated players are here', async () => {
   await sleep(100);
   assert.equal(seen(a).tick, stopped, 'paused while Crimson is away');
   await leaveAll(a, c);
+});
+
+test('the game\'s creator may have it go on without the players missing, until they are back', async () => {
+  const res = await post('/api/games', { token: TOKENS.a, players: 3 });
+  const id = /** @type {string} */ ((await res.json()).id);
+  const a = await join(id, TOKENS.a);
+  let b = await join(id, TOKENS.b);
+  await sleep(50);
+  assert.equal(seen(a).running, false, 'waiting for the third player');
+  assert.equal(a.state.toJSON().creator, playerId(TOKENS.a), 'the page knows who may start it');
+
+  assert.equal(await refusal(b.request('startNow')), 'not a game you started');
+  assert.equal(await refusal(give(a, { type: 'away' })), 'unknown command', 'only the room says who is away');
+  assert.equal(await a.request('startNow'), true);
+  await until(() => seen(a).running);
+  assert.deepEqual(seen(a).players.slice(0, 3).map((p) => p.away), [undefined, undefined, true]);
+  assert.deepEqual(server.storage.listCommands(id).map((c) => [c.player, c.command]), [[2, { type: 'away' }]], 'logged, so replays agree');
+  assert.equal(await refusal(a.request('startNow')), 'nobody is missing');
+
+  // Crimson leaves: the game waits again, until it goes on without them too.
+  await b.leave();
+  await until(() => !seen(a).running);
+  assert.equal(await a.request('startNow'), true);
+  await until(() => seen(a).running);
+  assert.deepEqual(seen(a).players.slice(0, 3).map((p) => p.away), [undefined, true, true]);
+
+  // Back, and a newcomer in the free seat: the game waits for both again.
+  b = await join(id, TOKENS.b);
+  const c = await join(id, TOKENS.c);
+  await until(() => seen(a).players.every((p) => p.away === undefined));
+  assert.equal(c.state.toJSON().viewers[c.sessionId]?.seat, 2);
+  assert.deepEqual(server.storage.listCommands(id).slice(-2).map((x) => [x.player, x.command.type]).sort(), [[1, 'back'], [2, 'back']]);
+  await c.leave();
+  await until(() => !seen(a).running);
+  await leaveAll(a, b);
+});
+
+test('a player whose castle fell may take a free base; the game waits for no fallen side', async () => {
+  const res = await post('/api/games', { token: TOKENS.a, players: 4 });
+  const id = /** @type {string} */ ((await res.json()).id);
+  const a = await join(id, TOKENS.a);
+  let b = await join(id, TOKENS.b);
+  assert.equal(await a.request('startNow'), true);
+  await until(() => seen(a).running);
+
+  // Crimson's castle falls.
+  const room = matchMaker.getLocalRoomById(a.roomId);
+  const castle = /** @type {any} */ (Object.values(room.game.buildings)).find((x) => x.owner === 1 && x.type === 'castle');
+  castle.hp = 0;
+  await until(() => seen(a).players[1].lost !== undefined);
+  await b.leave();
+  await sleep(50);
+  assert.equal(seen(a).running, true, 'no waiting for a side that has lost');
+
+  b = await join(id, TOKENS.b);
+  assert.equal(b.state.toJSON().viewers[b.sessionId]?.seat, 1, 'back in the seat they had');
+  assert.equal(await b.request('claimSeat', { seat: 3 }), 3, 'the free base they picked');
+  await until(() => seen(a).players[3].away === undefined);
+  assert.deepEqual(a.state.toJSON().seats, [playerId(TOKENS.a), '', '', playerId(TOKENS.b)]);
+  assert.equal(await give(b, { type: 'upgrade', building: castleOf(seen(b), 3)?.id }), server.storage.listCommands(id).at(-1)?.seq ?? -1);
+
+  // A newcomer gets the free base whose castle stands, never the fallen one.
+  const c = await join(id, TOKENS.c);
+  assert.equal(c.state.toJSON().viewers[c.sessionId]?.seat, 2);
+  assert.equal(await refusal(b.request('claimSeat')), null, 'asking again, with a standing seat, is harmless');
+  await leaveAll(a, b, c);
 });
 
 // --- commands --------------------------------------------------------------

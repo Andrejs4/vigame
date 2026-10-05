@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 
 import { createChallenges } from '../server/challenge.js';
 import { GAME_NAMES } from '../src/core/names.js';
-import { GAME_NAME_MAX, PLAYER_NAME_MAX, cleanGameName, cleanPlayerName } from '../src/core/player.js';
+import { GAME_NAME_MAX, LANGUAGES, PLAYER_NAME_MAX, cleanGameName, cleanLanguage, cleanPlayerName } from '../src/core/player.js';
 
 test('player names: letters and digits in any script, up to 15 characters', () => {
   for (const name of ['Ann', 'Jānis', 'Ōtani 2', 'Анна-Мария', '李小龍', 'अनिल', "O'Neil", 'x_y.z', '7']) {
@@ -75,4 +75,12 @@ test('challenges expire, and only so many are held at once', () => {
   clock = 2002;
   challenges.issue();
   assert.equal(challenges.size(), 1, 'expired ones are dropped as new ones arrive');
+});
+
+test('a player\'s language is Auto, English, Russian, Latvian or Finnish, by its code', () => {
+  assert.deepEqual(LANGUAGES, ['auto', 'en', 'ru', 'lv', 'fi']);
+  for (const code of LANGUAGES) assert.equal(cleanLanguage(code), code);
+  for (const code of ['', 'EN', 'en-US', 'de', 'toString', null, undefined, 1, ['en']]) {
+    assert.equal(cleanLanguage(code), null, JSON.stringify(code));
+  }
 });

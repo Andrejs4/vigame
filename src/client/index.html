@@ -27,9 +27,18 @@
   <img class="banner" src="client/art/banner.webp" width="1040" height="400" alt="">
   <form class="card" novalidate>
     <h1>Vigame</h1>
-    <p class="hint">The name other players see: up to 15 letters or digits.</p>
-    <label>Your name
-      <input id="login-name" name="name" autocomplete="nickname" spellcheck="false" required>
+    <!-- Its words are in words.js, in each language. -->
+    <label><span id="login-name-label">Your name</span>
+      <input id="login-name" name="name" placeholder="Visible name (15)" autocomplete="nickname" spellcheck="false" required>
+    </label>
+    <label><span id="login-language-label">Language</span>
+      <select id="login-language" name="language">
+        <option value="auto" selected>Auto</option>
+        <option value="en" lang="en">English</option>
+        <option value="ru" lang="ru">Русский</option>
+        <option value="lv" lang="lv">Latviešu</option>
+        <option value="fi" lang="fi">Suomi</option>
+      </select>
     </label>
     <label><span id="login-question">Loading the question&hellip;</span>
       <input id="login-answer" name="answer" inputmode="numeric" autocomplete="off" required>
@@ -40,19 +49,45 @@
   <img class="banner" src="client/art/banner-lord.webp" width="1040" height="400" alt="">
 </main>
 
+<main class="page" id="settings" hidden>
+  <form class="card" novalidate>
+    <!-- Its words are in words.js, in each language. -->
+    <h1 id="settings-title">Settings</h1>
+    <label><span id="settings-name-label">Your name</span>
+      <input id="settings-name" name="name" placeholder="Visible name (15)" autocomplete="nickname" spellcheck="false" required>
+    </label>
+    <label><span id="settings-language-label">Language</span>
+      <select id="settings-language" name="language">
+        <option value="auto">Auto</option>
+        <option value="en" lang="en">English</option>
+        <option value="ru" lang="ru">Русский</option>
+        <option value="lv" lang="lv">Latviešu</option>
+        <option value="fi" lang="fi">Suomi</option>
+      </select>
+    </label>
+    <p class="error" id="settings-error" role="alert"></p>
+    <div class="buttons">
+      <a class="button" id="settings-back" href="./">Back</a>
+      <button id="settings-save" class="primary">Save</button>
+    </div>
+  </form>
+</main>
+
 <main class="page" id="lobby" hidden>
+  <!-- Its words are in words.js (data-word); How to play and About are written out in each language. -->
   <div class="card wide">
     <h1>Vigame</h1>
-    <p class="hint">Playing as <strong id="lobby-name"></strong> &middot; <a href="" id="lobby-rename">Change name</a></p>
+    <p class="hint"><span data-word="playingAs">Playing as</span> <strong id="lobby-name"></strong> &middot; <a href="?settings" id="lobby-settings" data-word="settings">Settings</a></p>
     <p class="error" id="lobby-notice" role="status" hidden></p>
-    <label for="lobby-mode">Mode</label>
+    <label for="lobby-mode" data-word="mode">Mode</label>
     <select id="lobby-mode">
-      <option value="coop" selected>Cooperation: together against the Dark Lord</option>
-      <option value="easy">Easy Lord: together against a weaker Dark Lord</option>
-      <option value="shared">Shared Easy Lord: one stock for all, against a weaker Dark Lord</option>
-      <option value="ffa">Free for all: each against the other</option>
+      <option value="coop" selected data-word="coopChoice">Cooperation: together against the Dark Lord</option>
+      <option value="easy" data-word="easyChoice">Easy Lord: together against a weaker Dark Lord</option>
+      <option value="shared" data-word="sharedChoice">Shared Easy Lord: one stock for all, against a weaker Dark Lord</option>
+      <option value="veryEasy" data-word="veryEasyChoice">Very Easy Lord: as Shared Easy Lord, and units breed twice as fast</option>
+      <option value="ffa" data-word="ffaChoice">Free for all: each against the other</option>
     </select>
-    <label for="lobby-players">Players</label>
+    <label for="lobby-players" data-word="players">Players</label>
     <select id="lobby-players">
       <option value="1" selected>1</option>
       <option value="2">2</option>
@@ -62,73 +97,218 @@
       <option value="6">6</option>
       <option value="7">7</option>
       <option value="8">8</option>
+      <option value="9">9</option>
+      <option value="10">10</option>
+      <option value="11">11</option>
+      <option value="12">12</option>
+      <option value="13">13</option>
+      <option value="14">14</option>
+      <option value="15">15</option>
+      <option value="16">16</option>
     </select>
-    <button id="lobby-new" class="primary">New game</button>
+    <button id="lobby-new" class="primary" data-word="newGame">New game</button>
     <div id="lobby-limit" hidden>
       <p class="error" id="lobby-limit-text" role="alert"></p>
       <ul class="games" id="lobby-limit-games"></ul>
     </div>
     <details class="games-list" id="lobby-mine-section" open>
-      <summary><h2>Your games <span class="count" id="lobby-mine-count"></span></h2></summary>
+      <summary><h2><span data-word="yourGames">Your games</span> <span class="count" id="lobby-mine-count"></span></h2></summary>
       <ul class="games" id="lobby-mine"></ul>
-      <p class="empty" id="lobby-mine-empty">None yet. Start one, or join one below.</p>
+      <p class="empty" id="lobby-mine-empty" data-word="yourGamesNone">None yet. Start one, or join one below.</p>
     </details>
     <details class="games-list" id="lobby-open-section" open>
-      <summary><h2>Waiting for a player <span class="count" id="lobby-open-count"></span></h2></summary>
+      <summary><h2><span data-word="waitingGames">Waiting for a player</span> <span class="count" id="lobby-open-count"></span></h2></summary>
       <ul class="games" id="lobby-open"></ul>
-      <p class="empty" id="lobby-open-empty">No one is waiting right now.</p>
+      <p class="empty" id="lobby-open-empty" data-word="waitingGamesNone">No one is waiting right now.</p>
     </details>
     <details class="games-list" id="lobby-playing-section">
-      <summary><h2>Ongoing <span class="count" id="lobby-playing-count"></span></h2></summary>
+      <summary><h2><span data-word="ongoingGames">Ongoing</span> <span class="count" id="lobby-playing-count"></span></h2></summary>
       <ul class="games" id="lobby-playing"></ul>
-      <p class="empty" id="lobby-playing-empty">Nobody else is playing right now.</p>
+      <p class="empty" id="lobby-playing-empty" data-word="ongoingGamesNone">Nobody else is playing right now.</p>
     </details>
     <details class="games-list" id="lobby-done-section">
-      <summary><h2>Recently finished <span class="count" id="lobby-done-count"></span></h2></summary>
+      <summary><h2><span data-word="finishedGames">Recently finished</span> <span class="count" id="lobby-done-count"></span></h2></summary>
       <ul class="games" id="lobby-done"></ul>
-      <p class="empty" id="lobby-done-empty">No game has ended yet.</p>
+      <p class="empty" id="lobby-done-empty" data-word="finishedGamesNone">No game has ended yet.</p>
     </details>
     <details class="games-list prose" id="lobby-how-section">
-      <summary><h2>How to play</h2></summary>
-      <p>The units at home in your castle raise new ones: the more of them,
-        and the better they breed, the sooner. Your side is out once your
-        castle falls.</p>
-      <p>Build near your standing buildings. The crew you pick raises a
-        building once they get there; meanwhile it has half its hit points
-        and shelters nobody. A pit's crew digs stone, which pays for towers,
-        farms and upgrades; farms grow food. Water can't be crossed, and
-        scrub can't be built on and is twice as slow to walk.</p>
-      <p>Select a building and press Crew to choose who works there; Return
-        sends them home. Your castle's Heroes lists your heroes, who level
-        up faster than the rest. Every minute your units eat: short meals
-        make them hungry, and at full hunger they may starve.</p>
-      <p>Select a wagon or band, then click a cell, to move it; it carries
-        its crew. A wagon can't pass other buildings; a band passes anything
-        of yours, gives no cover, and breaks up when it has nobody. Units in
-        buildings and bands strike enemies in reach; press Attack, then an
-        enemy building, to choose their target.</p>
-      <p>Drag to pan, wheel to zoom; press the minimap to look anywhere. A
-        button's bold letter is its key; choosing a crew, Enter or that
-        letter again sends it.</p>
+      <summary><h2 data-word="howToPlay">How to play</h2></summary>
+      <div lang="en">
+        <p>The units at home in your castle raise new ones: the more of them,
+          and the better they breed, the sooner. Your side is out once your
+          castle falls; while a castle stands that nobody plays, New base
+          moves you to it.</p>
+        <p>Build near your standing buildings. The crew you pick raises a
+          building once they get there; meanwhile it has half its hit points
+          and shelters nobody. A pit's crew digs stone, which pays for towers,
+          farms and upgrades; farms grow food. Water can't be crossed, and
+          scrub can't be built on and is twice as slow to walk.</p>
+        <p>Select a building and press Crew to choose who works there; Return
+          sends them home. Your castle's Heroes lists your heroes, who level
+          up faster than the rest. Every minute your units eat: short meals
+          make them hungry, and at full hunger they may starve.</p>
+        <p>Select a wagon or band, then click a cell, to move it; it carries
+          its crew. A wagon can't pass other buildings; a band passes anything
+          of yours, gives no cover, and breaks up when it has nobody. Units in
+          buildings and bands strike enemies in reach; press Attack, then an
+          enemy building, to choose their target.</p>
+        <p>Drag to pan, wheel to zoom; press the minimap to look anywhere. A
+          button's bold letter is its key; choosing a crew, Enter or that
+          letter again sends it.</p>
+      </div>
+      <div lang="ru" hidden>
+        <p>Юниты дома, в вашем замке, растят новых: чем их больше и чем лучше
+          они плодятся, тем скорее. Ваша сторона выбывает, когда падёт её
+          замок; пока стоит замок, за который никто не играет, «Новая база»
+          переносит вас туда.</p>
+        <p>Стройте рядом со своими готовыми зданиями. Выбранная бригада
+          возводит здание, когда доберётся до него; до тех пор у него половина
+          прочности и оно никого не укрывает. Бригада в яме добывает камень,
+          на него строят башни, фермы и улучшения; фермы растят еду. Воду не
+          пересечь, на кустарнике нельзя строить, и идти по нему вдвое
+          медленнее.</p>
+        <p>Выберите здание и нажмите «Бригада», чтобы решить, кто там
+          работает; «Вернуть» отправляет их домой. «Герои» у замка показывают
+          ваших героев, которые растут в уровне быстрее остальных. Каждую
+          минуту юниты едят: скудные обеды делают их голодными, а при полном
+          голоде они могут умереть.</p>
+        <p>Выберите воз или отряд, затем клетку, чтобы двинуть их; бригада
+          едет с ними. Воз не проходит сквозь здания; отряд
+          проходит сквозь всё ваше, не даёт укрытия и распадается, когда в
+          нём никого нет. Юниты в зданиях и отрядах бьют врагов в пределах
+          досягаемости; нажмите «Атака», затем вражеское здание, чтобы выбрать
+          цель.</p>
+        <p>Тяните карту, чтобы сдвинуть её, колесом меняйте масштаб; нажмите
+          на мини-карту, чтобы посмотреть в любое место. Жирная буква на
+          кнопке — её клавиша, на любой раскладке (английские тоже работают);
+          при выборе бригады Enter или та же клавиша ещё раз отправляет её.</p>
+      </div>
+      <div lang="lv" hidden>
+        <p>Vienības mājās, jūsu pilī, audzina jaunas: jo vairāk to ir un jo
+          labāk tās vairojas, jo ātrāk. Jūsu puse zaudē, kad krīt jūsu
+          pils; kamēr stāv pils, ar kuru neviens nespēlē, „Jauna bāze”
+          pārceļ jūs uz to.</p>
+        <p>Būvējiet pie savām stāvošajām ēkām. Izvēlētā komanda uzceļ ēku, kad
+          nonāk tur; līdz tam tai ir puse izturības, un tā nevienu nesargā.
+          Bedres komanda rok akmeni, ar ko maksā par torņiem, fermām un
+          uzlabojumiem; fermas audzē pārtiku. Ūdeni nevar šķērsot, krūmājos
+          nevar būvēt, un pa tiem iet divreiz lēnāk.</p>
+        <p>Izvēlieties ēku un nospiediet „Komanda”, lai izvēlētos, kas tur
+          strādā; „Mājās” sūta tos mājās. Pils „Varoņi” rāda jūsu varoņus,
+          kuri iegūst līmeņus ātrāk par citiem. Katru minūti vienības ēd:
+          trūcīgas maltītes tās izsalcina, un pilnā badā tās var nomirt.</p>
+        <p>Izvēlieties ratus vai baru, tad šūnu, lai tos pārvietotu; tie ved
+          savu komandu. Rati nevar iet cauri citām ēkām; bars iet cauri visam
+          jūsējam, nedod aizsegu un izjūk, kad tajā neviena nav. Vienības ēkās
+          un baros sit ienaidniekus, ko var aizsniegt; nospiediet „Atakot”,
+          tad ienaidnieka ēku, lai izvēlētos mērķi.</p>
+        <p>Velciet, lai pārvietotu skatu, ritenītis tuvina; nospiediet
+          minikarti, lai skatītos jebkur. Pogas treknais burts ir tās
+          taustiņš (angliskie arī der); izvēloties komandu, Enter vai tas
+          pats taustiņš vēlreiz to nosūta.</p>
+      </div>
+      <div lang="fi" hidden>
+        <p>Linnasi kotona olevat yksiköt kasvattavat uusia: mitä enemmän heitä
+          on ja mitä paremmin he lisääntyvät, sitä nopeammin. Puolesi häviää,
+          kun linnasi kaatuu; niin kauan kuin jokin linna on vailla
+          pelaajaa, Uusi linna siirtää sinut siihen.</p>
+        <p>Rakenna seisovien rakennustesi lähelle. Valitsemasi ryhmä
+          pystyttää rakennuksen, kun se pääsee perille; sitä ennen sillä on
+          puolet kestävyydestään, eikä se suojaa ketään. Kuopan ryhmä louhii
+          kiveä, jolla maksetaan tornit, farmit ja kehitykset; farmit
+          kasvattavat ruokaa. Vettä ei voi ylittää, pensaikkoon ei voi
+          rakentaa, ja siinä kulkeminen on kaksi kertaa hitaampaa.</p>
+        <p>Valitse rakennus ja paina Ryhmä valitaksesi, kuka siellä
+          työskentelee; Kotiin lähettää heidät kotiin. Linnan Sankarit näyttää
+          sankarisi, jotka nousevat tasoissa muita nopeammin. Joka minuutti
+          yksiköt syövät: niukat ateriat tekevät heistä nälkäisiä, ja täydessä
+          nälässä he voivat nääntyä.</p>
+        <p>Valitse vaunu tai joukko ja sitten ruutu siirtääksesi sitä; se
+          kuljettaa ryhmänsä. Vaunu ei pääse muiden rakennusten läpi; joukko
+          kulkee kaiken omasi läpi, ei anna suojaa ja hajoaa, kun siinä ei ole
+          ketään. Rakennuksissa ja joukoissa olevat yksiköt iskevät
+          ulottuvilla oleviin vihollisiin; paina Hyökkää ja sitten vihollisen
+          rakennusta valitaksesi kohteen.</p>
+        <p>Vedä siirtääksesi näkymää, rullalla zoomaat; paina pikkukarttaa
+          katsoaksesi minne tahansa. Painikkeen lihavoitu kirjain on sen
+          näppäin (englanninkielisetkin toimivat); ryhmää valitessa Enter tai
+          sama näppäin uudelleen lähettää sen.</p>
+      </div>
     </details>
     <details class="games-list prose" id="lobby-about-section">
-      <summary><h2>About</h2></summary>
-      <p>Vigame is a real-time strategy game on a hex map, played in the
-        browser, and still growing.</p>
-      <p>It is its author's first pure vibe-coding project, and a
-        successful one: built entirely through conversation with Claude,
-        without its author once looking at the code.</p>
-      <p>Its source code, and the place to report a bug or suggest
-        something: <a href="https://github.com/Andrejs4/vigame" target="_blank" rel="noopener">github.com/Andrejs4/vigame</a>.</p>
-      <p>The code is free software under the
-        <a href="https://www.gnu.org/licenses/old-licenses/gpl-2.0.html" target="_blank" rel="noopener">GNU GPL</a>,
-        version 2 or later. Pictures:
-        <a href="https://game-icons.net" target="_blank" rel="noopener">game-icons.net</a>
-        by Lorc and Delapouite,
-        <a href="https://creativecommons.org/licenses/by/3.0/" target="_blank" rel="noopener">CC BY 3.0</a>;
-        the tab's icon and the login pictures were generated with
-        Perplexity, for non-commercial use. Fonts: IBM Plex, under the SIL Open Font License. Made with
-        Colyseus, Express and SQLite.</p>
+      <summary><h2 data-word="about">About</h2></summary>
+      <div lang="en">
+        <p>Vigame is a real-time strategy game on a hex map, played in the
+          browser, and still growing.</p>
+        <p>It is its author's first pure vibe-coding project, and a
+          successful one: built entirely through conversation with Claude,
+          without its author once looking at the code.</p>
+        <p>Its source code, and the place to report a bug or suggest
+          something: <a href="https://github.com/Andrejs4/vigame" target="_blank" rel="noopener">github.com/Andrejs4/vigame</a>.</p>
+        <p>The code is free software under the
+          <a href="https://www.gnu.org/licenses/old-licenses/gpl-2.0.html" target="_blank" rel="noopener">GNU GPL</a>,
+          version 2 or later. Pictures:
+          <a href="https://game-icons.net" target="_blank" rel="noopener">game-icons.net</a>
+          by Lorc and Delapouite,
+          <a href="https://creativecommons.org/licenses/by/3.0/" target="_blank" rel="noopener">CC BY 3.0</a>;
+          the tab's icon and the login pictures were generated with
+          Perplexity, for non-commercial use. Fonts: IBM Plex, under the SIL Open Font License. Made with
+          Colyseus, Express and SQLite.</p>
+      </div>
+      <div lang="ru" hidden>
+        <p>Vigame — стратегия в реальном времени на карте из шестиугольников,
+          прямо в браузере, и она ещё растёт.</p>
+        <p>Это первый проект автора, целиком сделанный вайб-кодингом, и
+          удачный: он создан только в разговорах с Claude, а автор ни разу не
+          заглянул в код.</p>
+        <p>Исходный код, а также место, где можно сообщить об ошибке или
+          что-то предложить: <a href="https://github.com/Andrejs4/vigame" target="_blank" rel="noopener">github.com/Andrejs4/vigame</a>.</p>
+        <p>Код — свободная программа под лицензией
+          <a href="https://www.gnu.org/licenses/old-licenses/gpl-2.0.html" target="_blank" rel="noopener">GNU GPL</a>
+          версии 2 или новее. Картинки:
+          <a href="https://game-icons.net" target="_blank" rel="noopener">game-icons.net</a>,
+          авторы Lorc и Delapouite,
+          <a href="https://creativecommons.org/licenses/by/3.0/" target="_blank" rel="noopener">CC BY 3.0</a>;
+          значок вкладки и картинки страницы входа созданы в Perplexity, для
+          некоммерческого использования. Шрифты: IBM Plex, по лицензии SIL
+          Open Font License. Сделано на Colyseus, Express и SQLite.</p>
+      </div>
+      <div lang="lv" hidden>
+        <p>Vigame ir reāllaika stratēģijas spēle uz sešstūru kartes,
+          spēlējama pārlūkā, un tā vēl aug.</p>
+        <p>Tas ir autora pirmais tīrais vaibkodēšanas projekts, un veiksmīgs:
+          veidots tikai sarunās ar Claude, autoram ne reizi neieskatoties
+          kodā.</p>
+        <p>Tās pirmkods un vieta, kur ziņot par kļūdu vai ko ieteikt:
+          <a href="https://github.com/Andrejs4/vigame" target="_blank" rel="noopener">github.com/Andrejs4/vigame</a>.</p>
+        <p>Kods ir brīva programmatūra ar
+          <a href="https://www.gnu.org/licenses/old-licenses/gpl-2.0.html" target="_blank" rel="noopener">GNU GPL</a>
+          licenci, 2. versiju vai jaunāku. Attēli:
+          <a href="https://game-icons.net" target="_blank" rel="noopener">game-icons.net</a>,
+          autori Lorc un Delapouite,
+          <a href="https://creativecommons.org/licenses/by/3.0/" target="_blank" rel="noopener">CC BY 3.0</a>;
+          cilnes ikona un pieteikšanās lapas attēli radīti ar Perplexity,
+          nekomerciālai lietošanai. Fonti: IBM Plex, ar SIL Open Font
+          License. Veidots ar Colyseus, Express un SQLite.</p>
+      </div>
+      <div lang="fi" hidden>
+        <p>Vigame on reaaliaikainen strategiapeli kuusikulmiokartalla,
+          pelataan selaimessa, ja se kasvaa yhä.</p>
+        <p>Se on tekijänsä ensimmäinen puhdas vibe coding -projekti, ja
+          onnistunut: tehty kokonaan keskustellen Clauden kanssa, tekijän
+          katsomatta kertaakaan koodiin.</p>
+        <p>Sen lähdekoodi ja paikka ilmoittaa viasta tai ehdottaa jotain:
+          <a href="https://github.com/Andrejs4/vigame" target="_blank" rel="noopener">github.com/Andrejs4/vigame</a>.</p>
+        <p>Koodi on vapaata ohjelmistoa
+          <a href="https://www.gnu.org/licenses/old-licenses/gpl-2.0.html" target="_blank" rel="noopener">GNU GPL</a>
+          -lisenssillä, versio 2 tai uudempi. Kuvat:
+          <a href="https://game-icons.net" target="_blank" rel="noopener">game-icons.net</a>,
+          tekijät Lorc ja Delapouite,
+          <a href="https://creativecommons.org/licenses/by/3.0/" target="_blank" rel="noopener">CC BY 3.0</a>;
+          välilehden kuvake ja kirjautumissivun kuvat on tehty Perplexityllä,
+          ei-kaupalliseen käyttöön. Fontit: IBM Plex, SIL Open Font License
+          -lisenssillä. Tehty Colyseuksella, Expressillä ja SQLitellä.</p>
+      </div>
     </details>
   </div>
 </main>
@@ -137,12 +317,15 @@
   <canvas id="board"></canvas>
 
   <div class="hud" id="status">
-    <div class="masthead">Vigame &middot; prototype</div>
-    <dl>
+    <!-- Folds the panel to this header, and unfolds it; this browser keeps the choice. -->
+    <button class="masthead" id="status-toggle" aria-expanded="true" aria-controls="status-body" title="Hide the game's details">
+      <span>Vigame &middot; prototype</span><span class="chevron" aria-hidden="true"></span>
+    </button>
+    <dl id="status-body">
       <div class="row"><dt>Game</dt><dd><span id="game-name">&mdash;</span><button class="inline" id="rename-button" hidden aria-label="Rename the game" title="Rename the game">✎</button></dd></div>
       <div class="row"><dt>Time</dt><dd id="time">0:00</dd></div>
       <div class="row"><dt>You</dt><dd id="seat">&mdash;</dd></div>
-      <div class="row"><dt>Players</dt><dd id="players" title="Seated players here, of the game's seats; it blinks while the game waits for the rest">&mdash;</dd></div>
+      <div class="row"><dt>Players</dt><dd><span id="players" title="Seated players here, of the game's seats; it blinks while the game waits for the rest">&mdash;</span><button class="inline" id="start-button" hidden title="Start without the players missing: the Dark Lord leaves their castles be until they are back" data-word-title="startNowTitle" data-word="startNow">Start</button></dd></div>
       <div class="row"><dt>Units</dt><dd id="units">&mdash;</dd></div>
       <div class="row"><dt>Tile</dt><dd id="tile">&mdash;</dd></div>
       <div class="row"><dt>Observers</dt><dd id="observers">0</dd></div>
@@ -152,6 +335,10 @@
 
   <!-- What play turns on: what the side has to spend, in big figures, and what is selected. -->
   <div class="hud" id="tactics">
+    <!-- Hides the minimap and shows it again (M); this browser keeps the choice. -->
+    <button class="corner-toggle" id="minimap-toggle" aria-expanded="true" aria-controls="minimap" aria-keyshortcuts="M" title="Hide the minimap (M)">
+      <span class="chevron" aria-hidden="true"></span>
+    </button>
     <div class="stocks">
       <div class="stock stone" title="In bold from 60, enough for a tower">
         <div class="figure"><span id="stone">&mdash;</span></div>
@@ -176,32 +363,33 @@
     </div>
   </div>
 
+  <!-- Its words are in words.js (data-word…); the buttons with a key (data-word-key) get their keys and labels from play.js. -->
   <div class="hud" id="controls">
-    <div class="group-label">Build</div>
-    <button id="build-tower" data-kind="tower" aria-pressed="false" aria-keyshortcuts="T">Tower</button>
-    <button id="build-wagon" data-kind="wagon" aria-pressed="false" aria-keyshortcuts="W">Wagon</button>
-    <button id="build-pit" data-kind="pit" aria-pressed="false" aria-keyshortcuts="P">Pit</button>
-    <button id="build-farm" data-kind="farm" aria-pressed="false" aria-keyshortcuts="F">Farm</button>
-    <button id="build-band" data-kind="band" aria-pressed="false" aria-keyshortcuts="B">Band</button>
-    <div class="group-label">Selected</div>
-    <button id="upgrade" disabled aria-keyshortcuts="U" title="Upgrade (U)"><b>U</b>pgrade</button>
-    <button id="crew-button" disabled aria-keyshortcuts="C" title="Choose who works here (C)"><b>C</b>rew…</button>
+    <div class="group-label" data-word="groupBuild">Build</div>
+    <button id="build-tower" data-kind="tower" data-word-key="keyTower" aria-pressed="false" aria-keyshortcuts="T">Tower</button>
+    <button id="build-wagon" data-kind="wagon" data-word-key="keyWagon" aria-pressed="false" aria-keyshortcuts="W">Wagon</button>
+    <button id="build-pit" data-kind="pit" data-word-key="keyPit" aria-pressed="false" aria-keyshortcuts="P">Pit</button>
+    <button id="build-farm" data-kind="farm" data-word-key="keyFarm" aria-pressed="false" aria-keyshortcuts="F">Farm</button>
+    <button id="build-band" data-kind="band" data-word-key="keyBand" aria-pressed="false" aria-keyshortcuts="B">Band</button>
+    <div class="group-label" data-word="groupSelected">Selected</div>
+    <button id="upgrade" data-word-key="keyUpgrade" disabled aria-keyshortcuts="U" title="Upgrade (U)" data-word-title="upgradeTitle"><b>U</b>pgrade</button>
+    <button id="crew-button" data-word-key="keyCrew" disabled aria-keyshortcuts="C" title="Choose who works here (C)" data-word-title="crewTitle"><b>C</b>rew…</button>
     <!-- In the crew button's place while your castle is selected: it has no crew, as everyone at home is. -->
-    <button id="heroes-button" hidden aria-keyshortcuts="H" title="Your heroes, highest level first (H)"><b>H</b>eroes…</button>
-    <button id="return-button" disabled>Return</button>
-    <button id="abort-button" disabled title="Give up a building still going up: its crew goes home, and its cost is lost">Abort</button>
-    <button id="attack-button" disabled aria-pressed="false" aria-keyshortcuts="A" title="Attack (A)"><b>A</b>ttack…</button>
-    <div class="group-label">View</div>
-    <button id="recenter">Recenter</button>
+    <button id="heroes-button" data-word-key="keyHeroes" hidden aria-keyshortcuts="H" title="Your heroes, highest level first (H)" data-word-title="heroesTitle"><b>H</b>eroes…</button>
+    <button id="return-button" disabled data-word="return">Return</button>
+    <button id="abort-button" disabled title="Give up a building still going up: its crew goes home, and its cost is lost" data-word-title="abortTitle" data-word="abort">Abort</button>
+    <button id="attack-button" data-word-key="keyAttack" disabled aria-pressed="false" aria-keyshortcuts="A" title="Attack (A)" data-word-title="attackTitle"><b>A</b>ttack…</button>
+    <div class="group-label" data-word="groupView">View</div>
+    <button id="recenter" data-word="recenter">Recenter</button>
     <div class="zoom-row">
-      <button id="zoom-out" aria-label="Zoom out">&minus;</button>
-      <button id="zoom-in" aria-label="Zoom in">+</button>
-      <button id="mute-button" aria-pressed="false" title="Sounds are on unless this is pressed; your choice is kept in this browser">Mute</button>
+      <button id="zoom-out" aria-label="Zoom out" data-word-label="zoomOut">&minus;</button>
+      <button id="zoom-in" aria-label="Zoom in" data-word-label="zoomIn">+</button>
+      <button id="mute-button" aria-pressed="false" title="Sounds are on unless this is pressed; your choice is kept in this browser" data-word-title="muteTitle" data-word="mute">Mute</button>
     </div>
-    <button id="toggle-coords" aria-pressed="false">Coordinates</button>
-    <button id="seat-button" hidden>Release seat</button>
-    <button id="scores-button" hidden>Scores</button>
-    <a class="button" id="to-lobby" href="">Lobby</a>
+    <button id="toggle-coords" aria-pressed="false" data-word="coordinates">Coordinates</button>
+    <button id="seat-button" hidden data-word="releaseSeat">Release</button>
+    <button id="scores-button" hidden data-word="scores">Scores</button>
+    <a class="button" id="to-lobby" href="" data-word="lobby">Lobby</a>
   </div>
 
   <div class="hud" id="minimap">

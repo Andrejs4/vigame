@@ -18,8 +18,10 @@ import { Camera } from './camera.js';
 import { Effects, fallenHeroes, fallenHeroesNote } from './effects.js';
 import { Minimap } from './minimap.js';
 import { BoardRenderer, COUNT_ZOOM, pickAt } from './render.js';
+import { autoLanguage, browserLanguages, chosenLanguage, keyCandidates } from './language.js';
 import { Sounds, soundsFor } from './sounds.js';
 import { Tokens } from './tokens.js';
+import { say, translate } from './words.js';
 
 /** @param {number} tick */
 function formatTime(tick) {
@@ -67,19 +69,48 @@ function worth(line) {
   return each >= 1 ? `${each} points each` : `a point per ${Math.round(1 / each)}`;
 }
 
+/** Where this browser keeps which panels are folded away: the status panel, the minimap. */
+const FOLDED_KEY = 'vigame.folded';
+
 /** Stone and dark metal the HUD shows in bold: enough for a tower, and for a wagon's upgrade. */
 const PLENTY = { stone: 60, metal: 30 };
 
 /**
- * Set a button's label with its first letter in bold: the key that presses it.
+ * The keys that press a button (its aria-keyshortcuts), its own first.
+ * @param {Element} button
+ */
+const keysOf = (button) => (button.getAttribute('aria-keyshortcuts') ?? '').split(' ').filter(Boolean);
+
+/**
+ * Set the label of a button that a key presses, with the key's letter in
+ * bold where the label has it ("Tower", "Ферма"), and its price if it has
+ * one ("Tower · 60"; on a phone the price goes on a line of its own).
  * @param {HTMLElement} button
  * @param {string} label
+ * @param {string} [price]
  */
-function keyLabel(button, label) {
-  if (button.textContent === label && button.firstChild?.nodeName === 'B') return;
-  const key = document.createElement('b');
-  key.textContent = label[0];
-  button.replaceChildren(key, label.slice(1));
+function keyLabel(button, label, price = '') {
+  const shown = `${label}|${price}|${button.getAttribute('aria-keyshortcuts')}`;
+  if (button.dataset.shown === shown) return;
+  button.dataset.shown = shown;
+  const at = label.toLowerCase().indexOf((keysOf(button)[0] ?? '').toLowerCase());
+  /** @type {Array<Node | string>} */
+  const parts = [label];
+  if (at >= 0 && keysOf(button).length) {
+    const letter = document.createElement('b');
+    letter.textContent = label[at];
+    parts.splice(0, 1, label.slice(0, at), letter, label.slice(at + 1));
+  }
+  if (price) {
+    const dot = document.createElement('span');
+    dot.className = 'dot';
+    dot.textContent = ' · ';
+    const priced = document.createElement('span');
+    priced.className = 'price';
+    priced.append(dot, price);
+    parts.push(priced);
+  }
+  button.replaceChildren(...parts.filter((part) => part !== ''));
 }
 
 /** @typedef {import('../core/game.js').Building} Building */
@@ -87,14 +118,27 @@ function keyLabel(button, label) {
 /**
  * Show the game and play it.
  * @param {Awaited<ReturnType<typeof import('./net.js').createServerNet>>} net A joined game.
- * @param {import('./api.js').Player} me
+ * @param {import('./api.js').Me} me
  */
 export async function startGame(net, me) {
   const stage = /** @type {HTMLElement} */ (document.getElementById('stage'));
   const canvas = /** @type {HTMLCanvasElement} */ (document.getElementById('board'));
   const mapCanvas = /** @type {HTMLCanvasElement} */ (document.getElementById('minimap-canvas'));
   const mapFrame = /** @type {HTMLElement} */ (document.getElementById('minimap-frame'));
+  const mapPanel = /** @type {HTMLElement} */ (document.getElementById('minimap'));
   const controls = /** @type {HTMLElement} */ (document.getElementById('controls'));
+  // The buttons are in the player's language; the rest of the game isn't
+  // translated yet.
+  const language = chosenLanguage(me.language, autoLanguage(browserLanguages(), me.name));
+  const word = (/** @type {import('./words.js').Word} */ w, /** @type {Record<string, string | number>} */ values = {}) => say(language, { word: w, values });
+  controls.lang = language;
+  translate(controls, language);
+  // Each button's key in the player's language, and the English one, which
+  // works in every language.
+  for (const button of /** @type {NodeListOf<HTMLElement>} */ (controls.querySelectorAll('[data-word-key]'))) {
+    const keyWord = /** @type {import('./words.js').Word} */ (button.dataset.wordKey);
+    button.setAttribute('aria-keyshortcuts', [...new Set([word(keyWord), say('en', { word: keyWord })])].join(' '));
+  }
   const hud = {
     gameName: document.getElementById('game-name'),
     time: document.getElementById('time'),
@@ -115,6 +159,9 @@ export async function startGame(net, me) {
     observers: document.getElementById('observers'),
   };
   const seatButton = /** @type {HTMLButtonElement} */ (document.getElementById('seat-button'));
+  // For the game's creator, while it waits for players: go on without them.
+  const startButton = /** @type {HTMLButtonElement} */ (document.getElementById('start-button'));
+  startButton.title = word('startNowTitle');
   const upgradeButton = /** @type {HTMLButtonElement} */ (document.getElementById('upgrade'));
   const crewButton = /** @type {HTMLButtonElement} */ (document.getElementById('crew-button'));
   const heroesButton = /** @type {HTMLButtonElement} */ (document.getElementById('heroes-button'));
@@ -122,6 +169,9 @@ export async function startGame(net, me) {
   const abortButton = /** @type {HTMLButtonElement} */ (document.getElementById('abort-button'));
   const attackButton = /** @type {HTMLButtonElement} */ (document.getElementById('attack-button'));
   const muteButton = /** @type {HTMLButtonElement} */ (document.getElementById('mute-button'));
+  keyLabel(crewButton, word('crew'));
+  keyLabel(heroesButton, word('heroes'));
+  keyLabel(attackButton, word('attack'));
   const scoresButton = /** @type {HTMLButtonElement} */ (document.getElementById('scores-button'));
   const scoresDialog = /** @type {HTMLDialogElement} */ (document.getElementById('scores'));
   const gameId = new URLSearchParams(location.search).get('game') ?? '';
@@ -375,6 +425,18 @@ export async function startGame(net, me) {
   /** Whether this viewer can give commands right now. */
   const canCommand = () => net.seat() !== null && net.running();
 
+  /**
+   * Whether this viewer may start the game without the players missing: its
+   * creator, while it waits for someone and someone it waits for is here.
+   */
+  function canStartNow() {
+    if (!net.isCreator() || net.running() || !view || view.over !== undefined) return false;
+    const here = new Set(peers.map((p) => p.uid));
+    const awaited = (/** @type {number} */ i) => view?.players[i]?.lost === undefined && !view?.players[i]?.away;
+    const present = net.seats().map((holder) => holder !== null && here.has(holder));
+    return present.some((p, i) => p && awaited(i)) && present.some((p, i) => !p && awaited(i));
+  }
+
   /** Whether this viewer may rename the game: a player still in it, paused or not. */
   function canRename() {
     const seat = net.seat();
@@ -488,9 +550,13 @@ export async function startGame(net, me) {
     if (hud.players) {
       // Seated players who are here, of the seats; it blinks while the game waits.
       const here = new Set(peers.filter((p) => p.seat !== null).map((p) => p.seat)).size;
-      hud.players.textContent = view ? `${here}/${seatsOf(view)}` : '—';
+      const away = view ? view.players.filter((p) => p.away).length : 0;
+      hud.players.textContent = view ? `${here}/${seatsOf(view)}${away ? `, ${away} away` : ''}` : '—';
       hud.players.classList.toggle('waiting', paused && view?.over === undefined);
     }
+    startButton.hidden = !canStartNow();
+    const startLabel = word(view?.tick ? 'goOn' : 'startNow');
+    if (startButton.textContent !== startLabel) startButton.textContent = startLabel;
     if (hud.observers) {
       const watching = peers.filter((p) => p.seat === null);
       hud.observers.textContent = net.connected() ? String(watching.length) : 'offline';
@@ -501,7 +567,11 @@ export async function startGame(net, me) {
     const over = view?.over !== undefined;
     seatButton.hidden = over || (seat === null && !net.canClaimSeat());
     scoresButton.hidden = !over;
-    seatButton.textContent = seat === null ? 'Take seat' : 'Release seat';
+    // Once your castle has fallen, a free one to play on, while there is one.
+    const moving = seat !== null && net.canClaimSeat();
+    const seatLabel = word(seat === null ? 'takeSeat' : moving ? 'newBase' : 'releaseSeat');
+    if (seatButton.textContent !== seatLabel) seatButton.textContent = seatLabel;
+    seatButton.title = moving ? word('newBaseTitle') : '';
 
     const can = canCommand();
     for (const button of buildButtons) {
@@ -514,7 +584,7 @@ export async function startGame(net, me) {
     upgradeButton.disabled = !upgradable;
     const price = upgradable && b ? upgradeCost(b) : null;
     const priced = [price?.stone ? String(price.stone) : '', price?.metal ? `${price.metal}◆` : ''].filter(Boolean);
-    keyLabel(upgradeButton, priced.length ? `Upgrade · ${priced.join(' + ')}` : 'Upgrade');
+    keyLabel(upgradeButton, word('upgrade'), priced.join(' + '));
     const crewed = Boolean(mine && b && b.type !== 'castle' && !isDugOut(b));
     crewButton.disabled = !crewed;
     // Your castle has no crew (everyone at home is in it): Heroes takes its place.
@@ -676,13 +746,13 @@ export async function startGame(net, me) {
    * @param {string} options.kind The building's type, whose skill ranks the units.
    * @param {number} options.limit How many it takes.
    * @param {string | null} options.target The building, or null for a new one.
-   * @param {string} options.key The letter that confirms it, besides Enter: the
-   *   one that opened it.
+   * @param {string[]} options.keys The keys that confirm it, besides Enter:
+   *   those of the button that opened it.
    * @param {{ q: number, r: number }} options.site Where the crew goes, for the
    *   Nearest order.
    * @returns {Promise<string[] | null>} The chosen unit ids, or null if cancelled.
    */
-  function chooseCrew({ title, hint, action, kind, limit, target, key, site }) {
+  function chooseCrew({ title, hint, action, kind, limit, target, keys, site }) {
     const seat = net.seat();
     if (!view || seat === null) return Promise.resolve(null);
     const { skill, extra, ticked = limit } = BUILDING_TYPES[kind];
@@ -700,7 +770,7 @@ export async function startGame(net, me) {
     crewParts.title.textContent = title;
     crewParts.hint.textContent = hint;
     crewParts.ok.textContent = action;
-    crewParts.ok.title = `${action} (Enter or ${key})`;
+    crewParts.ok.title = `${action} (Enter or ${keys[0]})`;
     /** Each unit's row, by id. */
     /** @type {Map<string, HTMLElement>} */
     const rows = new Map();
@@ -810,7 +880,8 @@ export async function startGame(net, me) {
     crewDialog.onkeydown = (e) => {
       // Closed, it keeps the focus until the next frame: the key is the page's then.
       if (!crewDialog.open || e.repeat || e.ctrlKey || e.metaKey || e.altKey) return;
-      const confirms = e.key === 'Enter' ? !(e.target instanceof HTMLButtonElement) : e.key.toLowerCase() === key.toLowerCase();
+      const confirms = e.key === 'Enter' ? !(e.target instanceof HTMLButtonElement)
+        : keyCandidates(e).some((k) => keys.some((own) => own.toLowerCase() === k));
       if (!confirms) return;
       e.preventDefault();
       crewParts.ok.click();
@@ -900,7 +971,7 @@ export async function startGame(net, me) {
           kind,
           limit: type.capacity,
           target: null,
-          key: type.name[0],
+          keys: keysOf(/** @type {HTMLElement} */ (buildButtons.find((button) => button.dataset.kind === kind))),
           site: at,
         });
         if (!chosen) return;
@@ -1083,13 +1154,14 @@ export async function startGame(net, me) {
     updateHud();
   });
 
-  // A letter presses the button it is bold on (its aria-keyshortcuts),
-  // unless typing or in a dialog, or a dialog just took it to close (it
-  // shuts before the key gets here, so it must not open again).
-  const shortcuts = new Map([...controls.querySelectorAll('button[aria-keyshortcuts]')]
-    .map((button) => [button.getAttribute('aria-keyshortcuts')?.toLowerCase(), /** @type {HTMLButtonElement} */ (button)]));
+  // A letter presses its button (aria-keyshortcuts): the one it is bold on,
+  // or M the minimap's arrow; unless typing or in a dialog, or a dialog just
+  // took it to close (it shuts before the key gets here, so it must not open
+  // again).
+  const shortcuts = new Map([...stage.querySelectorAll('button[aria-keyshortcuts]')]
+    .flatMap((button) => keysOf(button).map((k) => [k.toLowerCase(), /** @type {HTMLButtonElement} */ (button)])));
   addEventListener('keydown', (e) => {
-    const button = shortcuts.get(e.key.toLowerCase());
+    const button = keyCandidates(e).map((k) => shortcuts.get(k)).find(Boolean);
     if (!button || button.disabled || button.hidden) return;
     if (e.defaultPrevented || e.repeat || e.ctrlKey || e.metaKey || e.altKey) return;
     if (crewDialog.open || heroesDialog.open || scoresDialog.open || renameDialog.open) return;
@@ -1100,9 +1172,13 @@ export async function startGame(net, me) {
 
   for (const button of buildButtons) {
     const { name, cost, metal, hunger } = BUILDING_TYPES[button.dataset.kind ?? ''];
-    keyLabel(button, cost ? `${name} · ${cost}` : metal ? `${name} · ${metal}◆` : hunger ? `${name} · ${hunger}%` : name);
-    button.title = `${name} (${name[0]}): ${cost ? `${cost} stone` : metal ? `${metal} dark metal, near your castle`
-      : hunger ? `${hunger}% more hunger (free once it is 100%)` : 'free'}`;
+    const label = word(/** @type {import('./words.js').Word} */ (button.dataset.kind));
+    keyLabel(button, label, cost ? String(cost) : metal ? `${metal}◆` : hunger ? `${hunger}%` : '');
+    button.title = word('buildTitle', {
+      name: label,
+      key: keysOf(button)[0] ?? '',
+      price: cost ? word('stoneCost', { n: cost }) : metal ? word('metalCost', { n: metal }) : hunger ? word('hungerCost', { n: hunger }) : word('free'),
+    });
     button.addEventListener('click', () => {
       const kind = button.dataset.kind ?? null;
       // Short of its price, say so now, not after a cell and a crew are chosen.
@@ -1161,7 +1237,7 @@ export async function startGame(net, me) {
       kind: b.type,
       limit: capacityOf(b),
       target: b.id,
-      key: 'C',
+      keys: keysOf(crewButton),
       site: b,
     });
     if (units) give({ type: 'crew', building: b.id, units }, 'send that crew');
@@ -1173,7 +1249,8 @@ export async function startGame(net, me) {
   heroesButton.addEventListener('click', showHeroes);
   heroesDialog.addEventListener('keydown', (e) => {
     // Closed, it keeps the focus until the next frame: the key is the page's then.
-    if (!heroesDialog.open || e.key.toLowerCase() !== 'h' || e.repeat || e.ctrlKey || e.metaKey || e.altKey) return;
+    const own = keysOf(heroesButton).map((k) => k.toLowerCase());
+    if (!heroesDialog.open || !keyCandidates(e).some((k) => own.includes(k)) || e.repeat || e.ctrlKey || e.metaKey || e.altKey) return;
     e.preventDefault();
     heroesDialog.close();
   });
@@ -1206,8 +1283,18 @@ export async function startGame(net, me) {
   });
 
   seatButton.addEventListener('click', () => {
-    if (net.seat() !== null) net.releaseSeat();
-    else net.claimSeat();
+    if (net.seat() !== null && !net.canClaimSeat()) {
+      net.releaseSeat();
+      return;
+    }
+    // The free castle selected, if one is; else the server picks the first.
+    const owner = selected ? view?.buildings[selected]?.owner : undefined;
+    net.claimSeat(owner !== undefined && net.freeSeats().includes(owner) ? owner : undefined);
+  });
+
+  startButton.addEventListener('click', async () => {
+    const outcome = await net.startNow();
+    if (!outcome.ok) flash(`Can't start: ${outcome.reason}.`);
   });
 
   document.getElementById('toggle-coords')?.addEventListener('click', (e) => {
@@ -1233,6 +1320,42 @@ export async function startGame(net, me) {
   document.getElementById('recenter')?.addEventListener('click', recenter);
   addEventListener('resize', resize);
 
+  // The status panel folds to its header, and the minimap hides (its arrow
+  // in the stock panel's corner, or M); this browser keeps both choices.
+  const statusPanel = /** @type {HTMLElement} */ (document.getElementById('status'));
+  const statusToggle = /** @type {HTMLButtonElement} */ (document.getElementById('status-toggle'));
+  const statusBody = /** @type {HTMLElement} */ (document.getElementById('status-body'));
+  const mapToggle = /** @type {HTMLButtonElement} */ (document.getElementById('minimap-toggle'));
+  /**
+   * Fold or unfold one of them, and keep the choice.
+   * @param {HTMLButtonElement} toggle
+   * @param {boolean} open
+   */
+  function unfold(toggle, open) {
+    toggle.setAttribute('aria-expanded', String(open));
+    if (toggle === statusToggle) {
+      statusBody.hidden = !open;
+      statusPanel.classList.toggle('folded', !open);
+      toggle.title = word(open ? 'statusFold' : 'statusUnfold');
+    } else {
+      mapPanel.hidden = !open;
+      toggle.title = word(open ? 'minimapHide' : 'minimapShow');
+      // Its view frame follows the camera only as the board redraws.
+      needsDraw = true;
+    }
+    try {
+      localStorage.setItem(FOLDED_KEY, JSON.stringify({ status: statusBody.hidden, minimap: mapPanel.hidden }));
+    } catch { /* not kept */ }
+  }
+  /** @type {{ status?: boolean, minimap?: boolean }} */
+  let folded = {};
+  try { folded = JSON.parse(localStorage.getItem(FOLDED_KEY) ?? '{}') ?? {}; } catch { /* as the page has them */ }
+  unfold(statusToggle, folded.status !== true);
+  unfold(mapToggle, folded.minimap !== true);
+  for (const toggle of [statusToggle, mapToggle]) {
+    toggle.addEventListener('click', () => unfold(toggle, toggle.getAttribute('aria-expanded') !== 'true'));
+  }
+
   // --- run -----------------------------------------------------------------
 
   /** @param {number} time */
@@ -1240,7 +1363,8 @@ export async function startGame(net, me) {
     // Queue the next frame first, so one frame that throws cannot stop the
     // board from ever redrawing again.
     requestAnimationFrame(frame);
-    minimap.paint(time);
+    // A hidden minimap waits: what changed meanwhile is painted once it shows.
+    if (!mapPanel.hidden) minimap.paint(time);
     const played = playing;
     playing = effects.playing(time);
     const animated = animating;

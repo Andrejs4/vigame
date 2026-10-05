@@ -25,7 +25,7 @@ import { createHash } from 'node:crypto';
 import { ErrorCode, Room, ServerError, logger } from '@colyseus/core';
 
 import { BOARD_OPTIONS, createBoard, tileAt } from '../src/core/board.js';
-import { advance, applyCommand, checkState, newGame, publicView } from '../src/core/game.js';
+import { ROOM_COMMANDS, advance, applyCommand, checkState, newGame, publicView } from '../src/core/game.js';
 import { BUILDING_TYPES, DEFAULT_MODE, MODES, TICKS_PER_SECOND } from '../src/core/rules.js';
 import { GameState, ViewerState, syncGame, syncSeats } from './schema.js';
 
@@ -230,18 +230,26 @@ export class GameRoom extends Room {
     this.snapshotAt = game.tick;
     /** @type {Array<string | null>} */
     this.seats = saved.seats.map((pid) => pid ?? null);
+    /** The player who started the game, who may start it without the players missing. */
+    this.creator = saved.creator ?? null;
 
     const state = new GameState();
+    state.creator = this.creator ?? '';
     syncGame(state, publicView(game));
     syncSeats(state, this.seats);
     this.setState(state);
 
     this.onMessage('command', (client, message, ctx) => this.play(client, message, ctx));
-    this.onMessage('claimSeat', (client, _message, ctx) => {
-      const seat = this.takeSeat(client.auth.pid);
+    this.onMessage('claimSeat', (client, message, ctx) => {
+      const { seat: wanted } = fields(message);
+      const seat = this.claimSeat(client.auth.pid, typeof wanted === 'number' ? wanted : null);
       return seat === null ? ctx?.reject('no free seat') : seat;
     });
     this.onMessage('releaseSeat', (client) => { this.releaseSeat(client.auth.pid); });
+    this.onMessage('startNow', (client, _message, ctx) => {
+      const why = this.startNow(client.auth.pid);
+      return why === null ? true : ctx?.reject(why);
+    });
     this.onMessage('select', (client, message) => this.select(client, message));
 
     // Patches go out once per tick, after the tick has changed things.
@@ -249,15 +257,77 @@ export class GameRoom extends Room {
     this.setFixedTimestep(() => this.step(), tickRate);
   }
 
+  /** The players here, by player id. */
+  here() {
+    return new Set([...this.state.viewers.values()].map((v) => v.pid));
+  }
+
   /**
-   * Whether the clock runs: only while every seat is held by someone here,
-   * or with `soloClock`, while any seated player is here.
+   * Whether a seat's side is still in the game: its castle stands.
+   * @param {number} seat
+   */
+  standing(seat) {
+    return this.game.players[seat]?.lost === undefined;
+  }
+
+  /**
+   * The seats the game waits for: those still in the game, but for the ones
+   * it goes on without while their players are away (`away` in the core).
+   * @returns {boolean[]}
+   */
+  awaited() {
+    return this.seats.map((_, i) => this.standing(i) && this.game.players[i]?.away === undefined);
+  }
+
+  /**
+   * Whether the clock runs: while every seat it waits for is held by someone
+   * here, and someone is; or with `soloClock`, while any seated player is here.
    */
   clockRuns() {
     if (this.game.over !== undefined) return false; // the game is over
-    const here = new Set([...this.state.viewers.values()].map((v) => v.pid));
+    const here = this.here();
     const present = (/** @type {string | null} */ pid) => pid !== null && here.has(pid);
-    return this.soloClock ? this.seats.some(present) : this.seats.every(present);
+    if (this.soloClock) return this.seats.some(present);
+    const awaited = this.awaited();
+    return this.seats.some((pid, i) => awaited[i] && present(pid)) && this.seats.every((pid, i) => !awaited[i] || present(pid));
+  }
+
+  /**
+   * The game's creator has the game go on without the players missing: each
+   * seat it waits for whose player isn't here is marked away in the game,
+   * a command the room logs, until its player is back (`welcomeBack`).
+   * @param {string} pid Who asks.
+   * @returns {string | null} Why not, or null once done.
+   */
+  startNow(pid) {
+    if (this.deleted) return 'the game is gone';
+    if (pid !== this.creator) return 'not a game you started';
+    if (this.game.over !== undefined) return 'the game is over';
+    const here = this.here();
+    const awaited = this.awaited();
+    const present = this.seats.map((holder) => holder !== null && here.has(holder));
+    if (!this.seats.some((_, i) => awaited[i] && present[i])) return 'no player is here';
+    const missing = this.seats.flatMap((_, i) => (awaited[i] && !present[i] ? [i] : []));
+    if (!missing.length) return 'nobody is missing';
+    for (const seat of missing) this.commit(seat, { type: 'away' });
+    return null;
+  }
+
+  /**
+   * Players marked away who are here again are back, and the game waits for
+   * them once more. A failed write is logged; they stay marked away.
+   */
+  welcomeBack() {
+    if (this.deleted || this.game.over !== undefined) return;
+    const here = this.here();
+    this.seats.forEach((holder, seat) => {
+      if (holder === null || !here.has(holder) || this.game.players[seat]?.away === undefined) return;
+      try {
+        this.commit(seat, { type: 'back' });
+      } catch (e) {
+        logger.error(`game ${this.gameId}: logging seat ${seat} back failed`, e);
+      }
+    });
   }
 
   /** One tick of the game clock. */
@@ -296,22 +366,33 @@ export class GameRoom extends Room {
     if (seat === null) return ctx?.reject('not seated');
     const command = flatCommand(message);
     if (!command) return ctx?.reject('not a command');
+    // Only the room says who is away.
+    if (ROOM_COMMANDS.includes(String(command.type))) return ctx?.reject('unknown command');
     // Renaming the game needs no clock: players waiting for the rest may.
     if (!this.state.running && command.type !== 'rename') return ctx?.reject('the game is paused');
 
-    const next = structuredClone(this.game);
-    const outcome = applyCommand(this.board, next, seat, command);
+    const outcome = this.commit(seat, command);
     if (!outcome.ok) return ctx?.reject(outcome.reason);
-
-    // Throws if the write fails; the request is then answered with an error
-    // and the live game is left as it was.
-    this.seq = this.storage.recordCommand(this.gameId, { tick: this.game.tick, player: seat, command });
-
-    this.game = next;
-    syncGame(this.state, publicView(next));
     // The lobby reads names from the snapshot, which a paused game never takes.
     if (command.type === 'rename') this.snapshot();
     return this.seq;
+  }
+
+  /**
+   * Apply a command on a copy of the game, log it with its tick, then adopt
+   * the copy. Throws if the write fails, leaving the live game as it was.
+   * @param {number} seat The side giving it.
+   * @param {Record<string, string | number | string[]>} command
+   * @returns {import('../src/core/game.js').Outcome}
+   */
+  commit(seat, command) {
+    const next = structuredClone(this.game);
+    const outcome = applyCommand(this.board, next, seat, command);
+    if (!outcome.ok) return outcome;
+    this.seq = this.storage.recordCommand(this.gameId, { tick: this.game.tick, player: seat, command });
+    this.game = next;
+    syncGame(this.state, publicView(next));
+    return outcome;
   }
 
   /**
@@ -324,17 +405,54 @@ export class GameRoom extends Room {
   }
 
   /**
-   * Give the player the first free seat, unless they already have one.
+   * A free seat whose castle stands: the one wanted if it is, else the first.
+   * @param {number | null} [wanted]
+   * @returns {number | null}
+   */
+  freeSeat(wanted = null) {
+    const free = (/** @type {number} */ i) => this.seats[i] === null && this.standing(i);
+    if (wanted !== null && Number.isInteger(wanted) && free(wanted)) return wanted;
+    const first = this.seats.findIndex((_, i) => free(i));
+    return first < 0 ? null : first;
+  }
+
+  /**
+   * Give the player the first free seat whose castle stands, unless they
+   * already have a seat.
    * @param {string} pid
-   * @returns {number | null} Their seat, or null when every seat is taken.
+   * @returns {number | null} Their seat, or null when no seat is free.
    */
   takeSeat(pid) {
     const held = this.seatOf(pid);
     if (held !== null) return held;
-    const free = this.seats.indexOf(null);
-    if (free < 0) return null;
-    this.saveSeats(this.seats.map((holder, i) => (i === free ? pid : holder)));
-    return free;
+    return this.moveTo(pid, this.freeSeat());
+  }
+
+  /**
+   * A player asks for a seat: a free one, or, once their own side has lost,
+   * a free one in its place. The one they want if it is free.
+   * @param {string} pid
+   * @param {number | null} wanted
+   * @returns {number | null} Their seat, or null when no seat is free.
+   */
+  claimSeat(pid, wanted) {
+    const held = this.seatOf(pid);
+    if (held !== null && this.standing(held)) return held;
+    if (this.game.over !== undefined) return held;
+    return this.moveTo(pid, this.freeSeat(wanted)) ?? held;
+  }
+
+  /**
+   * Seat a player, freeing the seat they had; a player away from it is back.
+   * @param {string} pid
+   * @param {number | null} seat
+   * @returns {number | null} The seat, or null for none.
+   */
+  moveTo(pid, seat) {
+    if (seat === null) return null;
+    this.saveSeats(this.seats.map((holder, i) => (i === seat ? pid : holder === pid ? null : holder)));
+    this.welcomeBack();
+    return seat;
   }
 
   /**
@@ -381,13 +499,15 @@ export class GameRoom extends Room {
   }
 
   /**
-   * The first two players in take the seats.
+   * Players who join take the free seats in order, those whose castles
+   * stand; one the game went on without is back.
    * @param {import('@colyseus/core').Client} client
    */
   onJoin(client) {
     const { pid, name } = client.auth;
     const seat = this.takeSeat(pid);
     this.state.viewers.set(client.sessionId, new ViewerState({ pid, name, seat: seat ?? -1 }));
+    this.welcomeBack();
   }
 
   /**
@@ -402,7 +522,8 @@ export class GameRoom extends Room {
 
   /**
    * The viewer is gone. Their seat is not: it stays theirs until they release
-   * it, however long they are away, and the game waits for them.
+   * it, however long they are away, and the game waits for them, unless its
+   * creator has it go on without them (`startNow`).
    * @param {import('@colyseus/core').Client} client
    */
   onLeave(client) {
