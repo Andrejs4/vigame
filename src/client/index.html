@@ -70,18 +70,19 @@
 </main>
 
 <main class="page" id="lobby" hidden>
+  <!-- Its words are in words.js (data-word); How to play and About are written out in each language. -->
   <div class="card wide">
     <h1>Vigame</h1>
-    <p class="hint">Playing as <strong id="lobby-name"></strong> &middot; <a href="?settings" id="lobby-settings">Settings</a></p>
+    <p class="hint"><span data-word="playingAs">Playing as</span> <strong id="lobby-name"></strong> &middot; <a href="?settings" id="lobby-settings" data-word="settings">Settings</a></p>
     <p class="error" id="lobby-notice" role="status" hidden></p>
-    <label for="lobby-mode">Mode</label>
+    <label for="lobby-mode" data-word="mode">Mode</label>
     <select id="lobby-mode">
-      <option value="coop" selected>Cooperation: together against the Dark Lord</option>
-      <option value="easy">Easy Lord: together against a weaker Dark Lord</option>
-      <option value="shared">Shared Easy Lord: one stock for all, against a weaker Dark Lord</option>
-      <option value="ffa">Free for all: each against the other</option>
+      <option value="coop" selected data-word="coopChoice">Cooperation: together against the Dark Lord</option>
+      <option value="easy" data-word="easyChoice">Easy Lord: together against a weaker Dark Lord</option>
+      <option value="shared" data-word="sharedChoice">Shared Easy Lord: one stock for all, against a weaker Dark Lord</option>
+      <option value="ffa" data-word="ffaChoice">Free for all: each against the other</option>
     </select>
-    <label for="lobby-players">Players</label>
+    <label for="lobby-players" data-word="players">Players</label>
     <select id="lobby-players">
       <option value="1" selected>1</option>
       <option value="2">2</option>
@@ -92,72 +93,120 @@
       <option value="7">7</option>
       <option value="8">8</option>
     </select>
-    <button id="lobby-new" class="primary">New game</button>
+    <button id="lobby-new" class="primary" data-word="newGame">New game</button>
     <div id="lobby-limit" hidden>
       <p class="error" id="lobby-limit-text" role="alert"></p>
       <ul class="games" id="lobby-limit-games"></ul>
     </div>
     <details class="games-list" id="lobby-mine-section" open>
-      <summary><h2>Your games <span class="count" id="lobby-mine-count"></span></h2></summary>
+      <summary><h2><span data-word="yourGames">Your games</span> <span class="count" id="lobby-mine-count"></span></h2></summary>
       <ul class="games" id="lobby-mine"></ul>
-      <p class="empty" id="lobby-mine-empty">None yet. Start one, or join one below.</p>
+      <p class="empty" id="lobby-mine-empty" data-word="yourGamesNone">None yet. Start one, or join one below.</p>
     </details>
     <details class="games-list" id="lobby-open-section" open>
-      <summary><h2>Waiting for a player <span class="count" id="lobby-open-count"></span></h2></summary>
+      <summary><h2><span data-word="waitingGames">Waiting for a player</span> <span class="count" id="lobby-open-count"></span></h2></summary>
       <ul class="games" id="lobby-open"></ul>
-      <p class="empty" id="lobby-open-empty">No one is waiting right now.</p>
+      <p class="empty" id="lobby-open-empty" data-word="waitingGamesNone">No one is waiting right now.</p>
     </details>
     <details class="games-list" id="lobby-playing-section">
-      <summary><h2>Ongoing <span class="count" id="lobby-playing-count"></span></h2></summary>
+      <summary><h2><span data-word="ongoingGames">Ongoing</span> <span class="count" id="lobby-playing-count"></span></h2></summary>
       <ul class="games" id="lobby-playing"></ul>
-      <p class="empty" id="lobby-playing-empty">Nobody else is playing right now.</p>
+      <p class="empty" id="lobby-playing-empty" data-word="ongoingGamesNone">Nobody else is playing right now.</p>
     </details>
     <details class="games-list" id="lobby-done-section">
-      <summary><h2>Recently finished <span class="count" id="lobby-done-count"></span></h2></summary>
+      <summary><h2><span data-word="finishedGames">Recently finished</span> <span class="count" id="lobby-done-count"></span></h2></summary>
       <ul class="games" id="lobby-done"></ul>
-      <p class="empty" id="lobby-done-empty">No game has ended yet.</p>
+      <p class="empty" id="lobby-done-empty" data-word="finishedGamesNone">No game has ended yet.</p>
     </details>
     <details class="games-list prose" id="lobby-how-section">
-      <summary><h2>How to play</h2></summary>
-      <p>The units at home in your castle raise new ones: the more of them,
-        and the better they breed, the sooner. Your side is out once your
-        castle falls.</p>
-      <p>Build near your standing buildings. The crew you pick raises a
-        building once they get there; meanwhile it has half its hit points
-        and shelters nobody. A pit's crew digs stone, which pays for towers,
-        farms and upgrades; farms grow food. Water can't be crossed, and
-        scrub can't be built on and is twice as slow to walk.</p>
-      <p>Select a building and press Crew to choose who works there; Return
-        sends them home. Your castle's Heroes lists your heroes, who level
-        up faster than the rest. Every minute your units eat: short meals
-        make them hungry, and at full hunger they may starve.</p>
-      <p>Select a wagon or band, then click a cell, to move it; it carries
-        its crew. A wagon can't pass other buildings; a band passes anything
-        of yours, gives no cover, and breaks up when it has nobody. Units in
-        buildings and bands strike enemies in reach; press Attack, then an
-        enemy building, to choose their target.</p>
-      <p>Drag to pan, wheel to zoom; press the minimap to look anywhere. A
-        button's bold letter is its key; choosing a crew, Enter or that
-        letter again sends it.</p>
+      <summary><h2 data-word="howToPlay">How to play</h2></summary>
+      <div lang="en">
+        <p>The units at home in your castle raise new ones: the more of them,
+          and the better they breed, the sooner. Your side is out once your
+          castle falls.</p>
+        <p>Build near your standing buildings. The crew you pick raises a
+          building once they get there; meanwhile it has half its hit points
+          and shelters nobody. A pit's crew digs stone, which pays for towers,
+          farms and upgrades; farms grow food. Water can't be crossed, and
+          scrub can't be built on and is twice as slow to walk.</p>
+        <p>Select a building and press Crew to choose who works there; Return
+          sends them home. Your castle's Heroes lists your heroes, who level
+          up faster than the rest. Every minute your units eat: short meals
+          make them hungry, and at full hunger they may starve.</p>
+        <p>Select a wagon or band, then click a cell, to move it; it carries
+          its crew. A wagon can't pass other buildings; a band passes anything
+          of yours, gives no cover, and breaks up when it has nobody. Units in
+          buildings and bands strike enemies in reach; press Attack, then an
+          enemy building, to choose their target.</p>
+        <p>Drag to pan, wheel to zoom; press the minimap to look anywhere. A
+          button's bold letter is its key; choosing a crew, Enter or that
+          letter again sends it.</p>
+      </div>
+      <div lang="ru" hidden>
+        <p>Юниты дома, в вашем замке, растят новых: чем их больше и чем лучше
+          они плодятся, тем скорее. Ваша сторона выбывает, когда падёт её
+          замок.</p>
+        <p>Стройте рядом со своими готовыми зданиями. Выбранная бригада
+          возводит здание, когда доберётся до него; до тех пор у него половина
+          прочности и оно никого не укрывает. Бригада карьера добывает камень,
+          на него строят башни, фермы и улучшения; фермы растят еду. Воду не
+          пересечь, на кустарнике нельзя строить, и идти по нему вдвое
+          медленнее.</p>
+        <p>Выберите здание и нажмите «Бригада», чтобы решить, кто там
+          работает; «Вернуть» отправляет их домой. «Герои» у замка показывают
+          ваших героев, которые растут в уровне быстрее остальных. Каждую
+          минуту юниты едят: скудные обеды делают их голодными, а при полном
+          голоде они могут умереть.</p>
+        <p>Выберите повозку или отряд, затем клетку, чтобы двинуть их;
+          бригада едет с ними. Повозка не проходит сквозь здания; отряд
+          проходит сквозь всё ваше, не даёт укрытия и распадается, когда в
+          нём никого нет. Юниты в зданиях и отрядах бьют врагов в пределах
+          досягаемости; нажмите «Атака», затем вражеское здание, чтобы выбрать
+          цель.</p>
+        <p>Тяните карту, чтобы сдвинуть её, колесом меняйте масштаб; нажмите
+          на мини-карту, чтобы посмотреть в любое место. Жирная буква на
+          кнопке — её клавиша; при выборе бригады Enter или та же буква ещё
+          раз отправляет её.</p>
+      </div>
     </details>
     <details class="games-list prose" id="lobby-about-section">
-      <summary><h2>About</h2></summary>
-      <p>Vigame is a real-time strategy game on a hex map, played in the
-        browser, and still growing.</p>
-      <p>It is its author's first pure vibe-coding project, and a
-        successful one: built entirely through conversation with Claude,
-        without its author once looking at the code.</p>
-      <p>Its source code, and the place to report a bug or suggest
-        something: <a href="https://github.com/Andrejs4/vigame" target="_blank" rel="noopener">github.com/Andrejs4/vigame</a>.</p>
-      <p>The code is free software under the
-        <a href="https://www.gnu.org/licenses/old-licenses/gpl-2.0.html" target="_blank" rel="noopener">GNU GPL</a>,
-        version 2 or later. Pictures:
-        <a href="https://game-icons.net" target="_blank" rel="noopener">game-icons.net</a>
-        by Lorc and Delapouite,
-        <a href="https://creativecommons.org/licenses/by/3.0/" target="_blank" rel="noopener">CC BY 3.0</a>;
-        the tab's icon and the login pictures were generated with
-        Perplexity, for non-commercial use. Fonts: IBM Plex, under the SIL Open Font License. Made with
-        Colyseus, Express and SQLite.</p>
+      <summary><h2 data-word="about">About</h2></summary>
+      <div lang="en">
+        <p>Vigame is a real-time strategy game on a hex map, played in the
+          browser, and still growing.</p>
+        <p>It is its author's first pure vibe-coding project, and a
+          successful one: built entirely through conversation with Claude,
+          without its author once looking at the code.</p>
+        <p>Its source code, and the place to report a bug or suggest
+          something: <a href="https://github.com/Andrejs4/vigame" target="_blank" rel="noopener">github.com/Andrejs4/vigame</a>.</p>
+        <p>The code is free software under the
+          <a href="https://www.gnu.org/licenses/old-licenses/gpl-2.0.html" target="_blank" rel="noopener">GNU GPL</a>,
+          version 2 or later. Pictures:
+          <a href="https://game-icons.net" target="_blank" rel="noopener">game-icons.net</a>
+          by Lorc and Delapouite,
+          <a href="https://creativecommons.org/licenses/by/3.0/" target="_blank" rel="noopener">CC BY 3.0</a>;
+          the tab's icon and the login pictures were generated with
+          Perplexity, for non-commercial use. Fonts: IBM Plex, under the SIL Open Font License. Made with
+          Colyseus, Express and SQLite.</p>
+      </div>
+      <div lang="ru" hidden>
+        <p>Vigame — стратегия в реальном времени на карте из шестиугольников,
+          прямо в браузере, и она ещё растёт.</p>
+        <p>Это первый проект автора, целиком сделанный вайб-кодингом, и
+          удачный: он создан только в разговорах с Claude, а автор ни разу не
+          заглянул в код.</p>
+        <p>Исходный код, а также место, где можно сообщить об ошибке или
+          что-то предложить: <a href="https://github.com/Andrejs4/vigame" target="_blank" rel="noopener">github.com/Andrejs4/vigame</a>.</p>
+        <p>Код — свободная программа под лицензией
+          <a href="https://www.gnu.org/licenses/old-licenses/gpl-2.0.html" target="_blank" rel="noopener">GNU GPL</a>
+          версии 2 или новее. Картинки:
+          <a href="https://game-icons.net" target="_blank" rel="noopener">game-icons.net</a>,
+          авторы Lorc и Delapouite,
+          <a href="https://creativecommons.org/licenses/by/3.0/" target="_blank" rel="noopener">CC BY 3.0</a>;
+          значок вкладки и картинки страницы входа созданы в Perplexity, для
+          некоммерческого использования. Шрифты: IBM Plex, по лицензии SIL
+          Open Font License. Сделано на Colyseus, Express и SQLite.</p>
+      </div>
     </details>
   </div>
 </main>

@@ -189,15 +189,34 @@ which language Auto picked (src/client/language.js):
 - Once signed in, the name comes first: Russian for Cyrillic letters, else
   the browser's, else English (`autoLanguage`).
 
-The login and settings pages are translated. Their words are `WORDS` in
-src/client/words.js, one table per language with `{…}` filled in (`say`).
-Each page draws all its texts in one `show()`, which runs again when the
-language chosen or the name changes, so the page turns at once. The tests
-check every language has every word with the same `{…}`, at most half
-again as long as the English (five letters more for a short word: "Save",
-"Сохранить"). The settings page lost its two hints at the author's word:
-the name field says "Visible name (15)" when empty, as on the login page.
-The lobby and the game wait until the author asks.
+The login page, the settings page and the lobby are translated. Their words
+are `WORDS` in src/client/words.js, one table per language with `{…}`
+filled in (`say`); a word that goes with a count has a form per plural kind
+(`Intl.PluralRules`), picked by `{n}`. A static text in index.html names its
+word with `data-word` (`translate`); the lobby's How to play and About are
+written out in each language there, as they hold links, and the page shows
+the reader's. The login and settings pages draw their texts in one
+`show()`, which runs again when the language chosen or the name changes,
+so they turn at once; the lobby reads its language once. The tests check
+every language has every word with the same `{…}`, at most half again as
+long as the English (five letters more for a short word: "Save",
+"Сохранить"), every plural form, and that index.html's English matches the
+table. The settings page lost its two hints at the author's word: the name
+field says "Visible name (15)" when empty, as on the login page. Why New
+game is refused comes from the server as counts (`waiting`, `seated`) for
+the page to word.
+
+The game's controls are next, when the author asks. Russian names already
+in use (the author said to estimate the game's terms), so the controls
+should match them: юниты (units), бригада (crew; the button «Бригада»),
+«Вернуть» (Return), «Герои» (Heroes), «Атака» (Attack), карьер (pit),
+повозка (wagon), отряд (band), прочность (a building's hit points),
+кустарник (scrub), Тёмный Лорд (the Dark Lord), modes Кооператив, Лёгкий
+Лорд, Общий Лёгкий Лорд, Все против всех, and sides Синие, Багровые,
+Зелёные, Золотые, Бирюзовые, Оранжевые, Розовые, Серебряные (plural, as
+teams: "победили Синие"). How to play already names those buttons in
+Russian.
+
 His plan: translate only the lobby and the game's controls, each text about
 as long as the English so the layout holds, and take care with short texts
 and texts built up as the game goes. Things to watch there:
@@ -206,8 +225,9 @@ and texts built up as the game goes. Things to watch there:
   word either marks its own letter, or the keys stay Latin.
 - Short labels padded to line up, such as "Att Lv 15" in the Heroes list.
 - Counts with a noun ("3 heroes died"): Russian has three plural forms.
-- Texts the server sends in English (refusals, why New game is refused),
-  which the page would have to put in its own words.
+- Texts the server sends in English, such as the core's refusals, which
+  the page would have to put in its own words (why New game is refused
+  already comes as counts).
 - Every view switch is a page load, so the page can read its language once,
   as it loads.
 

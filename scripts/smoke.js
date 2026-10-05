@@ -395,7 +395,7 @@ async function finished(browser, url) {
  * Ann's settings, from the lobby and back: a name with a symbol is refused,
  * a new name and language are kept, then she puts hers back; Back changes
  * nothing. The page is in the language chosen, or the one Auto stands for,
- * and turns as either changes; the lobby stays in English.
+ * and turns as either changes; so is the lobby.
  * @param {import('playwright').Page} a
  * @param {{ full: boolean }} options
  */
@@ -433,7 +433,20 @@ async function settings(a, { full }) {
   await waitText(a, '#settings-title', 'Settings');
   await a.selectOption('#settings-language', 'ru');
   await saved('Анна');
-  assert.equal(await lang(), 'en', 'the lobby is in English');
+  // The lobby is in Russian now, How to play and About too.
+  assert.equal(await lang(), 'ru');
+  await waitText(a, '#lobby-new', 'Новая игра');
+  await waitText(a, '#lobby-settings', 'Настройки');
+  await waitText(a, '#lobby-mine-section h2 [data-word]', 'Ваши игры');
+  await waitText(a, '#lobby-mode option[value="ffa"]', 'Все против всех: каждый сам за себя');
+  await a.click('#lobby-how-section summary');
+  await a.click('#lobby-about-section summary');
+  assert.equal(await a.locator('#lobby-how-section [lang="ru"]').isVisible(), true);
+  assert.equal(await a.locator('#lobby-how-section [lang="en"]').isVisible(), false);
+  assert.ok(await a.locator('#lobby-about-section [lang="ru"] a[href="https://github.com/Andrejs4/vigame"]').isVisible(), 'the Russian About links the source');
+  if (full) await a.screenshot({ path: join(OUT, 'lobby-ru.png'), fullPage: true });
+  await a.click('#lobby-how-section summary');
+  await a.click('#lobby-about-section summary');
 
   await open();
   assert.equal(await a.inputValue('#settings-name'), 'Анна');
@@ -446,6 +459,8 @@ async function settings(a, { full }) {
   await waitText(a, '#settings-title', 'Settings');
   if (full) await a.screenshot({ path: join(OUT, 'settings-en.png') });
   await saved('Ann');
+  assert.equal(await lang(), 'en', 'the lobby is in English again');
+  await waitText(a, '#lobby-new', 'New game');
 
   await open();
   assert.equal(await a.inputValue('#settings-language'), 'auto');
@@ -521,7 +536,8 @@ async function threeBrowsers(browser, url, { full, label }) {
     const res = await fetch(/** @type {HTMLLinkElement} */ (document.querySelector('link[rel=icon]')).href);
     return `${res.status} ${res.headers.get('content-type')}`;
   }), '200 image/png', 'the icon loads');
-  assert.ok(await a.locator('#lobby-about-section a[href="https://github.com/Andrejs4/vigame"]').isVisible(), 'About links the source');
+  assert.ok(await a.locator('#lobby-about-section [lang="en"] a[href="https://github.com/Andrejs4/vigame"]').isVisible(), 'About links the source');
+  assert.equal(await a.locator('#lobby-about-section [lang="ru"]').isVisible(), false, 'only the English About shows');
   if (full) await a.screenshot({ path: join(OUT, 'lobby-about.png'), fullPage: true });
   await a.click('#lobby-how-section summary');
   await a.click('#lobby-about-section summary');
@@ -1063,7 +1079,9 @@ async function phone(browser, url) {
   await logIn(page, 'Pia', { touch: true });
   await inLobby(page);
   const fits = () => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth);
+  await waitText(page, '#lobby-new', 'Новая игра');
   assert.ok(await fits(), 'the lobby scrolls sideways on a phone');
+  await page.screenshot({ path: join(OUT, 'lobby-phone.png') });
   await page.tap('#lobby-settings');
   await page.waitForSelector('#settings:not([hidden])');
   await waitText(page, '#settings-language option[value="auto"]', 'Авто (Русский)');

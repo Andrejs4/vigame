@@ -77,12 +77,15 @@ test('a player may start a game unless three of theirs wait for a player, or the
   const waiting = tooManyGamesNow([...mine, game('w3', 'p', [null])], 'p', 3);
   assert.deepEqual(waiting?.games.map((g) => g.id), ['w1', 'w2', 'w3']);
   assert.match(waiting?.error ?? '', /^You have 3 games of yours waiting for a player\./);
+  assert.deepEqual([waiting?.waiting, waiting?.seated], [3, 0], 'how many, for the page to say in its words');
   const seated = tooManyGamesNow([...mine, game('s2', 'q', ['p', 'q'])], 'p', 3);
   assert.deepEqual(seated?.games.map((g) => g.id), ['w1', 's1', 's2'], 'the games they sit in');
   assert.match(seated?.error ?? '', /^You have a seat in 3 games under way\./);
+  assert.deepEqual([seated?.waiting, seated?.seated], [0, 3]);
   const both = tooManyGamesNow([...mine, game('w3', 'p', ['p'])].map((g) => (g.id === 'w3' ? { ...g, seats: ['p', null] } : g)), 'p', 3);
   assert.deepEqual(both?.games.map((g) => g.id), ['w1', 'w2', 's1', 'w3']);
   assert.match(both?.error ?? '', /waiting for a player, and a seat in 3 games/);
+  assert.deepEqual([both?.waiting, both?.seated], [3, 3]);
   // What each can do with one: delete their own that nobody else plays, else leave it.
   assert.deepEqual(['w1', 'w2', 's1'].map((id) => clearing(/** @type {any} */ (mine.find((g) => g.id === id)), 'p')), ['delete', 'delete', 'leave']);
   assert.equal(clearing(game('x', 'p', ['p', 'q']), 'p'), 'leave', 'someone else plays it');

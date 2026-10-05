@@ -30,13 +30,14 @@ Run `npm start` and open http://127.0.0.1:2567.
   browser stays logged in across visits. **Settings**, next to your name
   in the lobby, changes the name and the language.
 - **Language**: Auto (the default), English or Russian; Auto's option says
-  which it picked. The login and settings pages are in Russian already,
-  turning at once when Russian is chosen. On the login page, Auto goes by
-  the first of the browser's languages that is English or Russian, else
+  which it picked. The login page, the settings page and the lobby (How
+  to play and About too) are in Russian already; the login and settings
+  pages turn at once when Russian is chosen. On the login page, Auto goes
+  by the first of the browser's languages that is English or Russian, else
   picks Russian for a name typed in Cyrillic letters, else English. Once
-  signed in (the settings page), Auto picks Russian for a name in Cyrillic
-  letters first, then goes by the browser, else English. The lobby and the
-  game are in English for now.
+  signed in (settings, lobby), Auto picks Russian for a name in Cyrillic
+  letters first, then goes by the browser, else English. The game itself
+  is in English for now.
 - **The lobby** lists your games under way, games with a free seat, other
   people's under way with every seat taken (**Watch** opens one as an
   observer), and the finished ones (anyone's; **Scores** opens one at its
@@ -513,7 +514,7 @@ HTTP API:
 | `GET /api/challenge` | A sum to answer when signing in: `{ id, question }`. Each one answers once and lasts 10 minutes. |
 | `POST /api/players` | Signs in: `{ token, name, language?, challenge, answer }` gives `{ pid, name, language }` (`language` `auto` by default). `400` for a bad token, name or language, `403` for a wrong answer. |
 | `POST /api/settings` | Changes a signed-in player's settings: `{ token, name?, language? }` gives `{ pid, name, language }`; what isn't given stays. `401` if not signed in, `400` for a bad name or language. |
-| `POST /api/games` | Starts a game with a random map: `{ token, mode?, players? }` of a signed-in player (`mode` `coop`, `easy`, `shared` or `ffa`, `players` 1 to 8; by default a cooperation game for one) gives `201 { id }`; `401` if not signed in, `400` for a bad mode or number; `409 { error, games }` while the player has too many games on the go (three of theirs waiting for a player, or seats in three under way), with those games as `GET /api/games` lists them, each with `clear`: `'delete'`, `'leave'` or `null`. |
+| `POST /api/games` | Starts a game with a random map: `{ token, mode?, players? }` of a signed-in player (`mode` `coop`, `easy`, `shared` or `ffa`, `players` 1 to 8; by default a cooperation game for one) gives `201 { id }`; `401` if not signed in, `400` for a bad mode or number; `409 { error, waiting, seated, games }` while the player has too many games on the go (three of theirs waiting for a player, or seats in three under way): why in English, how many of each (0 for one that isn't why, so the page can say it in its own words), and those games as `GET /api/games` lists them, each with `clear`: `'delete'`, `'leave'` or `null`. |
 | `POST /api/games/:id/delete` | `{ token }`: deletes a game under way that the player started and nobody else holds a seat in, closing its room if open; `403` if they didn't start it, `409` if someone else plays it or it is over. |
 | `POST /api/games/:id/leave` | `{ token }`: gives up the player's seat in a game under way, through its room if open; `409` if they hold none or it is over. |
 | `GET /api/games` | The 50 most recently active games, for the lobby, with their name, mode and who holds each seat: `{ pid, name }` or `null`. |

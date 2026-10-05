@@ -55,6 +55,7 @@ test('three games waiting, or seats in three under way, send a player back to th
   assert.equal(refused.status, 409);
   const body = await refused.json();
   assert.match(body.error, /^You have 3 games of yours waiting for a player\./);
+  assert.deepEqual([body.waiting, body.seated], [3, 0], 'how many, for the page to say in its words');
   assert.deepEqual(body.games.map((/** @type {any} */ g) => g.id).sort(), [...ids].sort());
   assert.ok(body.games.every((/** @type {any} */ g) => GAME_NAMES.includes(g.name) && !('creator' in g)), 'named, as the lobby lists them');
   assert.ok(body.games.every((/** @type {any} */ g) => g.clear === 'delete'), 'hers, nobody else in them: she may delete them');
@@ -75,6 +76,7 @@ test('three games waiting, or seats in three under way, send a player back to th
   assert.equal(seated.status, 409);
   const why = await seated.json();
   assert.match(why.error, /^You have a seat in 3 games under way\./);
+  assert.deepEqual([why.waiting, why.seated], [0, 3]);
   assert.deepEqual(why.games.map((/** @type {any} */ g) => g.id).sort(), [...ids].sort());
   assert.ok(why.games.every((/** @type {any} */ g) => g.clear === 'leave'), 'Ann\'s games: Bēla may leave them');
 

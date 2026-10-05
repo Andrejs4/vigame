@@ -8,7 +8,7 @@
  *   POST /api/players           sign in: { token, name, language?, challenge, answer } -> { pid, name, language }
  *   POST /api/me                who a token belongs to: { token } -> { pid, name, language }, or null
  *   POST /api/settings          change name or language: { token, name?, language? } -> { pid, name, language }
- *   POST /api/games             start a game: { token } -> 201 { id }, or 409 with too many on the go
+ *   POST /api/games             start a game: { token } -> 201 { id }, or 409 { error, waiting, seated, games } with too many on the go
  *   GET  /api/games             recently active games, with who holds each seat (the lobby)
  *   GET  /api/games/:id         one game's snapshot and seats
  *   GET  /api/games/:id/commands  its command log (history, replays)
@@ -76,14 +76,16 @@ export const IDLE_MS = 3 * 24 * 60 * 60 * 1000;
 /**
  * Whether a player has too many games on the go to start another: `limit`
  * of their own waiting for a player, or `limit` they hold a seat in, not
- * counting games idle for IDLE_MS. If so, why, and those games, so they can
- * go back to one, or clear it (`clearing`).
+ * counting games idle for IDLE_MS. If so, why, in English and as counts
+ * for the page to put in its own words (`waiting` and `seated`, 0 for one
+ * that isn't a reason), and those games, so they can go back to one, or
+ * clear it (`clearing`).
  * @template {{ creator: string | null, seats: Array<string | null>, updatedAt: number }} G
  * @param {G[]} games The player's games under way (`gamesUnderWayOf`).
  * @param {string} pid
  * @param {number} limit
  * @param {number} now
- * @returns {{ error: string, games: G[] } | null}
+ * @returns {{ error: string, waiting: number, seated: number, games: G[] } | null}
  */
 export function tooManyGames(games, pid, limit, now) {
   const fresh = games.filter((g) => now - g.updatedAt < IDLE_MS);
@@ -95,7 +97,12 @@ export function tooManyGames(games, pid, limit, now) {
   ];
   if (!why.length) return null;
   const shown = fresh.filter((g) => (waiting.length >= limit && waiting.includes(g)) || (seated.length >= limit && seated.includes(g)));
-  return { error: `You have ${why.join(', and ')}. Go back to one of them, or clear one, before starting another:`, games: shown };
+  return {
+    error: `You have ${why.join(', and ')}. Go back to one of them, or clear one, before starting another:`,
+    waiting: waiting.length >= limit ? waiting.length : 0,
+    seated: seated.length >= limit ? seated.length : 0,
+    games: shown,
+  };
 }
 
 /**
@@ -225,7 +232,8 @@ export async function startGameServer({
           // Who started each stays on the server; the player learns only
           // what they may do with it.
           const games = crowded.games.map(({ creator: _creator, ...g }) => ({ ...g, clear: clearing({ creator: _creator, seats: g.seats }, creator) }));
-          return void res.status(409).json({ error: crowded.error, games: seatNames(games) });
+          const { error, waiting, seated } = crowded;
+          return void res.status(409).json({ error, waiting, seated, games: seatNames(games) });
         }
         res.status(201).json({ id: startGame(storage, { mode, players, creator }) });
       });

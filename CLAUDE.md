@@ -130,10 +130,12 @@ graphics work.
   player's name and language, anything else the lobby, and the login page
   comes first while the browser isn't signed in.
 - Each player has a language (Auto, English or Russian), kept on the
-  server. The login and settings pages are translated: their words are
-  `WORDS` in words.js, which the tests keep complete and about as long as
-  the English. The lobby and the game wait until the author asks.
-  docs/notes.md has his plan and what to watch for.
+  server. The login page, the settings page and the lobby are translated:
+  their words are `WORDS` in words.js, which the tests keep complete and
+  about as long as the English; a static text in index.html names its word
+  with `data-word`, and the lobby's How to play and About are written out
+  in each language. The game waits until the author asks. docs/notes.md
+  has his plan, what to watch for, and the Russian names already used.
 
 ## Game server (server/)
 

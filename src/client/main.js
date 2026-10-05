@@ -27,7 +27,7 @@ function showProblem(text) {
 /**
  * Join a game and play it.
  * @param {string} token
- * @param {import('./api.js').Player} me
+ * @param {import('./api.js').Me} me
  * @param {string} gameId
  */
 async function openGame(token, me, gameId) {
@@ -41,9 +41,7 @@ async function openGame(token, me, gameId) {
     // database, say): sign in again and retry.
     if (/sign in first/.test(why)) return openGame(token, await showLogin(token), gameId);
     history.replaceState(null, '', serverBase().pathname);
-    return showLobby(token, me, {
-      notice: /no game/.test(why) ? 'There is no game at that address.' : 'Could not open that game.',
-    });
+    return showLobby(token, me, { notice: { word: /no game/.test(why) ? 'noSuchGame' : 'notOpened' } });
   }
   // Closing or reloading the page is leaving, not a dropped connection the
   // server should hold a place open for.

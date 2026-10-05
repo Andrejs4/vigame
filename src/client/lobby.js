@@ -3,11 +3,19 @@
  * other people's under way (to watch), the finished ones (to see their
  * points again), and starting a new one. Opening a game goes to
  * `?game=<id>`, the same address an invitation link has.
+ *
+ * It shows in the player's language: the one in their settings, or for
+ * Auto, the one their name and browser suggest (`autoLanguage`).
  */
 
 import { hasLord } from '../core/game.js';
 import { MODES, SIDES, TICKS_PER_SECOND } from '../core/rules.js';
 import { getJson, post, reason } from './api.js';
+import { autoLanguage, browserLanguages, chosenLanguage } from './language.js';
+import { WORDS, say, translate } from './words.js';
+
+/** @typedef {import('./language.js').PageLanguage} PageLanguage */
+/** @typedef {import('./words.js').Word} Word */
 
 /** How often the lists refresh while the lobby is open. */
 const REFRESH_MS = 5000;
@@ -33,28 +41,38 @@ function gameTime(tick) {
 }
 
 /**
+ * Whether a text from the server is one of the words, such as a mode's key.
+ * @param {unknown} key
+ * @returns {key is Word}
+ */
+const isWord = (key) => typeof key === 'string' && Object.hasOwn(WORDS.en, key);
+
+/**
  * How a finished game came out, in a few words.
  * @param {import('./api.js').GameSummary} game
+ * @param {PageLanguage} language
  */
-function result(game) {
-  if (game.winner === null) return 'over, nobody won';
-  if (hasLord(game.mode)) return game.winner === 0 ? 'won' : 'the Dark Lord won';
-  return `${SIDES[game.winner]?.name ?? '?'} won`;
+function result(game, language) {
+  if (game.winner === null) return say(language, { word: 'nobodyWon' });
+  if (hasLord(game.mode)) return say(language, { word: game.winner === 0 ? 'won' : 'lordWon' });
+  const side = SIDES[game.winner]?.name.toLowerCase();
+  return isWord(side) ? say(language, { word: 'sideWon', values: { side: say(language, { word: side }) } }) : '?';
 }
 
 /**
  * One game as a list row: its name, who plays which side, how far it has
  * got, and a button to open it.
  * @param {import('./api.js').GameSummary} game
- * @param {string} action The button's label.
+ * @param {Word} action The button's label.
+ * @param {PageLanguage} language
  */
-function row(game, action) {
+function row(game, action, language) {
   const li = document.createElement('li');
   const who = document.createElement('span');
   who.className = 'who';
   const title = document.createElement('span');
   title.className = 'title';
-  title.textContent = game.name ?? 'A game';
+  title.textContent = game.name ?? say(language, { word: 'aGame' });
   who.append(title);
   // Teammates with "&", rivals with "vs".
   const between = hasLord(game.mode) ? ' & ' : ' vs ';
@@ -67,13 +85,14 @@ function row(game, action) {
   });
   const when = document.createElement('span');
   when.className = 'when';
-  when.textContent = `${MODES[/** @type {keyof typeof MODES} */ (game.mode)] ?? ''} · ${gameTime(game.tick)}${game.over === null ? '' : ` · ${result(game)}`}`;
+  const mode = Object.hasOwn(MODES, game.mode) && isWord(game.mode) ? say(language, { word: game.mode }) : '';
+  when.textContent = `${mode} · ${gameTime(game.tick)}${game.over === null ? '' : ` · ${result(game, language)}`}`;
   who.append(when);
 
   const open = document.createElement('a');
   open.className = 'button';
   open.href = gameHref(game.id);
-  open.textContent = action;
+  open.textContent = say(language, { word: action });
   const actions = document.createElement('span');
   actions.className = 'actions';
   actions.append(open);
@@ -86,11 +105,12 @@ function row(game, action) {
  * when it has none.
  * @param {string} name
  * @param {import('./api.js').GameSummary[]} games
- * @param {string} action The buttons' label.
+ * @param {Word} action The buttons' label.
+ * @param {PageLanguage} language
  */
-function fill(name, games, action) {
+function fillList(name, games, action, language) {
   const byId = (/** @type {string} */ id) => /** @type {HTMLElement} */ (document.getElementById(id));
-  byId(`lobby-${name}`).replaceChildren(...games.map((g) => row(g, action)));
+  byId(`lobby-${name}`).replaceChildren(...games.map((g) => row(g, action, language)));
   byId(`lobby-${name}-empty`).hidden = games.length > 0;
   byId(`lobby-${name}-count`).textContent = games.length ? String(games.length) : '';
 }
@@ -99,9 +119,9 @@ function fill(name, games, action) {
  * Show the lobby. It stays up until the player opens a game, which loads
  * that game's address.
  * @param {string} token
- * @param {import('./api.js').Player} me
- * @param {{ notice?: string }} [options] Something to say first, such as why
- *   the game they asked for isn't open.
+ * @param {import('./api.js').Me} me
+ * @param {{ notice?: import('./words.js').Said }} [options] Something to say
+ *   first, such as why the game they asked for isn't open.
  */
 export function showLobby(token, me, { notice } = {}) {
   const page = /** @type {HTMLElement} */ (document.getElementById('lobby'));
@@ -110,6 +130,15 @@ export function showLobby(token, me, { notice } = {}) {
   const newButton = /** @type {HTMLButtonElement} */ (document.getElementById('lobby-new'));
   const modeSelect = /** @type {HTMLSelectElement} */ (document.getElementById('lobby-mode'));
   const playersSelect = /** @type {HTMLSelectElement} */ (document.getElementById('lobby-players'));
+  const language = chosenLanguage(me.language, autoLanguage(browserLanguages(), me.name));
+
+  // Every text in the player's language; How to play and About are written
+  // out in each, and only theirs shows.
+  document.documentElement.lang = language;
+  translate(page, language);
+  for (const block of /** @type {NodeListOf<HTMLElement>} */ (page.querySelectorAll('.prose > [lang]'))) {
+    block.hidden = block.lang !== language;
+  }
 
   // Each list, and How to play and About, stays open or shut as the player
   // last left it, in this browser.
@@ -126,10 +155,10 @@ export function showLobby(token, me, { notice } = {}) {
     };
   }
 
-  /** @param {string} [text] */
-  function say(text) {
-    noticeOut.textContent = text ?? '';
-    noticeOut.hidden = !text;
+  /** @param {import('./words.js').Said} [said] */
+  function tell(said) {
+    noticeOut.textContent = said ? say(language, said) : '';
+    noticeOut.hidden = !said;
   }
 
   async function refresh() {
@@ -138,22 +167,22 @@ export function showLobby(token, me, { notice } = {}) {
     try {
       games = await getJson('api/games');
     } catch {
-      say('Could not reach the game server.');
+      tell({ word: 'offline' });
       return;
     }
     const isMine = (/** @type {import('./api.js').GameSummary} */ g) => g.seats.some((s) => s?.pid === me.pid);
     const going = games.filter((g) => g.over === null);
     const others = going.filter((g) => !isMine(g));
-    fill('mine', going.filter(isMine), 'Open');
-    fill('open', others.filter((g) => g.seats.some((s) => s === null)), 'Join');
+    fillList('mine', going.filter(isMine), 'open', language);
+    fillList('open', others.filter((g) => g.seats.some((s) => s === null)), 'join', language);
     // Every seat taken, most recently active first: opening one watches it.
-    fill('playing', others.filter((g) => g.seats.every((s) => s !== null)).slice(0, ONGOING_SHOWN), 'Watch');
+    fillList('playing', others.filter((g) => g.seats.every((s) => s !== null)).slice(0, ONGOING_SHOWN), 'watch', language);
     // Anyone's, all of them, most recent first: opening one shows its table of points.
-    fill('done', games.filter((g) => g.over !== null), 'Scores');
+    fillList('done', games.filter((g) => g.over !== null), 'scores', language);
   }
 
   nameOut.textContent = me.name;
-  say(notice);
+  tell(notice);
   page.hidden = false;
   refresh();
   setInterval(refresh, REFRESH_MS);
@@ -169,21 +198,21 @@ export function showLobby(token, me, { notice } = {}) {
    */
   function clearButton(game, how) {
     const button = document.createElement('button');
-    const name = game.name ?? 'this game';
-    button.textContent = how === 'delete' ? 'Delete' : 'Leave';
-    button.title = how === 'delete' ? 'Delete it for good: nobody else plays it' : 'Give up your seat, for someone else to take';
+    const values = { game: game.name ?? say(language, { word: 'aGame' }) };
+    const deleting = how === 'delete';
+    button.textContent = say(language, { word: how });
+    button.title = say(language, { word: deleting ? 'deleteTitle' : 'leaveTitle' });
     button.onclick = async () => {
-      const ask = how === 'delete' ? `Delete “${name}” for good?` : `Leave “${name}”? Your seat goes to whoever comes next.`;
-      if (!confirm(ask)) return;
+      if (!confirm(say(language, { word: deleting ? 'askDelete' : 'askLeave', values }))) return;
       button.disabled = true;
       try {
         const res = await post(`api/games/${encodeURIComponent(game.id)}/${how}`, { token });
         if (!res.ok) throw new Error(await reason(res));
         limit.hidden = true;
-        say(how === 'delete' ? `Deleted “${name}”.` : `Left “${name}”.`);
+        tell({ word: deleting ? 'deleted' : 'left', values });
         refresh();
       } catch (e) {
-        say(`Could not ${how === 'delete' ? 'delete' : 'leave'} “${name}” (${/** @type {Error} */ (e).message}).`);
+        tell({ word: deleting ? 'notDeleted' : 'notLeft', values: { ...values, why: /** @type {Error} */ (e).message } });
         button.disabled = false;
       }
     };
@@ -194,14 +223,21 @@ export function showLobby(token, me, { notice } = {}) {
     limit.hidden = true;
     try {
       const res = await post('api/games', { token, mode: modeSelect.value, players: Number(playersSelect.value) });
-      // Too many games on the go: the server says which, to go back to.
+      // Too many games on the go: the server says how many and which, to go
+      // back to.
       if (res.status === 409) {
-        const { error, games } = await res.json();
-        /** @type {HTMLElement} */ (document.getElementById('lobby-limit-text')).textContent = error;
+        const { waiting, seated, games } = await res.json();
+        const reasons = [
+          ...(waiting ? [say(language, { word: 'tooManyWaiting', values: { n: waiting } })] : []),
+          ...(seated ? [say(language, { word: 'tooManySeated', values: { n: seated } })] : []),
+        ];
+        /** @type {HTMLElement} */ (document.getElementById('lobby-limit-text')).textContent = say(language, {
+          word: 'tooMany', values: { reasons: reasons.join(WORDS[language].and) },
+        });
         const isMine = (/** @type {import('./api.js').GameSummary} */ g) => g.seats.some((s) => s?.pid === me.pid);
         /** @type {HTMLElement} */ (document.getElementById('lobby-limit-games')).replaceChildren(
           ...(/** @type {Array<import('./api.js').GameSummary & { clear: 'delete' | 'leave' | null }>} */ (games)).map((g) => {
-            const li = row(g, isMine(g) ? 'Open' : 'Join');
+            const li = row(g, isMine(g) ? 'open' : 'join', language);
             if (g.clear) li.querySelector('.actions')?.prepend(clearButton(g, g.clear));
             return li;
           }));
@@ -213,7 +249,7 @@ export function showLobby(token, me, { notice } = {}) {
       const { id } = await res.json();
       location.search = gameHref(id);
     } catch (e) {
-      say(`Could not start a game (${/** @type {Error} */ (e).message}).`);
+      tell({ word: 'notStarted', values: { why: /** @type {Error} */ (e).message } });
       newButton.disabled = false;
     }
   };
