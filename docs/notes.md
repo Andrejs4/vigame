@@ -141,6 +141,11 @@ stay sharp on high-density screens. The icon is a 32 × 32 PNG.
   keep them as they are: change them only when he asks.
 - No need to fit windows under about 800 px tall: there the minimap may
   cover the Lobby button.
+- The status panel folds to its header (the arrow on its right), and the
+  minimap hides by M or the arrow in the stock panel's top right corner,
+  where the author asked for it: on a phone the minimap sits just above
+  that corner, and the arrow stays to bring it back. Both choices are kept
+  per browser (`vigame.folded`); a hidden minimap doesn't repaint.
 
 ## Plans not built yet
 

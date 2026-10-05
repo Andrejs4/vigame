@@ -1149,6 +1149,26 @@ async function phone(browser, url) {
   assert.ok(layout.minimap.top > layout.status.bottom && layout.minimap.bottom < layout.tactics.top
     && layout.minimap.right <= layout.innerWidth, 'the minimap overlaps the panels or the screen edge');
 
+  // The status panel folds to its header, and the minimap hides by the arrow
+  // in the stock panel's corner, which stays to bring it back.
+  const statusHeight = () => page.evaluate(() => /** @type {HTMLElement} */ (document.getElementById('status')).offsetHeight);
+  const unfolded = await statusHeight();
+  await page.tap('#status-toggle');
+  assert.equal(await page.locator('#status-body').isHidden(), true, 'the status panel does not fold');
+  assert.equal(await page.getAttribute('#status-toggle', 'aria-expanded'), 'false');
+  assert.ok(await statusHeight() < unfolded / 3, 'the folded status panel is still tall');
+  await page.tap('#minimap-toggle');
+  assert.equal(await page.locator('#minimap').isHidden(), true, 'the minimap does not hide');
+  assert.equal(await page.locator('#minimap-toggle').isVisible(), true, 'the minimap\'s arrow went with it');
+  assert.equal(await page.getAttribute('#minimap-toggle', 'title'), 'Показать миникарту (M)');
+  await frames(page);
+  await page.screenshot({ path: join(OUT, 'phone-folded.png') });
+  await page.tap('#status-toggle');
+  await page.tap('#minimap-toggle');
+  assert.equal(await page.locator('#status-body').isVisible(), true);
+  assert.equal(await page.locator('#minimap').isVisible(), true);
+  assert.equal(await statusHeight(), unfolded);
+
   const castle = await castleOf(page, 0);
   await selectBuilding(page, castle, { touch: true });
   // With no hover on a touch screen, the last tapped hex is the tile readout.
@@ -1183,6 +1203,13 @@ async function phone(browser, url) {
   assert.ok(Object.values(desktopFit.lines).every((n) => n === 1), `a label wraps on a desktop: ${JSON.stringify(desktopFit.lines)}`);
   assert.ok(desktopFit.width <= 200, `the buttons' panel is ${desktopFit.width} px wide`);
   await other.screenshot({ path: join(OUT, 'game-ru.png') });
+  // M hides the minimap and shows it again, also where it types "ь"; this
+  // browser keeps the choice.
+  await other.keyboard.press('m');
+  assert.equal(await other.locator('#minimap').isHidden(), true, 'M does not hide the minimap');
+  assert.equal(await other.evaluate(() => JSON.parse(localStorage.getItem('vigame.folded') ?? '{}').minimap), true, 'the choice is not kept');
+  await other.evaluate(() => dispatchEvent(new KeyboardEvent('keydown', { key: 'ь', code: 'KeyM', bubbles: true })));
+  assert.equal(await other.locator('#minimap').isVisible(), true, 'M on a Russian keyboard does not show the minimap');
   // Б picks Башня whichever layout the keyboard is set to (Б is the comma
   // key), and so does the English T; А (the F key) picks Ферма.
   for (const [key, code, id] of [['б', 'Comma', 'build-tower'], [',', 'Comma', 'build-tower'], ['е', 'KeyT', 'build-tower'],

@@ -215,8 +215,11 @@
   <canvas id="board"></canvas>
 
   <div class="hud" id="status">
-    <div class="masthead">Vigame &middot; prototype</div>
-    <dl>
+    <!-- Folds the panel to this header, and unfolds it; this browser keeps the choice. -->
+    <button class="masthead" id="status-toggle" aria-expanded="true" aria-controls="status-body" title="Hide the game's details">
+      <span>Vigame &middot; prototype</span><span class="chevron" aria-hidden="true"></span>
+    </button>
+    <dl id="status-body">
       <div class="row"><dt>Game</dt><dd><span id="game-name">&mdash;</span><button class="inline" id="rename-button" hidden aria-label="Rename the game" title="Rename the game">✎</button></dd></div>
       <div class="row"><dt>Time</dt><dd id="time">0:00</dd></div>
       <div class="row"><dt>You</dt><dd id="seat">&mdash;</dd></div>
@@ -230,6 +233,10 @@
 
   <!-- What play turns on: what the side has to spend, in big figures, and what is selected. -->
   <div class="hud" id="tactics">
+    <!-- Hides the minimap and shows it again (M); this browser keeps the choice. -->
+    <button class="corner-toggle" id="minimap-toggle" aria-expanded="true" aria-controls="minimap" aria-keyshortcuts="M" title="Hide the minimap (M)">
+      <span class="chevron" aria-hidden="true"></span>
+    </button>
     <div class="stocks">
       <div class="stock stone" title="In bold from 60, enough for a tower">
         <div class="figure"><span id="stone">&mdash;</span></div>

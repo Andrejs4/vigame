@@ -56,7 +56,7 @@ button[aria-pressed="true"] { background: rgba(255, 216, 77, 0.18); border-color
 .waiting { animation: fade-blink 1.6s ease-in-out infinite; }
 
 @media (prefers-reduced-motion: reduce) {
-  button, .button { transition: none; }
+  button, .button, .chevron { transition: none; }
   .waiting { animation: none; color: var(--amber); }
 }
 
@@ -195,6 +195,39 @@ button[aria-pressed="true"] { background: rgba(255, 216, 77, 0.18); border-color
   margin-bottom: 7px;
   border-bottom: 1px solid var(--panel-edge);
 }
+/* The status panel's header folds it away and back, its arrow on the right. */
+button.masthead {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  width: 100%; padding: 0 0 7px;
+  font: 11px var(--sans); letter-spacing: 0.10em; color: var(--ink-dim);
+  background: none; border: 0; border-bottom: 1px solid var(--panel-edge); border-radius: 0;
+}
+button.masthead:hover:not(:disabled) { background: none; color: var(--ink); }
+/* No tap flash on a phone: these have no background of their own. */
+button.masthead, .corner-toggle { -webkit-tap-highlight-color: transparent; }
+#status.folded button.masthead { padding-bottom: 0; margin-bottom: 0; border-bottom: 0; }
+#status.folded .notice { margin-top: 7px; }
+
+/* An arrow pointing where its panel goes when pressed: up to fold away, down
+   to unfold (or, for the minimap above the stock on a phone, the other way). */
+.chevron {
+  flex: none; width: 7px; height: 7px; margin: 2px 2px 0;
+  border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor;
+  transform: rotate(-135deg); transition: transform 120ms ease;
+}
+[aria-expanded="false"] > .chevron { transform: rotate(45deg); margin: -3px 2px 0; }
+
+/* The minimap's arrow, in the stock panel's top right corner, so it stays to
+   bring the minimap back. */
+.corner-toggle {
+  position: absolute; top: 3px; right: 3px; z-index: 1;
+  display: flex; align-items: center; justify-content: center;
+  width: 24px; height: 24px; padding: 0;
+  color: var(--ink-dim); background: none; border: 0; border-radius: 6px;
+}
+.corner-toggle .chevron { transform: rotate(45deg); margin: -3px 0 0; }
+.corner-toggle[aria-expanded="false"] .chevron { transform: rotate(-135deg); margin: 3px 0 0; }
+.corner-toggle:hover:not(:disabled) { color: var(--ink); }
 
 dl { margin: 0; }
 .row { display: flex; justify-content: space-between; gap: 18px; }

@@ -125,6 +125,11 @@ export const WORDS = {
     abortTitle: 'Give up a building still going up: its crew goes home, and its cost is lost',
     attackTitle: 'Attack (A)',
     muteTitle: 'Sounds are on unless this is pressed; your choice is kept in this browser',
+    // The arrows that fold the status panel and hide the minimap.
+    statusFold: 'Hide the game\'s details',
+    statusUnfold: 'Show the game\'s details',
+    minimapHide: 'Hide the minimap (M)',
+    minimapShow: 'Show the minimap (M)',
     // The keys that press the buttons, each a letter of its label, shown in
     // bold. The English ones work in every language.
     keyTower: 'T',
@@ -255,6 +260,10 @@ export const WORDS = {
     abortTitle: 'Бросить недостроенное здание: бригада идёт домой, затраты пропадают',
     attackTitle: 'Атака (Т)',
     muteTitle: 'Звук включён, пока кнопка не нажата; выбор помнит этот браузер',
+    statusFold: 'Скрыть сведения об игре',
+    statusUnfold: 'Показать сведения об игре',
+    minimapHide: 'Скрыть миникарту (M)',
+    minimapShow: 'Показать миникарту (M)',
     // On the same key as the English one where the word has its letter (Г
     // is on U, Р on H, А on F), else the first letter, else a letter on a key
     // English leaves free (Б and А were taken): never on another button's

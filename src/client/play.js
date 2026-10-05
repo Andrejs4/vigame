@@ -69,6 +69,9 @@ function worth(line) {
   return each >= 1 ? `${each} points each` : `a point per ${Math.round(1 / each)}`;
 }
 
+/** Where this browser keeps which panels are folded away: the status panel, the minimap. */
+const FOLDED_KEY = 'vigame.folded';
+
 /** Stone and dark metal the HUD shows in bold: enough for a tower, and for a wagon's upgrade. */
 const PLENTY = { stone: 60, metal: 30 };
 
@@ -122,6 +125,7 @@ export async function startGame(net, me) {
   const canvas = /** @type {HTMLCanvasElement} */ (document.getElementById('board'));
   const mapCanvas = /** @type {HTMLCanvasElement} */ (document.getElementById('minimap-canvas'));
   const mapFrame = /** @type {HTMLElement} */ (document.getElementById('minimap-frame'));
+  const mapPanel = /** @type {HTMLElement} */ (document.getElementById('minimap'));
   const controls = /** @type {HTMLElement} */ (document.getElementById('controls'));
   // The buttons are in the player's language; the rest of the game isn't
   // translated yet.
@@ -1128,10 +1132,11 @@ export async function startGame(net, me) {
     updateHud();
   });
 
-  // A letter presses the button it is bold on (its aria-keyshortcuts),
-  // unless typing or in a dialog, or a dialog just took it to close (it
-  // shuts before the key gets here, so it must not open again).
-  const shortcuts = new Map([...controls.querySelectorAll('button[aria-keyshortcuts]')]
+  // A letter presses its button (aria-keyshortcuts): the one it is bold on,
+  // or M the minimap's arrow; unless typing or in a dialog, or a dialog just
+  // took it to close (it shuts before the key gets here, so it must not open
+  // again).
+  const shortcuts = new Map([...stage.querySelectorAll('button[aria-keyshortcuts]')]
     .flatMap((button) => keysOf(button).map((k) => [k.toLowerCase(), /** @type {HTMLButtonElement} */ (button)])));
   addEventListener('keydown', (e) => {
     const button = keyCandidates(e).map((k) => shortcuts.get(k)).find(Boolean);
@@ -1283,6 +1288,42 @@ export async function startGame(net, me) {
   document.getElementById('recenter')?.addEventListener('click', recenter);
   addEventListener('resize', resize);
 
+  // The status panel folds to its header, and the minimap hides (its arrow
+  // in the stock panel's corner, or M); this browser keeps both choices.
+  const statusPanel = /** @type {HTMLElement} */ (document.getElementById('status'));
+  const statusToggle = /** @type {HTMLButtonElement} */ (document.getElementById('status-toggle'));
+  const statusBody = /** @type {HTMLElement} */ (document.getElementById('status-body'));
+  const mapToggle = /** @type {HTMLButtonElement} */ (document.getElementById('minimap-toggle'));
+  /**
+   * Fold or unfold one of them, and keep the choice.
+   * @param {HTMLButtonElement} toggle
+   * @param {boolean} open
+   */
+  function unfold(toggle, open) {
+    toggle.setAttribute('aria-expanded', String(open));
+    if (toggle === statusToggle) {
+      statusBody.hidden = !open;
+      statusPanel.classList.toggle('folded', !open);
+      toggle.title = word(open ? 'statusFold' : 'statusUnfold');
+    } else {
+      mapPanel.hidden = !open;
+      toggle.title = word(open ? 'minimapHide' : 'minimapShow');
+      // Its view frame follows the camera only as the board redraws.
+      needsDraw = true;
+    }
+    try {
+      localStorage.setItem(FOLDED_KEY, JSON.stringify({ status: statusBody.hidden, minimap: mapPanel.hidden }));
+    } catch { /* not kept */ }
+  }
+  /** @type {{ status?: boolean, minimap?: boolean }} */
+  let folded = {};
+  try { folded = JSON.parse(localStorage.getItem(FOLDED_KEY) ?? '{}') ?? {}; } catch { /* as the page has them */ }
+  unfold(statusToggle, folded.status !== true);
+  unfold(mapToggle, folded.minimap !== true);
+  for (const toggle of [statusToggle, mapToggle]) {
+    toggle.addEventListener('click', () => unfold(toggle, toggle.getAttribute('aria-expanded') !== 'true'));
+  }
+
   // --- run -----------------------------------------------------------------
 
   /** @param {number} time */
@@ -1290,7 +1331,8 @@ export async function startGame(net, me) {
     // Queue the next frame first, so one frame that throws cannot stop the
     // board from ever redrawing again.
     requestAnimationFrame(frame);
-    minimap.paint(time);
+    // A hidden minimap waits: what changed meanwhile is painted once it shows.
+    if (!mapPanel.hidden) minimap.paint(time);
     const played = playing;
     playing = effects.playing(time);
     const animated = animating;

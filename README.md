@@ -295,7 +295,10 @@ Run `npm start` and open http://127.0.0.1:2567.
   are in each building (a spectator sees the whole map).
 - Drag to pan, and use the wheel or the − / + buttons to zoom. The minimap
   in the corner shows the whole board and a frame around what you see;
-  press or drag on it to look there.
+  press or drag on it to look there. **M**, or the arrow in the stock
+  panel's top right corner, hides it and brings it back; the status panel
+  folds to its header by the arrow on the header's right. This browser
+  keeps both choices. A message still shows under a folded status panel.
   **Coordinates** shows axial `q,r` labels. Escape cancels building and
   clears the selection; **A** is Attack.
 - Every viewer's picked hex shows as a ring: solid for yours, dashed for
