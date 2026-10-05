@@ -5,7 +5,12 @@
  * proxy can serve the whole game under a subfolder such as `/vigame/`.
  */
 
-/** @typedef {{ pid: string, name: string }} Player */
+/**
+ * @typedef {{ pid: string, name: string }} Player A player as other players
+ *   see them, such as in a seat.
+ * @typedef {Player & { language: import('../core/player.js').Language }} Me
+ *   The player this browser signed in as, with their settings.
+ */
 
 /**
  * @typedef {object} GameSummary A game as the lobby lists it.
@@ -97,7 +102,7 @@ export async function reason(res) {
  * Who this token belongs to, or null if it hasn't signed in (or the server
  * no longer knows it). Throws when the server can't be reached.
  * @param {string} token
- * @returns {Promise<Player | null>}
+ * @returns {Promise<Me | null>}
  */
 export async function whoAmI(token) {
   const res = await post('api/me', { token });

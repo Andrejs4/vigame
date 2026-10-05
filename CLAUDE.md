@@ -126,8 +126,12 @@ graphics work.
 - The HUD's pictures are the art/ SVGs used as CSS masks: `--icon` set on
   an element or its parent, the mask on a `::before`. A mask rule reaching
   an element with no `--icon` paints a solid square.
-- Views switch with a page load: `?game=<id>` is a game, anything else the
-  lobby, and the login page comes first while the browser isn't signed in.
+- Views switch with a page load: `?game=<id>` is a game, `?settings` the
+  player's name and language, anything else the lobby, and the login page
+  comes first while the browser isn't signed in.
+- Each player has a language (Auto, English or Russian), kept on the
+  server, but nothing is translated yet: wait until the author asks.
+  docs/notes.md has his plan and what to watch for.
 
 ## Game server (server/)
 

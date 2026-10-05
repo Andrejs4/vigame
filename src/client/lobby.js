@@ -8,7 +8,6 @@
 import { hasLord } from '../core/game.js';
 import { MODES, SIDES, TICKS_PER_SECOND } from '../core/rules.js';
 import { getJson, post, reason } from './api.js';
-import { showLogin } from './login.js';
 
 /** How often the lists refresh while the lobby is open. */
 const REFRESH_MS = 5000;
@@ -111,7 +110,6 @@ export function showLobby(token, me, { notice } = {}) {
   const newButton = /** @type {HTMLButtonElement} */ (document.getElementById('lobby-new'));
   const modeSelect = /** @type {HTMLSelectElement} */ (document.getElementById('lobby-mode'));
   const playersSelect = /** @type {HTMLSelectElement} */ (document.getElementById('lobby-players'));
-  const rename = /** @type {HTMLElement} */ (document.getElementById('lobby-rename'));
 
   // Each list, and How to play and About, stays open or shut as the player
   // last left it, in this browser.
@@ -158,7 +156,7 @@ export function showLobby(token, me, { notice } = {}) {
   say(notice);
   page.hidden = false;
   refresh();
-  const timer = setInterval(refresh, REFRESH_MS);
+  setInterval(refresh, REFRESH_MS);
 
   const limit = /** @type {HTMLElement} */ (document.getElementById('lobby-limit'));
   limit.hidden = true;
@@ -218,13 +216,5 @@ export function showLobby(token, me, { notice } = {}) {
       say(`Could not start a game (${/** @type {Error} */ (e).message}).`);
       newButton.disabled = false;
     }
-  };
-
-  rename.onclick = async (e) => {
-    e.preventDefault();
-    clearInterval(timer);
-    page.hidden = true;
-    const renamed = await showLogin(token);
-    showLobby(token, renamed);
   };
 }

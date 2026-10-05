@@ -5,8 +5,9 @@
  *   GET  /client/…, /core/…     the page's modules, as they are in src/
  *   GET  /vendor/colyseus.js    the Colyseus browser client the page uses
  *   GET  /api/challenge         a sum to answer when signing in -> { id, question }
- *   POST /api/players           sign in: { token, name, challenge, answer } -> { pid, name }
- *   POST /api/me                who a token belongs to: { token } -> { pid, name }, or null
+ *   POST /api/players           sign in: { token, name, language?, challenge, answer } -> { pid, name, language }
+ *   POST /api/me                who a token belongs to: { token } -> { pid, name, language }, or null
+ *   POST /api/settings          change name or language: { token, name?, language? } -> { pid, name, language }
  *   POST /api/games             start a game: { token } -> 201 { id }, or 409 with too many on the go
  *   GET  /api/games             recently active games, with who holds each seat (the lobby)
  *   GET  /api/games/:id         one game's snapshot and seats
@@ -31,7 +32,7 @@ import express from 'express';
 
 import { BOARD_OPTIONS, createBoard } from '../src/core/board.js';
 import { newGame } from '../src/core/game.js';
-import { cleanPlayerName } from '../src/core/player.js';
+import { cleanLanguage, cleanPlayerName } from '../src/core/player.js';
 import { DEFAULT_MODE, DEFAULT_PLAYERS, MAX_PLAYERS, MIN_PLAYERS, MODES, TICKS_PER_SECOND } from '../src/core/rules.js';
 import { createChallenges } from './challenge.js';
 import { gameRoom, isToken, liveRoom, playerId, signedIn } from './room.js';
@@ -166,22 +167,47 @@ export async function startGameServer({
       app.get('/api/challenge', (_req, res) => {
         res.set('cache-control', 'no-store').json(challenges.issue());
       });
-      // Signing in, and changing name: both answer a new sum.
+      /**
+       * The player a token belongs to as the page knows itself: id, name and
+       * language. Null if it hasn't signed in.
+       * @param {unknown} token
+       */
+      const me = (token) => {
+        const player = isToken(token) ? storage.loadPlayer(playerId(token)) : null;
+        return player && { pid: player.pid, name: player.name, language: player.language };
+      };
+      // Signing in answers a sum.
       app.post('/api/players', (req, res) => {
-        const { token, name, challenge, answer } = req.body ?? {};
+        const { token, name, language = 'auto', challenge, answer } = req.body ?? {};
         if (!isToken(token)) return void res.status(400).json({ error: 'bad token' });
         const clean = cleanPlayerName(name);
+        const lang = cleanLanguage(language);
         // Checked before the sum, so a bad name doesn't use up the challenge.
         if (!clean) return void res.status(400).json({ error: 'bad name' });
+        if (!lang) return void res.status(400).json({ error: 'bad language' });
         if (!challenges.check(challenge, answer)) return void res.status(403).json({ error: 'wrong answer' });
         const pid = playerId(token);
-        storage.savePlayer(pid, clean);
-        res.json({ pid, name: clean });
+        storage.savePlayer(pid, clean, lang);
+        res.json({ pid, name: clean, language: lang });
       });
       // A POST, so the secret token travels in the body, not in the address.
       // Not signed in is an ordinary answer, null, not an error.
       app.post('/api/me', (req, res) => {
-        res.set('cache-control', 'no-store').json(signedIn(storage, req.body?.token));
+        res.set('cache-control', 'no-store').json(me(req.body?.token));
+      });
+      // The settings page: a new name, language, or both. No sum: the player
+      // has signed in already.
+      app.post('/api/settings', (req, res) => {
+        const player = me(req.body?.token);
+        if (!player) return void res.status(401).json({ error: 'sign in first' });
+        // What isn't given stays as it is.
+        const { name = player.name, language = player.language } = req.body;
+        const clean = cleanPlayerName(name);
+        const lang = cleanLanguage(language);
+        if (!clean) return void res.status(400).json({ error: 'bad name' });
+        if (!lang) return void res.status(400).json({ error: 'bad language' });
+        storage.savePlayer(player.pid, clean, lang);
+        res.json({ pid: player.pid, name: clean, language: lang });
       });
 
       app.post('/api/games', (req, res) => {

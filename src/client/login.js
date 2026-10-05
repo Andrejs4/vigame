@@ -1,20 +1,23 @@
 /**
- * The login page: a name and the answer to the server's sum. It signs this
- * browser's token in, or gives it a new name.
+ * The login page: a name, a language, and the answer to the server's sum.
+ * It signs this browser's token in as a new player. The settings page
+ * changes the name and language later.
  */
 
 import { PLAYER_NAME_MAX, cleanPlayerName } from '../core/player.js';
 import { getJson, post, reason, saveName, savedName } from './api.js';
+import { showAutoLanguage } from './language.js';
 
 /**
  * Show the login page until the server accepts a name and an answer.
  * @param {string} token
- * @returns {Promise<import('./api.js').Player>}
+ * @returns {Promise<import('./api.js').Me>}
  */
 export function showLogin(token) {
   const page = /** @type {HTMLElement} */ (document.getElementById('login'));
   const form = /** @type {HTMLFormElement} */ (page.querySelector('form'));
   const nameInput = /** @type {HTMLInputElement} */ (document.getElementById('login-name'));
+  const languageSelect = /** @type {HTMLSelectElement} */ (document.getElementById('login-language'));
   const answerInput = /** @type {HTMLInputElement} */ (document.getElementById('login-answer'));
   const question = /** @type {HTMLElement} */ (document.getElementById('login-question'));
   const error = /** @type {HTMLElement} */ (document.getElementById('login-error'));
@@ -45,6 +48,7 @@ export function showLogin(token) {
 
   return new Promise((resolve) => {
     const done = new AbortController();
+    showAutoLanguage(languageSelect, nameInput, done.signal);
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
       if (submit.disabled) return;
@@ -61,7 +65,9 @@ export function showLogin(token) {
       submit.disabled = true;
       error.textContent = '';
       try {
-        const res = await post('api/players', { token, name, challenge, answer: answerInput.value.trim() });
+        const res = await post('api/players', {
+          token, name, language: languageSelect.value, challenge, answer: answerInput.value.trim(),
+        });
         if (res.ok) {
           const player = await res.json();
           saveName(player.name);

@@ -3,6 +3,7 @@
  *
  *   not signed in            the login page, then on as below
  *   ?game=<id>               that game
+ *   ?settings                the player's name and language
  *   anything else            the lobby
  *
  * Views switch with a page load (the lobby opens `?game=<id>`, the game's
@@ -15,6 +16,7 @@ import { showLobby } from './lobby.js';
 import { showLogin } from './login.js';
 import { createServerNet } from './net.js';
 import { startGame } from './play.js';
+import { showSettings } from './settings.js';
 
 /** @param {string} text */
 function showProblem(text) {
@@ -62,8 +64,10 @@ async function main() {
   }
   me ??= await showLogin(token);
 
-  const gameId = new URLSearchParams(location.search).get('game');
+  const address = new URLSearchParams(location.search);
+  const gameId = address.get('game');
   if (gameId) await openGame(token, me, gameId);
+  else if (address.has('settings')) showSettings(token, me);
   else showLobby(token, me);
 }
 

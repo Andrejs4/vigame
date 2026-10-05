@@ -105,9 +105,14 @@ button[aria-pressed="true"] { background: rgba(255, 216, 77, 0.18); border-color
   border: 1px solid var(--panel-edge); border-radius: 7px;
 }
 .card select option { background: var(--panel-solid); }
+/* A chooser inside its label sits like an input. */
+.card label select { margin-bottom: 0; }
 .card form button, .card > .primary, .card > .button { width: 100%; }
 .card .error { color: var(--amber); min-height: 1.5em; margin: 0 0 10px; font-size: 13px; }
 .card .empty { margin: 0; color: var(--ink-dim); font-size: 13px; }
+/* The settings page's Back and Save, side by side. */
+.card .buttons { display: flex; gap: 8px; }
+.card .buttons > * { flex: 1; text-align: center; }
 
 /* The lobby's lists fold away; each heading says how many games it has. */
 .games-list { margin-top: 20px; }

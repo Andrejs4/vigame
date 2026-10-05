@@ -91,9 +91,10 @@ commands.
 | Path | Role |
 | --- | --- |
 | `src/core/` | The pure modules above, shared with the server: hex math, the board, the rules, the core, player names. |
-| `client/main.js` | Picks the view: the login page while the browser isn't signed in, then a game (`?game=<id>`) or the lobby. Views switch with a page load, so leaving a game always leaves its room. |
+| `client/main.js` | Picks the view: the login page while the browser isn't signed in, then a game (`?game=<id>`), the settings (`?settings`) or the lobby. Views switch with a page load, so leaving a game always leaves its room. |
 | `client/api.js` | The browser's token and the HTTP calls, all by addresses relative to the page. |
-| `client/login.js`, `lobby.js` | The login page and the lobby. |
+| `client/login.js`, `lobby.js`, `settings.js` | The login page, the lobby, and the settings page (name and language). |
+| `client/language.js` | Which language Auto stands for. Nothing is translated yet. |
 | `client/play.js` | The game view: input, HUD, controls. |
 | `client/net.js` | The connection to a game: commands out, the core's view in. |
 | `client/camera.js`, `render.js` | Pan and zoom, and canvas drawing. The renderer sits behind a small interface so PixiJS can replace it. |
@@ -147,7 +148,9 @@ commands.
   `localStorage` and sends it when joining; the room knows the player by it
   and shows other viewers only a hash. Before a token may start or join a
   game, it is signed in with a name and the answer to a small sum
-  (`server/challenge.js`), and the `players` table records the name. The
+  (`server/challenge.js`), and the `players` table records the name, and
+  the language the player chose for the page. The settings page changes
+  both with no sum, as the token has signed in already. The
   room's `onAuth` refuses anyone else before a room is found or created.
   Logins would replace the token and the sum.
 - **Client**: `createServerNet` in `src/client/net.js`. The page loads the

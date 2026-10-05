@@ -112,17 +112,44 @@ test('a database file keeps games across restarts, with write-ahead logging on',
   }
 });
 
-test('players are stored by public id, and signing in again renames them', () => {
+test('players are stored by public id with a language, Auto unless chosen, and saving again changes them', () => {
   const storage = openStorage();
   assert.equal(storage.loadPlayer('p1'), null);
   storage.savePlayer('p1', 'Ann');
   const first = storage.loadPlayer('p1');
   assert.equal(first.name, 'Ann');
-  storage.savePlayer('p1', 'Anna');
+  assert.equal(first.language, 'auto');
+  storage.savePlayer('p1', 'Anna', 'ru');
   const renamed = storage.loadPlayer('p1');
   assert.equal(renamed.name, 'Anna');
+  assert.equal(renamed.language, 'ru');
   assert.equal(renamed.createdAt, first.createdAt);
   storage.close();
+});
+
+test('a version 21 database keeps its games, and its players get the language Auto', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'vigame-'));
+  try {
+    const file = join(dir, 'vigame.db');
+    const storage = openStorage(file);
+    storage.savePlayer('p1', 'Ann');
+    storage.createGame({ id: 'g1', seed: 1, state: STATE, seats: ['p1', null], creator: 'p1' });
+    storage.recordCommand('g1', { tick: 0, player: 0, command: { type: 'rename', name: 'Friday' } });
+    storage.close();
+    // Version 21's players had no language.
+    const old = new Database(file);
+    old.exec('ALTER TABLE players DROP COLUMN language; PRAGMA user_version = 21;');
+    old.close();
+
+    const upgraded = openStorage(file);
+    assert.deepEqual(upgraded.loadGame('g1')?.seats, ['p1', null]);
+    assert.equal(upgraded.listCommands('g1').length, 1);
+    assert.equal(upgraded.loadPlayer('p1')?.name, 'Ann');
+    assert.equal(upgraded.loadPlayer('p1')?.language, 'auto');
+    upgraded.close();
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test('an older database is upgraded: turn-based games are dropped, players kept', () => {
@@ -155,7 +182,7 @@ test('an older database is upgraded: turn-based games are dropped, players kept'
     storage.close();
 
     const check = new Database(file, { readonly: true });
-    assert.equal(check.pragma('user_version', { simple: true }), 21);
+    assert.equal(check.pragma('user_version', { simple: true }), 22);
     check.close();
   } finally {
     rmSync(dir, { recursive: true, force: true });

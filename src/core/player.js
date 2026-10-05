@@ -1,6 +1,7 @@
 /**
- * Player and game names, checked the same way on the page and on the game
- * server. Pure: the server imports this module unchanged.
+ * Player and game names, and a player's language, checked the same way on
+ * the page and on the game server. Pure: the server imports this module
+ * unchanged.
  */
 
 /** Longest player name, in characters (code points). */
@@ -48,4 +49,21 @@ export function cleanPlayerName(text) {
  */
 export function cleanGameName(text) {
   return cleanName(text, GAME_NAME_MAX);
+}
+
+/**
+ * The languages a player may choose for the page: `auto` lets the page pick
+ * one (`autoLanguage` in src/client/language.js), the rest are languages.
+ */
+export const LANGUAGES = /** @type {const} */ (['auto', 'en', 'ru']);
+
+/** @typedef {typeof LANGUAGES[number]} Language */
+
+/**
+ * A language setting as it will be stored, or null if it isn't one.
+ * @param {unknown} code
+ * @returns {Language | null}
+ */
+export function cleanLanguage(code) {
+  return LANGUAGES.find((l) => l === code) ?? null;
 }

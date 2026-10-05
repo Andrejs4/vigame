@@ -312,10 +312,15 @@ test('signing in takes a name and the answer to the server\'s sum', async () => 
   assert.deepEqual(await badName.json(), { error: 'bad name' });
   assert.equal(server.storage.loadPlayer(playerId(token)), null);
 
-  // A bad name didn't use the challenge up, so it still works.
+  const badLanguage = await post('/api/players', { token, name: 'Sam', language: 'de', challenge: sum.id, answer: sum.answer });
+  assert.equal(badLanguage.status, 400);
+  assert.deepEqual(await badLanguage.json(), { error: 'bad language' });
+
+  // A bad name or language didn't use the challenge up, so it still works.
+  // Without a language, the player gets Auto.
   const ok = await post('/api/players', { token, name: '  Sam   Lee ', challenge: sum.id, answer: String(sum.answer) });
   assert.equal(ok.status, 200);
-  assert.deepEqual(await ok.json(), { pid: playerId(token), name: 'Sam Lee' });
+  assert.deepEqual(await ok.json(), { pid: playerId(token), name: 'Sam Lee', language: 'auto' });
   assert.equal(server.storage.loadPlayer(playerId(token)).name, 'Sam Lee');
 
   // Every challenge answers once, and a wrong answer uses one up too.
@@ -332,14 +337,47 @@ test('signing in takes a name and the answer to the server\'s sum', async () => 
   }
   assert.equal(server.storage.loadPlayer(playerId(token)).name, 'Sam Lee', 'refusals change nothing');
 
-  // Signing in again, with a new sum, renames.
+  // Signing in again, with a new sum, renames, and takes the language chosen.
   const rename = await challenge();
-  assert.equal((await post('/api/players', { token, name: 'Samuel', challenge: rename.id, answer: rename.answer })).status, 200);
-  assert.equal(server.storage.loadPlayer(playerId(token)).name, 'Samuel');
+  const renamed = await post('/api/players', { token, name: 'Самуил', language: 'en', challenge: rename.id, answer: rename.answer });
+  assert.deepEqual(await renamed.json(), { pid: playerId(token), name: 'Самуил', language: 'en' });
+  assert.equal(server.storage.loadPlayer(playerId(token)).name, 'Самуил');
+});
+
+test('the settings page changes a player\'s name and language, with no sum', async () => {
+  const token = 'e'.repeat(32);
+  const pid = playerId(token);
+  const stranger = await post('/api/settings', { token, name: 'Eve' });
+  assert.equal(stranger.status, 401);
+  assert.deepEqual(await stranger.json(), { error: 'sign in first' });
+  assert.equal(server.storage.loadPlayer(pid), null);
+
+  server.storage.savePlayer(pid, 'Eve');
+  const both = await post('/api/settings', { token, name: '  Eve   Ray ', language: 'ru' });
+  assert.equal(both.status, 200);
+  assert.deepEqual(await both.json(), { pid, name: 'Eve Ray', language: 'ru' });
+  assert.deepEqual(await (await post('/api/me', { token })).json(), { pid, name: 'Eve Ray', language: 'ru' });
+
+  // What isn't given stays as it was.
+  assert.deepEqual(await (await post('/api/settings', { token, language: 'auto' })).json(), { pid, name: 'Eve Ray', language: 'auto' });
+  assert.deepEqual(await (await post('/api/settings', { token, name: 'Eve' })).json(), { pid, name: 'Eve', language: 'auto' });
+
+  for (const [body, error] of [
+    [{ token, name: 'Eve 🙂' }, 'bad name'],
+    [{ token, name: null, language: 'en' }, 'bad name'],
+    [{ token, language: 'EN' }, 'bad language'],
+    [{ token, name: 'Eva', language: 'de' }, 'bad language'],
+  ]) {
+    const res = await post('/api/settings', body);
+    assert.equal(res.status, 400, JSON.stringify(body));
+    assert.deepEqual(await res.json(), { error });
+  }
+  const kept = server.storage.loadPlayer(pid);
+  assert.deepEqual([kept.name, kept.language], ['Eve', 'auto'], 'refusals change nothing');
 });
 
 test('a token can ask who it belongs to', async () => {
-  assert.deepEqual(await (await post('/api/me', { token: TOKENS.a })).json(), { pid: playerId(TOKENS.a), name: 'Ann' });
+  assert.deepEqual(await (await post('/api/me', { token: TOKENS.a })).json(), { pid: playerId(TOKENS.a), name: 'Ann', language: 'auto' });
   for (const body of [{ token: 'y'.repeat(32) }, { token: 'short' }, {}]) {
     const res = await post('/api/me', body);
     assert.equal(res.status, 200, 'not signed in is an answer, not an error');

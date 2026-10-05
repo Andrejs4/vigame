@@ -31,6 +31,13 @@
     <label>Your name
       <input id="login-name" name="name" autocomplete="nickname" spellcheck="false" required>
     </label>
+    <label>Language
+      <select id="login-language" name="language">
+        <option value="auto" selected>Auto</option>
+        <option value="en" lang="en">English</option>
+        <option value="ru" lang="ru">Русский</option>
+      </select>
+    </label>
     <label><span id="login-question">Loading the question&hellip;</span>
       <input id="login-answer" name="answer" inputmode="numeric" autocomplete="off" required>
     </label>
@@ -40,10 +47,35 @@
   <img class="banner" src="client/art/banner-lord.webp" width="1040" height="400" alt="">
 </main>
 
+<main class="page" id="settings" hidden>
+  <form class="card" novalidate>
+    <h1>Settings</h1>
+    <p class="hint">The name other players see: up to 15 letters or digits.</p>
+    <label>Your name
+      <input id="settings-name" name="name" autocomplete="nickname" spellcheck="false" required>
+    </label>
+    <label>Language
+      <select id="settings-language" name="language">
+        <option value="auto">Auto</option>
+        <option value="en" lang="en">English</option>
+        <option value="ru" lang="ru">Русский</option>
+      </select>
+    </label>
+    <p class="hint">Auto picks Russian for a name in Cyrillic letters, or
+      follows your browser; English otherwise. Nothing is translated yet,
+      so for now it is all in English.</p>
+    <p class="error" id="settings-error" role="alert"></p>
+    <div class="buttons">
+      <a class="button" id="settings-back" href="./">Back</a>
+      <button id="settings-save" class="primary">Save</button>
+    </div>
+  </form>
+</main>
+
 <main class="page" id="lobby" hidden>
   <div class="card wide">
     <h1>Vigame</h1>
-    <p class="hint">Playing as <strong id="lobby-name"></strong> &middot; <a href="" id="lobby-rename">Change name</a></p>
+    <p class="hint">Playing as <strong id="lobby-name"></strong> &middot; <a href="?settings" id="lobby-settings">Settings</a></p>
     <p class="error" id="lobby-notice" role="status" hidden></p>
     <label for="lobby-mode">Mode</label>
     <select id="lobby-mode">

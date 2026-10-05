@@ -392,6 +392,53 @@ async function finished(browser, url) {
 }
 
 /**
+ * Ann's settings, from the lobby and back: a name with a symbol is refused,
+ * a new name and language are kept, then she puts hers back; Back changes
+ * nothing.
+ * @param {import('playwright').Page} a
+ * @param {{ full: boolean }} options
+ */
+async function settings(a, { full }) {
+  const open = async () => {
+    await a.click('#lobby-settings');
+    await a.waitForSelector('#settings:not([hidden])');
+    assert.match(new URL(a.url()).search, /^\?settings$/);
+  };
+  const saved = async (name) => {
+    await a.click('#settings-save');
+    await inLobby(a);
+    await waitText(a, '#lobby-name', name);
+    assert.equal(new URL(a.url()).search, '', 'the address is the lobby again');
+  };
+  await open();
+  assert.equal(await a.inputValue('#settings-name'), 'Ann');
+  assert.equal(await a.inputValue('#settings-language'), 'auto');
+  await waitText(a, '#settings-language option[value="auto"]', 'Auto (English)');
+  await a.fill('#settings-name', 'Ann \u{1F642}');
+  await a.click('#settings-save');
+  await waitMatch(a, '#settings-error', /letters or digits/);
+  await a.fill('#settings-name', 'Анна');
+  await waitText(a, '#settings-language option[value="auto"]', 'Auto (Русский)');
+  await a.selectOption('#settings-language', 'ru');
+  await saved('Анна');
+
+  await open();
+  assert.equal(await a.inputValue('#settings-name'), 'Анна');
+  assert.equal(await a.inputValue('#settings-language'), 'ru');
+  if (full) await a.screenshot({ path: join(OUT, 'settings.png') });
+  await a.fill('#settings-name', 'Ann');
+  await a.selectOption('#settings-language', 'auto');
+  await saved('Ann');
+
+  await open();
+  assert.equal(await a.inputValue('#settings-language'), 'auto');
+  await a.fill('#settings-name', 'Nobody');
+  await a.click('#settings-back');
+  await inLobby(a);
+  await waitText(a, '#lobby-name', 'Ann');
+}
+
+/**
  * Three browsers through the game server: login, lobby, a game, and the
  * game's commands. With `full`, everything; without, the path from login to
  * two players seeing each other's moves.
@@ -409,6 +456,12 @@ async function threeBrowsers(browser, url, { full, label }) {
   await a.waitForFunction(() => /What is/.test(document.getElementById('login-question')?.textContent ?? ''));
   await a.waitForFunction(() => [...document.querySelectorAll('#login .banner')].every((b) => /** @type {HTMLImageElement} */ (b).complete));
   if (full) await a.screenshot({ path: join(OUT, 'login.png') });
+  // The language is Auto at first, which says what it stands for: English
+  // in this browser, Russian once the name is in Cyrillic letters.
+  assert.equal(await a.inputValue('#login-language'), 'auto');
+  await waitText(a, '#login-language option[value="auto"]', 'Auto (English)');
+  await a.fill('#login-name', 'Анна');
+  await waitText(a, '#login-language option[value="auto"]', 'Auto (Русский)');
   await a.fill('#login-name', 'Ann \u{1F642}');
   await a.fill('#login-answer', '1');
   await a.click('#login-submit');
@@ -441,6 +494,7 @@ async function threeBrowsers(browser, url, { full, label }) {
   if (full) await a.screenshot({ path: join(OUT, 'lobby-about.png'), fullPage: true });
   await a.click('#lobby-how-section summary');
   await a.click('#lobby-about-section summary');
+  await settings(a, { full });
   assert.equal(await a.inputValue('#lobby-players'), '1', 'one player against the Dark Lord by default');
   await a.selectOption('#lobby-players', '2');
   await a.click('#lobby-new');
@@ -964,12 +1018,20 @@ async function threeBrowsers(browser, url, { full, label }) {
   for (const p of [a, b, c, lost]) await p.context().close();
 }
 
-/** The login page, the lobby and a Shared Easy Lord game on a phone, with a desktop teammate. */
+/** The login page, the lobby, settings and a Shared Easy Lord game on a phone, with a desktop teammate. */
 async function phone(browser, url) {
-  const page = await newPlayer(browser, url, 'phone', 'Pia', PHONE);
+  // A browser in Russian: Auto stands for Russian, even for a name in
+  // Latin letters.
+  const page = await newPlayer(browser, url, 'phone', 'Pia', { ...PHONE, locale: 'ru-RU' });
   await inLobby(page);
   const fits = () => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth);
   assert.ok(await fits(), 'the lobby scrolls sideways on a phone');
+  await page.tap('#lobby-settings');
+  await page.waitForSelector('#settings:not([hidden])');
+  await waitText(page, '#settings-language option[value="auto"]', 'Auto (Русский)');
+  assert.ok(await fits(), 'the settings page scrolls sideways on a phone');
+  await page.tap('#settings-back');
+  await inLobby(page);
   await page.selectOption('#lobby-mode', 'shared');
   await page.selectOption('#lobby-players', '2');
   await page.tap('#lobby-new');

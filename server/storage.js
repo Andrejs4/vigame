@@ -15,21 +15,22 @@
  *   commands  every accepted command with the tick it was applied at, in
  *             order, never updated or deleted. The snapshot plus the commands
  *             after it rebuild the game up to the last command.
- *   players   everyone who has signed in: their public player id and name.
- *             The secret token behind the id is never stored.
+ *   players   everyone who has signed in: their public player id, name and
+ *             language. The secret token behind the id is never stored.
  */
 
 import Database from 'better-sqlite3';
 
 /** Bump when the tables change, and add the upgrade step to `migrate`. */
-const SCHEMA_VERSION = 21;
+const SCHEMA_VERSION = 22;
 
 /**
  * @typedef {{ id: string, seed: number, state: unknown, seq: number, seats: Array<string | null>,
  *   creator: string | null, createdAt: number, updatedAt: number }} SavedGame
  *   `creator`: the player who started it, which players aren't shown.
  * @typedef {{ seq: number, tick: number, player: number, command: unknown, at: number }} SavedCommand
- * @typedef {{ pid: string, name: string, createdAt: number, updatedAt: number }} SavedPlayer
+ * @typedef {{ pid: string, name: string, language: import('../src/core/player.js').Language,
+ *   createdAt: number, updatedAt: number }} SavedPlayer
  */
 
 /**
@@ -71,8 +72,8 @@ export function openStorage(file = ':memory:') {
       AND (creator = @pid OR EXISTS (SELECT 1 FROM json_each(games.seats) WHERE value = @pid))
     ORDER BY updated_at DESC, id`);
   const upsertPlayer = db.prepare(`
-    INSERT INTO players (pid, name, created_at, updated_at) VALUES (@pid, @name, @now, @now)
-    ON CONFLICT (pid) DO UPDATE SET name = excluded.name, updated_at = excluded.updated_at`);
+    INSERT INTO players (pid, name, language, created_at, updated_at) VALUES (@pid, @name, @language, @now, @now)
+    ON CONFLICT (pid) DO UPDATE SET name = excluded.name, language = excluded.language, updated_at = excluded.updated_at`);
   const selectPlayer = db.prepare('SELECT * FROM players WHERE pid = ?');
 
   /** A command is logged, and its game marked active, together or not at all. */
@@ -177,12 +178,13 @@ export function openStorage(file = ':memory:') {
     },
 
     /**
-     * Record a player who has signed in, or give them a new name.
+     * Record a player who has signed in, or change their name or language.
      * @param {string} pid
      * @param {string} name
+     * @param {import('../src/core/player.js').Language} [language]
      */
-    savePlayer(pid, name) {
-      upsertPlayer.run({ pid, name, now: Date.now() });
+    savePlayer(pid, name, language = 'auto') {
+      upsertPlayer.run({ pid, name, language, now: Date.now() });
     },
 
     /**
@@ -191,7 +193,9 @@ export function openStorage(file = ':memory:') {
      */
     loadPlayer(pid) {
       const row = /** @type {any} */ (selectPlayer.get(pid));
-      return row ? { pid: row.pid, name: row.name, createdAt: row.created_at, updatedAt: row.updated_at } : null;
+      return row ? {
+        pid: row.pid, name: row.name, language: row.language, createdAt: row.created_at, updatedAt: row.updated_at,
+      } : null;
     },
 
     /** Whether writes go through a write-ahead log. */
@@ -425,6 +429,16 @@ function migrate(db) {
       DELETE FROM games;
       PRAGMA user_version = 21;
     `))();
+  }
+  if (version < 22) {
+    // Each player's language for the page: 'auto', 'en' or 'ru'
+    // (src/core/player.js). Games are kept; players start on 'auto'. A
+    // table that has the column already (one the tests age by hand) keeps it.
+    const has = db.prepare("SELECT 1 FROM pragma_table_info('players') WHERE name = 'language'").get();
+    db.transaction(() => {
+      if (!has) db.exec("ALTER TABLE players ADD COLUMN language TEXT NOT NULL DEFAULT 'auto'");
+      db.exec('PRAGMA user_version = 22');
+    })();
   }
 }
 

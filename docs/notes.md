@@ -12,15 +12,17 @@ CLAUDE.md has the rules for working on the code; this is the background.
   player sees it, show screenshots, and say whether a deploy keeps saved
   games. `npm run smoke` leaves screenshots in `smoke-output/`: `game-blue.png`,
   `crew.png`, `heroes.png`, `phone.png`, `effects.png`, `lobby*.png`,
-  `scores.png`, and `failed-*.png` when a check fails.
+  `login.png`, `settings.png`, `scores.png`, and `failed-*.png` when a check
+  fails.
 - The work happens in Claude Code cloud sessions, on a `claude/…` branch.
   Each batch of requests becomes one pull request, opened when he asks for
   it. He merges it on GitHub, then deploys on his Debian server with
   `git pull` and `sudo deploy/install.sh` (deploy/README.md). After a merge,
   the next work starts from a fresh `main`.
 - A deploy keeps saved games unless it bumps `STATE_VERSION` (games are then
-  rebuilt from their command logs) or adds a database step (README, "Not
-  done yet", says what that drops). A rule change that keeps the state's
+  rebuilt from their command logs) or adds a database step that drops them
+  (`migrate()` in server/storage.js says what each step does; adding a
+  column, such as players' language, keeps them). A rule change that keeps the state's
   shape applies to games under way from then on.
 - It began as a turn-based claude.ai artifact ("Vigame Hex Board"), was
   recovered from it into this repository, and was rebuilt as a real-time
@@ -173,6 +175,28 @@ Agreed in outline; nothing built yet.
 - **Order:** first the switch and Painted mode with stand-in textures made
   from noise, to check the approach and the speed; then his four ground
   textures; then the decorations.
+
+### Russian for the lobby and the game's controls
+
+The first step is built: each player has a language, Auto (the default),
+English or Russian, chosen on the login page and the settings page and kept
+on the server (`language` in the players table, `/api/me`). Auto stands for
+Russian when the name has Cyrillic letters, else the first of the
+browser's languages that the page has, else English (`autoLanguage` in
+src/client/language.js; its Auto option says which). Nothing is translated
+yet; the author asked to wait. His plan: translate only the lobby and the
+game's controls, each text about as long as the English so the layout
+holds, and take care with short texts and texts built up as the game goes.
+Things to watch there:
+
+- A button's bold letter is its key (**T**ower, **U**pgrade): a Russian
+  word either marks its own letter, or the keys stay Latin.
+- Short labels padded to line up, such as "Att Lv 15" in the Heroes list.
+- Counts with a noun ("3 heroes died"): Russian has three plural forms.
+- Texts the server sends in English (refusals, why New game is refused),
+  which the page would have to put in its own words.
+- Every view switch is a page load, so the page can read its language once,
+  as it loads.
 
 ### Less drawing during play
 

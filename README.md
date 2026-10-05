@@ -26,8 +26,14 @@ what the server sends and passes on the player's clicks as commands.
 
 Run `npm start` and open http://127.0.0.1:2567.
 
-- **Log in** with a name and the answer to a small sum. A browser stays
-  logged in across visits.
+- **Log in** with a name, a language and the answer to a small sum. A
+  browser stays logged in across visits. **Settings**, next to your name
+  in the lobby, changes the name and the language.
+- **Language**: Auto (the default), English or Russian. Auto picks Russian
+  for a name in Cyrillic letters, else the first of the browser's
+  languages that is English or Russian, else English; its option says which
+  it picked.
+  Nothing is translated yet, so for now everything is in English.
 - **The lobby** lists your games under way, games with a free seat, other
   people's under way with every seat taken (**Watch** opens one as an
   observer), and the finished ones (anyone's; **Scores** opens one at its
@@ -342,12 +348,13 @@ have one, install it with `npx playwright install chromium`.
 | `src/core/rules.js` | The numbers: tick rate, sides and modes, skills and experience, food and hunger, fighting, raiders, the Dark Lord's horde, building types. |
 | `src/core/names.js` | Medieval names for units, and which face goes with a name (`portraitOf`). |
 | `src/core/game.js` | The game core: the state as plain JSON, `applyCommand`, `advance` (one tick), `occupancy`, `checkState`, `publicView`. Deterministic. |
-| `src/core/player.js` | Player-name rules, checked on the page and on the server. |
+| `src/core/player.js` | Player-name rules and the languages a player may choose, checked on the page and on the server. |
 | `src/client/` | The page, served as it is. |
-| `src/client/index.html`, `style.css` | Markup and styles for the three views: login, lobby, game. |
+| `src/client/index.html`, `style.css` | Markup and styles for the views: login, lobby, settings, game. |
 | `src/client/main.js` | Entry point: picks the view. |
 | `src/client/api.js` | The browser's token, and the HTTP calls. |
-| `src/client/login.js`, `lobby.js` | The login page and the lobby. |
+| `src/client/login.js`, `lobby.js`, `settings.js` | The login page, the lobby, and the settings page (`?settings`: name and language). |
+| `src/client/language.js` | Which language Auto stands for, from the player's name and the browser. |
 | `src/client/play.js` | The game view: input, HUD, controls. |
 | `src/client/net.js` | The connection to a game on the server. |
 | `src/client/camera.js`, `render.js` | Pan and zoom, and the canvas renderer: terrain, buildings, marching units between cells, picks, hover. |
@@ -492,15 +499,17 @@ and the answer to a sum such as `3 + 4`. The sum keeps out scripts that
 don't know about this server, not ones written for it. A name is 1 to 15
 letters or digits in any script, with space, `-`, `_`, `.` and `'` allowed
 between them; `src/core/player.js` checks it on the page and on the server.
-Other viewers see it next to the seat. Signing in again renames.
+Other viewers see it next to the seat. The settings page changes the name,
+and the player's language (`auto`, `en` or `ru`), with no sum.
 
 HTTP API:
 
 | Request | Result |
 | --- | --- |
-| `POST /api/me` | Who a token belongs to: `{ token }` gives `{ pid, name }`, or `null` if it hasn't signed in. |
+| `POST /api/me` | Who a token belongs to: `{ token }` gives `{ pid, name, language }`, or `null` if it hasn't signed in. |
 | `GET /api/challenge` | A sum to answer when signing in: `{ id, question }`. Each one answers once and lasts 10 minutes. |
-| `POST /api/players` | Signs in (or renames): `{ token, name, challenge, answer }` gives `{ pid, name }`. `400` for a bad token or name, `403` for a wrong answer. |
+| `POST /api/players` | Signs in: `{ token, name, language?, challenge, answer }` gives `{ pid, name, language }` (`language` `auto` by default). `400` for a bad token, name or language, `403` for a wrong answer. |
+| `POST /api/settings` | Changes a signed-in player's settings: `{ token, name?, language? }` gives `{ pid, name, language }`; what isn't given stays. `401` if not signed in, `400` for a bad name or language. |
 | `POST /api/games` | Starts a game with a random map: `{ token, mode?, players? }` of a signed-in player (`mode` `coop`, `easy`, `shared` or `ffa`, `players` 1 to 8; by default a cooperation game for one) gives `201 { id }`; `401` if not signed in, `400` for a bad mode or number; `409 { error, games }` while the player has too many games on the go (three of theirs waiting for a player, or seats in three under way), with those games as `GET /api/games` lists them, each with `clear`: `'delete'`, `'leave'` or `null`. |
 | `POST /api/games/:id/delete` | `{ token }`: deletes a game under way that the player started and nobody else holds a seat in, closing its room if open; `403` if they didn't start it, `409` if someone else plays it or it is over. |
 | `POST /api/games/:id/leave` | `{ token }`: gives up the player's seat in a game under way, through its room if open; `409` if they hold none or it is over. |
@@ -513,7 +522,8 @@ The database has three tables: `games` (each game's seed, seats, who
 started it and when (neither shown to players), and a snapshot of its
 state, saved every ten seconds and when its room closes),
 `commands` (every accepted command with its tick, in order, never changed)
-and `players` (each signed-in player's public id and name; never the token).
+and `players` (each signed-in player's public id, name and language; never
+the token).
 A room reopening a game loads its snapshot and replays the commands logged
 after it; if the snapshot is unreadable, it replays the whole log from the
 opening position.
@@ -548,8 +558,9 @@ comes next.
     continuous ones.
   - `npm audit` reports advisories in `@colyseus/auth`, which Colyseus
     installs alongside its core; this server switches it off (`auth: false`).
-  - Upgrading the database to this version drops games saved by earlier
-    versions, whose rules differ; players keep their names.
+  - Some database upgrades drop the games saved before them, whose rules
+    differ (the latest that does: version 21); players keep their names.
+    Version 22, players' language, keeps games.
 - A seat is held until its player releases it, however long they are away,
   and the game waits for them.
 - The lobby lists only the 50 most recently active games.
