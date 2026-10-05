@@ -1091,6 +1091,59 @@ async function threeBrowsers(browser, url, { full, label }) {
   for (const p of [a, b, c, lost]) await p.context().close();
 }
 
+/**
+ * Latvian on a phone and Finnish on a desktop, each by its browser: the
+ * login page, the lobby, and a game's buttons, their bold keys and their fit.
+ * @param {import('playwright').Browser} browser
+ * @param {string} url
+ */
+async function latvianFinnish(browser, url) {
+  const lv = await openPage(browser, 'latvian', { ...PHONE, locale: 'lv-LV' });
+  await lv.goto(url);
+  await lv.waitForSelector('#login:not([hidden])');
+  await waitText(lv, '#login-submit', 'Spēlēt');
+  await waitText(lv, '#login-language option[value="auto"]', 'Auto (Latviešu)');
+  await logIn(lv, 'Līga', { touch: true });
+  await inLobby(lv);
+  await waitText(lv, '#lobby-new', 'Jauna spēle');
+  await waitText(lv, '#lobby-mode option[value="coop"]', 'Sadarbība: kopā pret Tumšo Kungu');
+  assert.equal(await lv.evaluate(() => document.documentElement.lang), 'lv');
+  assert.equal(await lv.locator('#lobby-how-section [lang="lv"]').count(), 1);
+  await lv.screenshot({ path: join(OUT, 'lobby-lv.png') });
+  await lv.selectOption('#lobby-players', '2');
+  await lv.tap('#lobby-new');
+  await inGame(lv);
+  const fi = await newPlayer(browser, lv.url(), 'finnish', 'Aino', { viewport: { width: 1280, height: 800 }, locale: 'fi-FI' });
+  await inGame(fi);
+  await waitMatch(lv, '#time', /^0:0[1-9]$/);
+
+  // Each key's letter in bold (on the phone, not bold), every label fitting.
+  const bold = (/** @type {import('playwright').Page} */ page) => page.$$eval('#controls button[aria-keyshortcuts]', (els) => els.map((el) => el.querySelector('b')?.textContent));
+  assert.equal(await lv.locator('#build-tower').innerText(), 'Tornis\n60');
+  assert.equal(await lv.locator('#seat-button').innerText(), 'Atlaist');
+  assert.deepEqual(await bold(lv), ['T', 'R', 'e', 'F', 'B', 'U', 'K', 'V', 'A']);
+  const lvFit = await controlsFit(lv);
+  assert.deepEqual(lvFit.over, [], 'a Latvian label overflows its button');
+  assert.ok(Object.values(lvFit.lines).every((n) => n <= 2) && lvFit.rows <= 3, `Latvian buttons: ${JSON.stringify(lvFit)}`);
+  await lv.screenshot({ path: join(OUT, 'game-lv-phone.png') });
+
+  assert.equal(await fi.locator('#build-farm').innerText(), 'Farmi · 30');
+  assert.equal(await fi.getAttribute('#build-farm', 'title'), 'Farmi (F): 30 kiveä');
+  assert.deepEqual(await bold(fi), ['T', 'V', 'p', 'F', 'J', 'K', 'R', 'S', 'y']);
+  const fiFit = await controlsFit(fi);
+  assert.deepEqual(fiFit.over, [], 'a Finnish label overflows its button');
+  assert.ok(Object.values(fiFit.lines).every((n) => n === 1) && fiFit.width <= 200, `Finnish buttons: ${JSON.stringify(fiFit)}`);
+  await fi.screenshot({ path: join(OUT, 'game-fi.png') });
+  // Its keys, and the English ones too (B is Joukko's). (Vaunu, a wagon,
+  // wants dark metal the side hasn't got.)
+  for (const [key, id] of [['f', 'build-farm'], ['j', 'build-band'], ['p', 'build-pit'], ['b', 'build-band']]) {
+    await fi.keyboard.press(key);
+    assert.equal(await fi.getAttribute(`#${id}`, 'aria-pressed'), 'true', `${key} doesn't press ${id}`);
+    await fi.keyboard.press('Escape');
+  }
+  for (const p of [lv, fi]) await p.context().close();
+}
+
 /** The login page, the lobby, settings and a Shared Easy Lord game on a phone, with a desktop teammate. */
 async function phone(browser, url) {
   // A browser in Russian: the login page is in Russian, and Auto stands
@@ -1288,6 +1341,7 @@ const scenarios = /** @type {Array<[string, () => Promise<void>]>} */ ([
   ['login, lobby and a game, three browsers', () => threeBrowsers(browser, games.url, { full: true, label: 'direct' })],
   ['the same under a subfolder, behind a proxy', () => threeBrowsers(browser, proxied.url, { full: false, label: 'proxied' })],
   ['on a phone', () => phone(browser, games.url)],
+  ['Latvian on a phone, Finnish on a desktop', () => latvianFinnish(browser, games.url)],
   ['a finished game\'s points', () => finished(browser, games.url)],
 ]).filter(([name]) => name.includes(only));
 

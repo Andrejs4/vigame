@@ -77,8 +77,8 @@ test('challenges expire, and only so many are held at once', () => {
   assert.equal(challenges.size(), 1, 'expired ones are dropped as new ones arrive');
 });
 
-test('a player\'s language is Auto, English or Russian, by its code', () => {
-  assert.deepEqual(LANGUAGES, ['auto', 'en', 'ru']);
+test('a player\'s language is Auto, English, Russian, Latvian or Finnish, by its code', () => {
+  assert.deepEqual(LANGUAGES, ['auto', 'en', 'ru', 'lv', 'fi']);
   for (const code of LANGUAGES) assert.equal(cleanLanguage(code), code);
   for (const code of ['', 'EN', 'en-US', 'de', 'toString', null, undefined, 1, ['en']]) {
     assert.equal(cleanLanguage(code), null, JSON.stringify(code));

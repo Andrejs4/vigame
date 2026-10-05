@@ -11,7 +11,7 @@ CLAUDE.md has the rules for working on the code; this is the background.
   result on his server; he doesn't read the code. So say what changed as a
   player sees it, show screenshots, and say whether a deploy keeps saved
   games. `npm run smoke` leaves screenshots in `smoke-output/`: `game-blue.png`,
-  `crew.png`, `heroes.png`, `phone.png`, `effects.png`, `lobby*.png`,
+  `crew.png`, `heroes.png`, `phone*.png`, `game-*.png`, `effects.png`, `lobby*.png`,
   `login*.png`, `settings*.png`, `scores.png`, and `failed-*.png` when a check
   fails.
 - The work happens in Claude Code cloud sessions, on a `claude/…` branch.
@@ -181,7 +181,7 @@ Agreed in outline; nothing built yet.
   from noise, to check the approach and the speed; then his four ground
   textures; then the decorations.
 
-### Russian for the lobby and the game's controls
+### Translations: Russian, Latvian, Finnish
 
 Built so far: each player has a language, Auto (the default), English or
 Russian, chosen on the login page and the settings page and kept on the
@@ -255,6 +255,19 @@ no Russian letter may sit on another button's English key (Бригада's И
 would be B, Band's), and the tests check it. A phone shows no bold letters
 (the author: no keys there), which also leaves its labels a little more
 room.
+
+Latvian and Finnish followed, with every word Russian has. Their buttons
+were measured the same way, and fit as English does on both phones (more
+room than Russian in the first row: Latvian 30 px, Finnish 14); the
+longer words (Vezums, Karjers, Pulks; Louhos, Maatila, Paranna) push
+Upgrade off the first row. Keys by the same rule, and the author chose
+words that keep the English key over nicer ones ("slightly lame, to buy
+consistent keys"): Atakot (A) over Uzbrukt, Farmi (F) over Tila. Their
+keyboards have the English letters where English ones do, so no layout
+table is needed; no key is a letter with a diacritic (ā, ņ, ä, ö).
+Latvian has three plural kinds (zero, one, other), Finnish two. A browser
+listing Latvian before Russian now gets Latvian for Auto (a Cyrillic name
+still picks Russian once signed in).
 
 His plan: translate only the lobby and the game's controls, each text about
 as long as the English so the layout holds, and take care with short texts

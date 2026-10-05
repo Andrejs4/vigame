@@ -4,7 +4,7 @@
  */
 
 /** The languages the page offers, each by its own name. */
-export const LANGUAGE_NAMES = { en: 'English', ru: 'Русский' };
+export const LANGUAGE_NAMES = { en: 'English', ru: 'Русский', lv: 'Latviešu', fi: 'Suomi' };
 
 /** @typedef {keyof typeof LANGUAGE_NAMES} PageLanguage */
 

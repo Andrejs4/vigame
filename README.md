@@ -29,18 +29,21 @@ Run `npm start` and open http://127.0.0.1:2567.
 - **Log in** with a name, a language and the answer to a small sum. A
   browser stays logged in across visits. **Settings**, next to your name
   in the lobby, changes the name and the language.
-- **Language**: Auto (the default), English or Russian; Auto's option says
-  which it picked. The login page, the settings page and the lobby (How
-  to play and About too) are in Russian already; the login and settings
-  pages turn at once when Russian is chosen. On the login page, Auto goes
-  by the first of the browser's languages that is English or Russian, else
-  picks Russian for a name typed in Cyrillic letters, else English. Once
-  signed in (settings, lobby, game), Auto picks Russian for a name in
-  Cyrillic letters first, then goes by the browser, else English. In a
-  game the buttons are in Russian too (Башня, Воз, Яма, Ферма, Отряд,
-  Апгрейд, Бригада…, Герои…, Вернуть, Бросить, Атака…, Отпусти), chosen
-  short enough that a phone's rows of buttons stay as in English; the
-  panels, messages and dialogs are in English for now.
+- **Language**: Auto (the default), English, Russian, Latvian or Finnish;
+  Auto's option says which it picked. The login page, the settings page,
+  the lobby (How to play and About too) and a game's buttons are in each
+  of them; the login and settings pages turn at once when another is
+  chosen. On the login page, Auto goes by the first of the browser's
+  languages that the game has, else picks Russian for a name typed in
+  Cyrillic letters, else English. Once signed in (settings, lobby, game),
+  Auto picks Russian for a name in Cyrillic letters first, then goes by
+  the browser, else English. The buttons' words were chosen short enough
+  that a phone's rows of buttons stay as in English: Башня, Воз, Яма,
+  Ферма, Отряд, Апгрейд, Бригада…, Герои…, Вернуть, Бросить, Атака…,
+  Отпусти; Tornis, Rati, Bedre, Ferma, Bars, Uzlabot, Komanda…, Varoņi…,
+  Mājās, Atcelt, Atakot…, Atlaist; Torni, Vaunu, Kuoppa, Farmi, Joukko,
+  Kehitä, Ryhmä…, Sankarit…, Kotiin, Peru, Hyökkää…, Vapauta. The panels,
+  messages and dialogs are in English for now.
 - **The lobby** lists your games under way, games with a free seat, other
   people's under way with every seat taken (**Watch** opens one as an
   observer), and the finished ones (anyone's; **Scores** opens one at its
@@ -249,12 +252,15 @@ Run `npm start` and open http://127.0.0.1:2567.
 - **Keys**: a button's bold letter presses it: **T**ower, **W**agon, **P**it,
   **F**arm and **B**and pick what to place (again to stop), **U**pgrade,
   **C**rew and **A**ttack act on the selected building, **H**eroes on your
-  castle, and Escape lets go. In Russian the bold letters are Russian:
-  **Б**ашня, **В**оз, **Я**ма, Ферм**а**, **О**тряд, Ап**г**рейд,
-  Брига**д**а, Ге**р**ои, А**т**ака. Where the word has the letter on the
-  English key, it is that one (Г is on U, Р on H, А on F), else the first
-  letter, else one on a key the English ones leave free; and the English
-  keys work in Russian too. Every key works whichever layout the keyboard
+  castle, and Escape lets go. In another language the bold letters are
+  its own: **Б**ашня, **В**оз, **Я**ма, Ферм**а**, **О**тряд, Ап**г**рейд,
+  Брига**д**а, Ге**р**ои, А**т**ака; **T**ornis, **R**ati, B**e**dre,
+  **F**erma, **B**ars, **U**zlabot, **K**omanda, **V**aroņi, **A**takot;
+  **T**orni, **V**aunu, Kuo**p**pa, **F**armi, **J**oukko, **K**ehitä,
+  **R**yhmä, **S**ankarit, H**y**ökkää. Where the word has the letter on
+  the English key, it is that one (in Russian Г is on U, Р on H, А on F),
+  else the first letter, else one on a key the English ones leave free;
+  and the English keys work in every language. Every key works whichever layout the keyboard
   is set to (Б is the comma key). On a phone a button's price is on a line
   of its own, and no letter is bold, as a phone has no keys.
   Choosing a crew, Enter sends it, as does the key that opened the chooser
@@ -517,7 +523,7 @@ don't know about this server, not ones written for it. A name is 1 to 15
 letters or digits in any script, with space, `-`, `_`, `.` and `'` allowed
 between them; `src/core/player.js` checks it on the page and on the server.
 Other viewers see it next to the seat. The settings page changes the name,
-and the player's language (`auto`, `en` or `ru`), with no sum.
+and the player's language (`auto`, `en`, `ru`, `lv` or `fi`), with no sum.
 
 HTTP API:
 

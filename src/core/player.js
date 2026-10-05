@@ -55,7 +55,7 @@ export function cleanGameName(text) {
  * The languages a player may choose for the page: `auto` lets the page pick
  * one (`autoLanguage` in src/client/language.js), the rest are languages.
  */
-export const LANGUAGES = /** @type {const} */ (['auto', 'en', 'ru']);
+export const LANGUAGES = /** @type {const} */ (['auto', 'en', 'ru', 'lv', 'fi']);
 
 /** @typedef {typeof LANGUAGES[number]} Language */
 

@@ -431,8 +431,8 @@ function migrate(db) {
     `))();
   }
   if (version < 22) {
-    // Each player's language for the page: 'auto', 'en' or 'ru'
-    // (src/core/player.js). Games are kept; players start on 'auto'. A
+    // Each player's language for the page: 'auto', or a language of
+    // LANGUAGES (src/core/player.js). Games are kept; players start on 'auto'. A
     // table that has the column already (one the tests age by hand) keeps it.
     const has = db.prepare("SELECT 1 FROM pragma_table_info('players') WHERE name = 'language'").get();
     db.transaction(() => {

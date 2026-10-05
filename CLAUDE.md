@@ -129,7 +129,8 @@ graphics work.
 - Views switch with a page load: `?game=<id>` is a game, `?settings` the
   player's name and language, anything else the lobby, and the login page
   comes first while the browser isn't signed in.
-- Each player has a language (Auto, English or Russian), kept on the
+- Each player has a language (Auto, English, Russian, Latvian or Finnish:
+  `LANGUAGES` in player.js, `LANGUAGE_NAMES` in language.js), kept on the
   server. The login page, the settings page, the lobby and the game's
   buttons are translated: their words are `WORDS` in words.js, which the
   tests keep complete and about as long as the English; a static text in

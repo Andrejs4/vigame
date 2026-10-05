@@ -8,7 +8,7 @@ import { LANGUAGES } from '../src/core/player.js';
 
 test('the page offers each language a player may choose, by its own name', () => {
   assert.deepEqual(Object.keys(LANGUAGE_NAMES), LANGUAGES.filter((l) => l !== 'auto'));
-  assert.deepEqual(LANGUAGE_NAMES, { en: 'English', ru: 'Русский' });
+  assert.deepEqual(LANGUAGE_NAMES, { en: 'English', ru: 'Русский', lv: 'Latviešu', fi: 'Suomi' });
 });
 
 test('Auto, once signed in: Russian for a name in Cyrillic letters, whatever the browser says', () => {
@@ -19,8 +19,10 @@ test('Auto, once signed in: Russian for a name in Cyrillic letters, whatever the
 
 test('Auto, once signed in: else the first of the browser\'s languages the page has', () => {
   assert.equal(autoLanguage(['ru-RU', 'ru', 'en-US', 'en']), 'ru');
-  assert.equal(autoLanguage(['lv', 'ru', 'en'], ''), 'ru');
-  assert.equal(autoLanguage(['lv', 'en-GB', 'ru'], 'Jānis'), 'en');
+  assert.equal(autoLanguage(['de', 'ru', 'en'], ''), 'ru');
+  assert.equal(autoLanguage(['de', 'en-GB', 'ru'], 'Jānis'), 'en');
+  assert.equal(autoLanguage(['lv', 'ru', 'en'], 'Jānis'), 'lv');
+  assert.equal(autoLanguage(['fi-FI', 'sv'], 'Aino'), 'fi');
   assert.equal(autoLanguage(['RU'], 'Ann'), 'ru', 'tags in any case');
 });
 
@@ -34,7 +36,8 @@ test('Auto, once signed in: else English', () => {
 test('Auto on the login page: the browser first, then the name typed, then English', () => {
   assert.equal(loginLanguage(['en-US', 'en'], 'Анна'), 'en');
   assert.equal(loginLanguage(['ru-RU'], 'Ann'), 'ru');
-  assert.equal(loginLanguage(['lv', 'ru', 'en'], ''), 'ru');
+  assert.equal(loginLanguage(['de', 'ru', 'en'], ''), 'ru');
+  assert.equal(loginLanguage(['lv', 'ru', 'en'], 'Анна'), 'lv');
   assert.equal(loginLanguage(['de'], 'Анна'), 'ru');
   assert.equal(loginLanguage(['de'], 'Ann'), 'en');
   assert.equal(loginLanguage([]), 'en');
@@ -67,14 +70,18 @@ test('each button\'s key is a letter of its label, on a key of its own; English 
     assert.equal(new Set(keys).size, keys.length, `${language}: two buttons share a key`);
     buttons.forEach((w, i) => assert.ok(String(words[labelOf(w)]).toLowerCase().includes(keys[i]), `${language}.${w} is not in its label`));
   }
-  // A Russian key sits where its button's English key is, or on a key the
-  // English ones leave free.
+  // A key sits where its button's English key is, or on a key the English
+  // ones leave free: a Russian letter on its ЙЦУКЕН key, a Latin one on its
+  // own (Latvian and Finnish keyboards have them where English ones do).
   const keyOf = Object.fromEntries(Object.entries(RUSSIAN_KEYS).map(([latin, russian]) => [russian, latin]));
   const english = Object.fromEntries(buttons.map((w) => [String(WORDS.en[/** @type {keyof typeof WORDS.en} */ (w)]).toLowerCase(), w]));
-  for (const w of buttons) {
-    const at = keyOf[String(WORDS.ru[/** @type {keyof typeof WORDS.ru} */ (w)]).toLowerCase()];
-    assert.ok(at, `ru.${w} is on no key`);
-    assert.ok(!english[at] || english[at] === w, `ru.${w} sits on ${english[at]}'s English key`);
+  for (const [language, words] of Object.entries(WORDS)) {
+    for (const w of buttons) {
+      const key = String(words[/** @type {keyof typeof WORDS.en} */ (w)]).toLowerCase();
+      const at = /^[a-z]$/.test(key) ? key : keyOf[key];
+      assert.ok(at, `${language}.${w} is on no key`);
+      assert.ok(!english[at] || english[at] === w, `${language}.${w} sits on ${english[at]}'s English key`);
+    }
   }
 });
 
@@ -112,13 +119,18 @@ test('every language has every word, with the same {placeholders}, about as long
 });
 
 test('a word that goes with a count takes the form its language uses for it', () => {
-  const waiting = (/** @type {'en' | 'ru'} */ language, /** @type {number} */ n) => say(language, { word: 'tooManyWaiting', values: { n } });
+  const waiting = (/** @type {import('../src/client/language.js').PageLanguage} */ language, /** @type {number} */ n) => say(language, { word: 'tooManyWaiting', values: { n } });
   assert.deepEqual([1, 3].map((n) => waiting('en', n)), ['1 game of yours waiting for a player', '3 games of yours waiting for a player']);
   assert.deepEqual([1, 3, 5, 21, 22, 25].map((n) => waiting('ru', n)), [
     '1 ваша ждёт игрока', '3 ваши ждут игрока', '5 ваших ждут игрока',
     '21 ваша ждёт игрока', '22 ваши ждут игрока', '25 ваших ждут игрока',
   ]);
   assert.equal(say('ru', { word: 'tooManySeated', values: { n: 3 } }), 'вы играете в 3 идущих играх');
+  assert.deepEqual([1, 3, 10, 21].map((n) => waiting('lv', n)), [
+    '1 jūsu spēle gaida spēlētāju', '3 jūsu spēles gaida spēlētāju', '10 jūsu spēles gaida spēlētāju', '21 jūsu spēle gaida spēlētāju',
+  ]);
+  assert.deepEqual([1, 3].map((n) => waiting('fi', n)), ['1 pelisi odottaa pelaajaa', '3 peliäsi odottaa pelaajaa']);
+  assert.equal(say('fi', { word: 'stoneCost', values: { n: 60 } }), '60 kiveä');
 });
 
 test('the page\'s texts name words that exist, in their English; How to play and About are in every language', () => {

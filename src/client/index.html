@@ -36,6 +36,8 @@
         <option value="auto" selected>Auto</option>
         <option value="en" lang="en">English</option>
         <option value="ru" lang="ru">Русский</option>
+        <option value="lv" lang="lv">Latviešu</option>
+        <option value="fi" lang="fi">Suomi</option>
       </select>
     </label>
     <label><span id="login-question">Loading the question&hellip;</span>
@@ -59,6 +61,8 @@
         <option value="auto">Auto</option>
         <option value="en" lang="en">English</option>
         <option value="ru" lang="ru">Русский</option>
+        <option value="lv" lang="lv">Latviešu</option>
+        <option value="fi" lang="fi">Suomi</option>
       </select>
     </label>
     <p class="error" id="settings-error" role="alert"></p>
@@ -168,6 +172,55 @@
           кнопке — её клавиша, на любой раскладке (английские тоже работают);
           при выборе бригады Enter или та же клавиша ещё раз отправляет её.</p>
       </div>
+      <div lang="lv" hidden>
+        <p>Vienības mājās, jūsu pilī, audzina jaunas: jo vairāk to ir un jo
+          labāk tās vairojas, jo ātrāk. Jūsu puse zaudē, kad krīt jūsu
+          pils.</p>
+        <p>Būvējiet pie savām stāvošajām ēkām. Izvēlētā komanda uzceļ ēku, kad
+          nonāk tur; līdz tam tai ir puse izturības, un tā nevienu nesargā.
+          Bedres komanda rok akmeni, ar ko maksā par torņiem, fermām un
+          uzlabojumiem; fermas audzē pārtiku. Ūdeni nevar šķērsot, krūmājos
+          nevar būvēt, un pa tiem iet divreiz lēnāk.</p>
+        <p>Izvēlieties ēku un nospiediet „Komanda”, lai izvēlētos, kas tur
+          strādā; „Mājās” sūta tos mājās. Pils „Varoņi” rāda jūsu varoņus,
+          kuri iegūst līmeņus ātrāk par citiem. Katru minūti vienības ēd:
+          trūcīgas maltītes tās izsalcina, un pilnā badā tās var nomirt.</p>
+        <p>Izvēlieties ratus vai baru, tad šūnu, lai tos pārvietotu; tie ved
+          savu komandu. Rati nevar iet cauri citām ēkām; bars iet cauri visam
+          jūsējam, nedod aizsegu un izjūk, kad tajā neviena nav. Vienības ēkās
+          un baros sit ienaidniekus, ko var aizsniegt; nospiediet „Atakot”,
+          tad ienaidnieka ēku, lai izvēlētos mērķi.</p>
+        <p>Velciet, lai pārvietotu skatu, ritenītis tuvina; nospiediet
+          minikarti, lai skatītos jebkur. Pogas treknais burts ir tās
+          taustiņš (angliskie arī der); izvēloties komandu, Enter vai tas
+          pats taustiņš vēlreiz to nosūta.</p>
+      </div>
+      <div lang="fi" hidden>
+        <p>Linnasi kotona olevat yksiköt kasvattavat uusia: mitä enemmän heitä
+          on ja mitä paremmin he lisääntyvät, sitä nopeammin. Puolesi häviää,
+          kun linnasi kaatuu.</p>
+        <p>Rakenna seisovien rakennustesi lähelle. Valitsemasi ryhmä
+          pystyttää rakennuksen, kun se pääsee perille; sitä ennen sillä on
+          puolet kestävyydestään, eikä se suojaa ketään. Kuopan ryhmä louhii
+          kiveä, jolla maksetaan tornit, farmit ja kehitykset; farmit
+          kasvattavat ruokaa. Vettä ei voi ylittää, pensaikkoon ei voi
+          rakentaa, ja siinä kulkeminen on kaksi kertaa hitaampaa.</p>
+        <p>Valitse rakennus ja paina Ryhmä valitaksesi, kuka siellä
+          työskentelee; Kotiin lähettää heidät kotiin. Linnan Sankarit näyttää
+          sankarisi, jotka nousevat tasoissa muita nopeammin. Joka minuutti
+          yksiköt syövät: niukat ateriat tekevät heistä nälkäisiä, ja täydessä
+          nälässä he voivat nääntyä.</p>
+        <p>Valitse vaunu tai joukko ja sitten ruutu siirtääksesi sitä; se
+          kuljettaa ryhmänsä. Vaunu ei pääse muiden rakennusten läpi; joukko
+          kulkee kaiken omasi läpi, ei anna suojaa ja hajoaa, kun siinä ei ole
+          ketään. Rakennuksissa ja joukoissa olevat yksiköt iskevät
+          ulottuvilla oleviin vihollisiin; paina Hyökkää ja sitten vihollisen
+          rakennusta valitaksesi kohteen.</p>
+        <p>Vedä siirtääksesi näkymää, rullalla zoomaat; paina pikkukarttaa
+          katsoaksesi minne tahansa. Painikkeen lihavoitu kirjain on sen
+          näppäin (englanninkielisetkin toimivat); ryhmää valitessa Enter tai
+          sama näppäin uudelleen lähettää sen.</p>
+      </div>
     </details>
     <details class="games-list prose" id="lobby-about-section">
       <summary><h2 data-word="about">About</h2></summary>
@@ -206,6 +259,42 @@
           значок вкладки и картинки страницы входа созданы в Perplexity, для
           некоммерческого использования. Шрифты: IBM Plex, по лицензии SIL
           Open Font License. Сделано на Colyseus, Express и SQLite.</p>
+      </div>
+      <div lang="lv" hidden>
+        <p>Vigame ir reāllaika stratēģijas spēle uz sešstūru kartes,
+          spēlējama pārlūkā, un tā vēl aug.</p>
+        <p>Tas ir autora pirmais tīrais vaibkodēšanas projekts, un veiksmīgs:
+          veidots tikai sarunās ar Claude, autoram ne reizi neieskatoties
+          kodā.</p>
+        <p>Tās pirmkods un vieta, kur ziņot par kļūdu vai ko ieteikt:
+          <a href="https://github.com/Andrejs4/vigame" target="_blank" rel="noopener">github.com/Andrejs4/vigame</a>.</p>
+        <p>Kods ir brīva programmatūra ar
+          <a href="https://www.gnu.org/licenses/old-licenses/gpl-2.0.html" target="_blank" rel="noopener">GNU GPL</a>
+          licenci, 2. versiju vai jaunāku. Attēli:
+          <a href="https://game-icons.net" target="_blank" rel="noopener">game-icons.net</a>,
+          autori Lorc un Delapouite,
+          <a href="https://creativecommons.org/licenses/by/3.0/" target="_blank" rel="noopener">CC BY 3.0</a>;
+          cilnes ikona un pieteikšanās lapas attēli radīti ar Perplexity,
+          nekomerciālai lietošanai. Fonti: IBM Plex, ar SIL Open Font
+          License. Veidots ar Colyseus, Express un SQLite.</p>
+      </div>
+      <div lang="fi" hidden>
+        <p>Vigame on reaaliaikainen strategiapeli kuusikulmiokartalla,
+          pelataan selaimessa, ja se kasvaa yhä.</p>
+        <p>Se on tekijänsä ensimmäinen puhdas vibe coding -projekti, ja
+          onnistunut: tehty kokonaan keskustellen Clauden kanssa, tekijän
+          katsomatta kertaakaan koodiin.</p>
+        <p>Sen lähdekoodi ja paikka ilmoittaa viasta tai ehdottaa jotain:
+          <a href="https://github.com/Andrejs4/vigame" target="_blank" rel="noopener">github.com/Andrejs4/vigame</a>.</p>
+        <p>Koodi on vapaata ohjelmistoa
+          <a href="https://www.gnu.org/licenses/old-licenses/gpl-2.0.html" target="_blank" rel="noopener">GNU GPL</a>
+          -lisenssillä, versio 2 tai uudempi. Kuvat:
+          <a href="https://game-icons.net" target="_blank" rel="noopener">game-icons.net</a>,
+          tekijät Lorc ja Delapouite,
+          <a href="https://creativecommons.org/licenses/by/3.0/" target="_blank" rel="noopener">CC BY 3.0</a>;
+          välilehden kuvake ja kirjautumissivun kuvat on tehty Perplexityllä,
+          ei-kaupalliseen käyttöön. Fontit: IBM Plex, SIL Open Font License
+          -lisenssillä. Tehty Colyseuksella, Expressillä ja SQLitellä.</p>
       </div>
     </details>
   </div>
