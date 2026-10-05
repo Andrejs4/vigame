@@ -159,6 +159,9 @@ export async function startGame(net, me) {
     observers: document.getElementById('observers'),
   };
   const seatButton = /** @type {HTMLButtonElement} */ (document.getElementById('seat-button'));
+  // For the game's creator, while it waits for players: go on without them.
+  const startButton = /** @type {HTMLButtonElement} */ (document.getElementById('start-button'));
+  startButton.title = word('startNowTitle');
   const upgradeButton = /** @type {HTMLButtonElement} */ (document.getElementById('upgrade'));
   const crewButton = /** @type {HTMLButtonElement} */ (document.getElementById('crew-button'));
   const heroesButton = /** @type {HTMLButtonElement} */ (document.getElementById('heroes-button'));
@@ -422,6 +425,18 @@ export async function startGame(net, me) {
   /** Whether this viewer can give commands right now. */
   const canCommand = () => net.seat() !== null && net.running();
 
+  /**
+   * Whether this viewer may start the game without the players missing: its
+   * creator, while it waits for someone and someone it waits for is here.
+   */
+  function canStartNow() {
+    if (!net.isCreator() || net.running() || !view || view.over !== undefined) return false;
+    const here = new Set(peers.map((p) => p.uid));
+    const awaited = (/** @type {number} */ i) => view?.players[i]?.lost === undefined && !view?.players[i]?.away;
+    const present = net.seats().map((holder) => holder !== null && here.has(holder));
+    return present.some((p, i) => p && awaited(i)) && present.some((p, i) => !p && awaited(i));
+  }
+
   /** Whether this viewer may rename the game: a player still in it, paused or not. */
   function canRename() {
     const seat = net.seat();
@@ -535,9 +550,13 @@ export async function startGame(net, me) {
     if (hud.players) {
       // Seated players who are here, of the seats; it blinks while the game waits.
       const here = new Set(peers.filter((p) => p.seat !== null).map((p) => p.seat)).size;
-      hud.players.textContent = view ? `${here}/${seatsOf(view)}` : '—';
+      const away = view ? view.players.filter((p) => p.away).length : 0;
+      hud.players.textContent = view ? `${here}/${seatsOf(view)}${away ? `, ${away} away` : ''}` : '—';
       hud.players.classList.toggle('waiting', paused && view?.over === undefined);
     }
+    startButton.hidden = !canStartNow();
+    const startLabel = word(view?.tick ? 'goOn' : 'startNow');
+    if (startButton.textContent !== startLabel) startButton.textContent = startLabel;
     if (hud.observers) {
       const watching = peers.filter((p) => p.seat === null);
       hud.observers.textContent = net.connected() ? String(watching.length) : 'offline';
@@ -548,8 +567,11 @@ export async function startGame(net, me) {
     const over = view?.over !== undefined;
     seatButton.hidden = over || (seat === null && !net.canClaimSeat());
     scoresButton.hidden = !over;
-    const seatLabel = word(seat === null ? 'takeSeat' : 'releaseSeat');
+    // Once your castle has fallen, a free one to play on, while there is one.
+    const moving = seat !== null && net.canClaimSeat();
+    const seatLabel = word(seat === null ? 'takeSeat' : moving ? 'newBase' : 'releaseSeat');
     if (seatButton.textContent !== seatLabel) seatButton.textContent = seatLabel;
+    seatButton.title = moving ? word('newBaseTitle') : '';
 
     const can = canCommand();
     for (const button of buildButtons) {
@@ -1261,8 +1283,18 @@ export async function startGame(net, me) {
   });
 
   seatButton.addEventListener('click', () => {
-    if (net.seat() !== null) net.releaseSeat();
-    else net.claimSeat();
+    if (net.seat() !== null && !net.canClaimSeat()) {
+      net.releaseSeat();
+      return;
+    }
+    // The free castle selected, if one is; else the server picks the first.
+    const owner = selected ? view?.buildings[selected]?.owner : undefined;
+    net.claimSeat(owner !== undefined && net.freeSeats().includes(owner) ? owner : undefined);
+  });
+
+  startButton.addEventListener('click', async () => {
+    const outcome = await net.startNow();
+    if (!outcome.ok) flash(`Can't start: ${outcome.reason}.`);
   });
 
   document.getElementById('toggle-coords')?.addEventListener('click', (e) => {

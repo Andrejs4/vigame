@@ -17,9 +17,15 @@
  *   onPeers(fn)     fn(peerList) whenever the viewers or their picks change
  *   seat()          my side, or null for a spectator
  *   onSeat(fn)      fn(seat) when my seat or the seat table changes
- *   canClaimSeat()  whether a seat is free and this viewer could take it
- *   claimSeat()
+ *   seats()         the player id in each seat, or null for a free one
+ *   freeSeats()     the free seats whose castles stand
+ *   canClaimSeat()  whether this viewer could take one of them: as a
+ *                   spectator, or once their own castle has fallen
+ *   claimSeat(seat) take a free seat, the one given if it is free
  *   releaseSeat()
+ *   isCreator()     whether this viewer started the game
+ *   startNow()      as its creator, have the game go on without the players
+ *                   missing; resolves to { ok } or { ok: false, reason }
  *   viewers()       number of people currently viewing
  *   connected()     boolean
  *   leave()
@@ -100,7 +106,10 @@ export async function createServerNet({ client, gameId, token, now = () => perfo
   let tickAt = now();
   /** @type {number | null} */
   let mySeat = null;
-  let seatFree = false;
+  /** @type {Array<string | null>} */
+  let seatList = [];
+  let amCreator = false;
+  let seatKey = '';
   /** @type {NetPeer[]} */
   let peerList = [];
   let peersKey = '';
@@ -184,10 +193,14 @@ export async function createServerNet({ client, gameId, token, now = () => perfo
     const viewers = raw.viewers && typeof raw.viewers === 'object' ? Object.entries(raw.viewers) : [];
     const me = viewers.find(([session]) => session === room.sessionId)?.[1];
     const seat = me && isSide(me.seat) ? me.seat : null;
-    const free = seats.some((s) => !s);
-    if (seat !== mySeat || free !== seatFree) {
+    const holders = seats.map((s) => (typeof s === 'string' && s ? s : null));
+    const creator = typeof me?.pid === 'string' && me.pid !== '' && raw.creator === me.pid;
+    const key = JSON.stringify([seat, holders, creator]);
+    if (key !== seatKey) {
+      seatKey = key;
       mySeat = seat;
-      seatFree = free;
+      seatList = holders;
+      amCreator = creator;
       seatListeners.emit(mySeat);
     }
 
@@ -214,6 +227,11 @@ export async function createServerNet({ client, gameId, token, now = () => perfo
 
   room.onStateChange(adopt);
   adopt(room.state);
+
+  /** The free seats whose castles stand. */
+  function freeSeats() {
+    return seatList.flatMap((holder, i) => (holder === null && view?.players[i]?.lost === undefined ? [i] : []));
+  }
 
   /** @param {boolean} value */
   function setConnected(value) {
@@ -265,9 +283,19 @@ export async function createServerNet({ client, gameId, token, now = () => perfo
     seat: () => mySeat,
     /** @param {(seat: number | null) => void} fn */
     onSeat: (fn) => seatListeners.add(fn),
-    canClaimSeat: () => isConnected && mySeat === null && seatFree,
-    claimSeat: () => room.request('claimSeat').then(() => {}, () => {}),
+    seats: () => [...seatList],
+    freeSeats,
+    canClaimSeat: () => isConnected && view?.over === undefined && freeSeats().length > 0
+      && (mySeat === null || view?.players[mySeat]?.lost !== undefined),
+    /** @param {number} [seat] */
+    claimSeat: (seat) => room.request('claimSeat', seat === undefined ? undefined : { seat }).then(() => {}, () => {}),
     releaseSeat: () => room.request('releaseSeat').then(() => {}, () => {}),
+    isCreator: () => amCreator,
+    /** @returns {Promise<{ ok: boolean, reason?: string }>} */
+    startNow: () => room.request('startNow').then(
+      () => ({ ok: true }),
+      (/** @type {any} */ e) => ({ ok: false, reason: String(e?.reason ?? e?.message ?? e) }),
+    ),
     viewers: () => viewerCount,
     connected: () => isConnected,
     /** Leave the game, for tests and page teardown. */

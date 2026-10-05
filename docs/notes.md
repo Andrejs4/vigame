@@ -223,10 +223,18 @@ author's word), яма (pit), воз (wagon), отряд (band), башня, ф�
 прочность (a building's hit points), кустарник (scrub), Тёмный Лорд (the
 Dark Lord), modes Кооператив, Лёгкий Лорд, Общий Лёгкий Лорд, Все против
 всех, sides Синие, Багровые, Зелёные, Золотые, Бирюзовые, Оранжевые,
-Розовые, Серебряные (plural, as teams: "победили Синие"), and on the
+Розовые, Серебряные (plural, as teams: "победили Синие"), and for seats 9
+to 16 Лазурные, Салатовые, Индиго, Вишнёвые, Оливковые, Коралловые, Белые,
+Мятные (Azure, Lime, Indigo, Cherry, Olive, Coral, White, Mint; Latvian
+Debeszilie, Laima, Indigo, Ķiršu, Olīvu, Koraļļu, Baltie, Mētru; Finnish
+Asuurit, Limetit, Indigot, Kirsikat, Oliivit, Korallit, Valkoiset,
+Mintut), and on the
 buttons Строить, Выбрано, Вид, Центр, Тихо, Координаты, Отпусти (the
-author's, for fun; Release in English), Занять место, Итоги, Лобби. How to
-play names the buttons the same way.
+author's, for fun; Release in English), Занять место, Новая база (New
+base, in the seat button's place once your castle has fallen; it fits a
+phone's rows, which the smoke check measures), Итоги, Лобби. In the status
+panel the creator's Старт / Дальше (Start, or Go on once the game has
+begun). How to play names the buttons the same way.
 
 The author's fallback words for buttons too long: Народ (crew), яма, бить
 (attack), воз, назад (return), стоп (abort). How the choice was made: a
@@ -298,6 +306,26 @@ screen's refresh rate (60 or 144 times a second). The author put these off
 2. Redraw for movement only when something moving is on screen.
 3. Keep the terrain drawn in a buffer, redrawn only on a pan or zoom. This
    fits the Painted graphics best, as textures make each redraw dearer.
+
+### Faster fighting for big games
+
+Measured for 16 players (a scratch benchmark, 100 ms a tick to spend):
+before the band fix, a big battle on an 8-player map took 28 ms a tick on
+average, and on a 16-player map (83 × 55, 8 sides of 600 units, 48 bands)
+127 ms. Most of it (two thirds) was each band asking which units were its
+crew. That fix is in (`advance`: one pass over the units for all bands),
+giving 7 ms and 23 ms, with the same results, so saved games replay.
+
+Left for later: once a second (`COMBAT_PERIOD`), each unit out walking
+looks through every enemy for the nearest one in reach, so the work grows
+with the square of the units out. With about 2,900 units walking out at
+once, one round took up to 2.9 s and froze the game for that long. The fix:
+in `fight`, sort the targets once into a lookup by cell (or by a coarse
+grid of cells), and have a walker look only at the cells within its reach.
+It must pick exactly the same target as now, including which of two at the
+same distance comes first (the targets' order in the list), or old games
+replay differently. Check it as the band fix was: a recorded big battle
+must end in the same state, tick for tick.
 
 ### Further off
 

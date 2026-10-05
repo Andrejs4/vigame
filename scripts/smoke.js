@@ -578,6 +578,8 @@ async function threeBrowsers(browser, url, { full, label }) {
   // Alone of two, and the Players line blinks while the game waits.
   await waitText(a, '#players', '1/2');
   assert.equal(await a.locator('#players.waiting').count(), 1, 'Players does not blink while waiting');
+  // She started it, so she could start it without Bēla; she waits.
+  await waitText(a, '#start-button', 'Start');
   // Recenter looks at her own castle, close enough to read unit counts.
   const home = await a.evaluate(() => {
     const v = /** @type {any} */ (window).__vigame;
@@ -616,6 +618,8 @@ async function threeBrowsers(browser, url, { full, label }) {
   await openFromLobby(b, 'open', 'Ann & —');
   await waitText(b, '#seat', 'Bēla · Crimson');
   await waitMatch(a, '#time', /^0:0[1-9]$/);
+  assert.equal(await a.locator('#start-button').isVisible(), false, 'nobody missing, nothing to start');
+  assert.equal(await b.locator('#start-button').isVisible(), false, 'Start is the creator\'s');
 
   // Ann builds a tower with a crew of six, who go to raise it; Bēla sees
   // them march, and Ann's pick. The rest stay home, for the pit below.
@@ -1144,6 +1148,41 @@ async function latvianFinnish(browser, url) {
   for (const p of [lv, fi]) await p.context().close();
 }
 
+/**
+ * A game for sixteen, which its creator starts with one other player
+ * there: the other fourteen are away, and the Dark Lord is as strong as
+ * for eight.
+ */
+async function sixteen(browser, url) {
+  const page = await newPlayer(browser, url, 'sixteen', 'Sven');
+  await inLobby(page);
+  await page.selectOption('#lobby-players', '16');
+  await page.click('#lobby-new');
+  await inGame(page);
+  await waitText(page, '#players', '1/16');
+  const other = await newPlayer(browser, page.url(), 'sixteen-b', 'Tove');
+  await inGame(other);
+  await waitText(other, '#seat', 'Tove · Crimson');
+  await waitText(page, '#start-button', 'Start');
+  assert.equal(await other.locator('#start-button').isVisible(), false, 'Start is the creator\'s');
+  assert.equal(await page.locator('#time').textContent(), '0:00 · paused');
+  await page.locator('#status').screenshot({ path: join(OUT, 'start-button.png') });
+
+  await page.click('#start-button');
+  await waitMatch(page, '#time', /^0:0[1-9]$/);
+  await waitText(page, '#players', '2/16, 14 away');
+  assert.equal(await page.locator('#start-button').isVisible(), false);
+  const view = await page.evaluate(() => /** @type {any} */ (window).__vigame.view);
+  assert.equal(view.players.filter((/** @type {any} */ p) => p.away).length, 14);
+  assert.equal(Object.values(view.buildings).filter((/** @type {any} */ b) => b.type === 'castle').length, 16);
+  assert.equal(/** @type {any} */ (Object.values(view.buildings).find((/** @type {any} */ b) => b.type === 'lair')).hp, 4 * BUILDING_TYPES.lair.hp, 'the Dark Lord as strong as for eight');
+  // The whole ring of castles, each side in its own colour.
+  for (let i = 0; i < 6; i++) await page.click('#zoom-out');
+  await frames(page);
+  await page.screenshot({ path: join(OUT, 'game-sixteen.png') });
+  for (const p of [page, other]) await p.context().close();
+}
+
 /** The login page, the lobby, settings and a Shared Easy Lord game on a phone, with a desktop teammate. */
 async function phone(browser, url) {
   // A browser in Russian: the login page is in Russian, and Auto stands
@@ -1244,6 +1283,23 @@ async function phone(browser, url) {
   assert.deepEqual(phoneFit.over, [], 'a button\'s label overflows it on a phone');
   assert.ok(Object.values(phoneFit.lines).every((n) => n <= 2), `a label takes three lines on a phone: ${JSON.stringify(phoneFit.lines)}`);
   assert.ok(phoneFit.rows <= 3, `the buttons take ${phoneFit.rows} rows on a phone`);
+  // Once a castle falls, the seat button offers a new base: it fits as well
+  // (put in its place for one measure, as no castle falls here).
+  const newBase = await page.evaluate(() => {
+    const button = /** @type {HTMLElement} */ (document.getElementById('seat-button'));
+    const label = button.textContent;
+    button.textContent = 'Новая база';
+    const range = document.createRange();
+    range.selectNodeContents(button);
+    const lines = new Set([...range.getClientRects()].filter((r) => r.width).map((r) => Math.round(r.bottom))).size;
+    const rows = new Set([...document.querySelectorAll('#controls :is(button, .button)')]
+      .filter((b) => /** @type {HTMLElement} */ (b).offsetParent).map((b) => Math.round(b.getBoundingClientRect().top))).size;
+    const over = button.scrollWidth > button.clientWidth + 1;
+    button.textContent = label;
+    return { lines, rows, over };
+  });
+  assert.deepEqual(newBase, { lines: newBase.lines, rows: phoneFit.rows, over: false }, 'New base does not fit on a phone');
+  assert.ok(newBase.lines <= 2, `New base takes ${newBase.lines} lines on a phone`);
   // On a desktop each label keeps to one line, its key in bold, and the
   // tooltips are in Russian.
   assert.equal(await other.locator('#build-tower').innerText(), 'Башня · 60');
@@ -1343,6 +1399,7 @@ const scenarios = /** @type {Array<[string, () => Promise<void>]>} */ ([
   ['on a phone', () => phone(browser, games.url)],
   ['Latvian on a phone, Finnish on a desktop', () => latvianFinnish(browser, games.url)],
   ['a finished game\'s points', () => finished(browser, games.url)],
+  ['sixteen players, started without the missing', () => sixteen(browser, games.url)],
 ]).filter(([name]) => name.includes(only));
 
 let failed = 0;

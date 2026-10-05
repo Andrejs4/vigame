@@ -128,9 +128,14 @@ commands.
   has no game rules of its own.
 - **The clock** runs only while every seat is held by a player who is here
   (and stops for good once the game is over),
-  so a game waits for an absent player instead of playing on without them.
+  so a game waits for an absent player instead of playing on without them,
+  until the game's creator has it go on without them. Those players are
+  then away, which the core learns from commands the room logs (`away`,
+  `back`), so the Dark Lord can leave them alone and replays still agree.
+  A seat whose castle has fallen is never waited for, and its player may
+  move to a free one.
 - **Connection**: WebSocket. Clients send only what they want to do
-  (`command`, `claimSeat`, `releaseSeat`, `select`), as Colyseus requests
+  (`command`, `claimSeat`, `releaseSeat`, `startNow`, `select`), as Colyseus requests
   that the room answers or refuses. Clients never send game state.
 - **Sync**: the room mirrors `publicView` into the Colyseus state
   (`server/schema.js`) after every tick and command. The mirror is generic:

@@ -96,6 +96,14 @@
       <option value="6">6</option>
       <option value="7">7</option>
       <option value="8">8</option>
+      <option value="9">9</option>
+      <option value="10">10</option>
+      <option value="11">11</option>
+      <option value="12">12</option>
+      <option value="13">13</option>
+      <option value="14">14</option>
+      <option value="15">15</option>
+      <option value="16">16</option>
     </select>
     <button id="lobby-new" class="primary" data-word="newGame">New game</button>
     <div id="lobby-limit" hidden>
@@ -127,7 +135,8 @@
       <div lang="en">
         <p>The units at home in your castle raise new ones: the more of them,
           and the better they breed, the sooner. Your side is out once your
-          castle falls.</p>
+          castle falls; while a castle stands that nobody plays, New base
+          moves you to it.</p>
         <p>Build near your standing buildings. The crew you pick raises a
           building once they get there; meanwhile it has half its hit points
           and shelters nobody. A pit's crew digs stone, which pays for towers,
@@ -149,7 +158,8 @@
       <div lang="ru" hidden>
         <p>Юниты дома, в вашем замке, растят новых: чем их больше и чем лучше
           они плодятся, тем скорее. Ваша сторона выбывает, когда падёт её
-          замок.</p>
+          замок; пока стоит замок, за который никто не играет, «Новая база»
+          переносит вас туда.</p>
         <p>Стройте рядом со своими готовыми зданиями. Выбранная бригада
           возводит здание, когда доберётся до него; до тех пор у него половина
           прочности и оно никого не укрывает. Бригада в яме добывает камень,
@@ -175,7 +185,8 @@
       <div lang="lv" hidden>
         <p>Vienības mājās, jūsu pilī, audzina jaunas: jo vairāk to ir un jo
           labāk tās vairojas, jo ātrāk. Jūsu puse zaudē, kad krīt jūsu
-          pils.</p>
+          pils; kamēr stāv pils, ar kuru neviens nespēlē, „Jauna bāze”
+          pārceļ jūs uz to.</p>
         <p>Būvējiet pie savām stāvošajām ēkām. Izvēlētā komanda uzceļ ēku, kad
           nonāk tur; līdz tam tai ir puse izturības, un tā nevienu nesargā.
           Bedres komanda rok akmeni, ar ko maksā par torņiem, fermām un
@@ -198,7 +209,8 @@
       <div lang="fi" hidden>
         <p>Linnasi kotona olevat yksiköt kasvattavat uusia: mitä enemmän heitä
           on ja mitä paremmin he lisääntyvät, sitä nopeammin. Puolesi häviää,
-          kun linnasi kaatuu.</p>
+          kun linnasi kaatuu; niin kauan kuin jokin linna on vailla
+          pelaajaa, Uusi linna siirtää sinut siihen.</p>
         <p>Rakenna seisovien rakennustesi lähelle. Valitsemasi ryhmä
           pystyttää rakennuksen, kun se pääsee perille; sitä ennen sillä on
           puolet kestävyydestään, eikä se suojaa ketään. Kuopan ryhmä louhii
@@ -312,7 +324,7 @@
       <div class="row"><dt>Game</dt><dd><span id="game-name">&mdash;</span><button class="inline" id="rename-button" hidden aria-label="Rename the game" title="Rename the game">✎</button></dd></div>
       <div class="row"><dt>Time</dt><dd id="time">0:00</dd></div>
       <div class="row"><dt>You</dt><dd id="seat">&mdash;</dd></div>
-      <div class="row"><dt>Players</dt><dd id="players" title="Seated players here, of the game's seats; it blinks while the game waits for the rest">&mdash;</dd></div>
+      <div class="row"><dt>Players</dt><dd><span id="players" title="Seated players here, of the game's seats; it blinks while the game waits for the rest">&mdash;</span><button class="inline" id="start-button" hidden title="Start without the players missing: the Dark Lord leaves their castles be until they are back" data-word-title="startNowTitle" data-word="startNow">Start</button></dd></div>
       <div class="row"><dt>Units</dt><dd id="units">&mdash;</dd></div>
       <div class="row"><dt>Tile</dt><dd id="tile">&mdash;</dd></div>
       <div class="row"><dt>Observers</dt><dd id="observers">0</dd></div>

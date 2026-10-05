@@ -79,14 +79,16 @@ test('seats are saved, and unreadable seat entries count as free', () => {
 test('the lobby lists the most recently active games first', async () => {
   const storage = openStorage();
   storage.createGame({ id: 'old', seed: 1, state: STATE, seats: [null, null] });
-  storage.createGame({ id: 'new', seed: 2, state: { ...STATE, tick: 30 }, seats: ['a', 'b'] });
+  // The second side's castle has fallen.
+  const players = [{ id: 0 }, { id: 1, lost: 20 }, { id: 2 }];
+  storage.createGame({ id: 'new', seed: 2, state: { ...STATE, tick: 30, players }, seats: ['a', 'b'] });
   await new Promise((res) => setTimeout(res, 5));
   storage.recordCommand('new', { tick: 30, player: 0, command: {} });
 
   const games = storage.listGames();
-  assert.deepEqual(games.map(({ id, tick, seats }) => ({ id, tick, seats })), [
-    { id: 'new', tick: 30, seats: ['a', 'b'] },
-    { id: 'old', tick: 0, seats: [null, null] },
+  assert.deepEqual(games.map(({ id, tick, seats, fallen }) => ({ id, tick, seats, fallen })), [
+    { id: 'new', tick: 30, seats: ['a', 'b'], fallen: [1] },
+    { id: 'old', tick: 0, seats: [null, null], fallen: [] },
   ]);
   assert.equal(storage.listGames({ limit: 1 }).length, 1);
   storage.close();

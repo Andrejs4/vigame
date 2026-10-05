@@ -364,6 +364,9 @@ button.inline {
   color: var(--ink-dim); font-size: 12px; line-height: inherit;
 }
 button.inline:hover:not(:disabled) { background: none; color: var(--amber); }
+/* The creator's Start, beside the players: the one thing to do while they wait. */
+#start-button { color: var(--amber); font-weight: 600; }
+#start-button:hover:not(:disabled) { text-decoration: underline; }
 
 /* The table at a game's end: a row a side, winners first, a column a line of points. */
 #scores { width: min(760px, calc(100vw - 32px)); }

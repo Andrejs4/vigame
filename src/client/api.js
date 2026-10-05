@@ -22,6 +22,8 @@
  * @property {number | null} winner The team that won, if one did.
  * @property {number} tick
  * @property {Array<Player | null>} seats Who holds each seat.
+ * @property {number[]} fallen The seats whose castles have fallen, which
+ *   nobody can take.
  * @property {number} createdAt
  * @property {number} updatedAt
  */

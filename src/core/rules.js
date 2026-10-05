@@ -15,8 +15,10 @@ export const TICKS_PER_SECOND = 10;
 
 /**
  * The sides' names and colours. A player's side has the palette of their
- * seat; the Dark Lord, the game's own side in cooperation games, has the
- * last one. A game's `players` records say which each owner number uses.
+ * seat (SEAT_SIDES); the Dark Lord, the game's own side in cooperation
+ * games, and the raiders have theirs. A game's `players` records say which
+ * each owner number uses. Seats 9 to 16 came later, after the Dark Lord and
+ * the raiders, so that games saved before keep their colours.
  */
 export const SIDES = [
   { id: 0, name: 'Blue',      color: '#3d7fd8', accent: '#9ec5ff' },
@@ -29,6 +31,14 @@ export const SIDES = [
   { id: 7, name: 'Silver',    color: '#8e9aa6', accent: '#dfe5eb' },
   { id: 8, name: 'Dark Lord', color: '#6a3fa0', accent: '#cdb0ff', npc: true },
   { id: 9, name: 'Raiders',   color: '#4a4038', accent: '#d8b08c', npc: true, wild: true },
+  { id: 10, name: 'Azure',    color: '#3fa9e6', accent: '#b4e2fa' },
+  { id: 11, name: 'Lime',     color: '#8bc43a', accent: '#d5f1a6' },
+  { id: 12, name: 'Indigo',   color: '#4c4ec4', accent: '#b9baf5' },
+  { id: 13, name: 'Cherry',   color: '#962a45', accent: '#eba4b6' },
+  { id: 14, name: 'Olive',    color: '#7e7c2c', accent: '#e0dd9c' },
+  { id: 15, name: 'Coral',    color: '#ec7c66', accent: '#ffcabd' },
+  { id: 16, name: 'White',    color: '#e2ddd0', accent: '#ffffff' },
+  { id: 17, name: 'Mint',     color: '#4fd0a2', accent: '#bdf3df' },
 ];
 
 /** The Dark Lord's palette. */
@@ -39,9 +49,12 @@ export const DARK_LORD = 8;
  */
 export const RAIDERS = 9;
 
+/** The palette of each seat's side, an index into SIDES, by seat. */
+export const SEAT_SIDES = [0, 1, 2, 3, 4, 5, 6, 7, 10, 11, 12, 13, 14, 15, 16, 17];
+
 /** Players a game may seat. */
 export const MIN_PLAYERS = 1;
-export const MAX_PLAYERS = 8;
+export const MAX_PLAYERS = 16;
 export const DEFAULT_PLAYERS = 1;
 
 /**
@@ -59,6 +72,12 @@ export const DEFAULT_MODE = 'coop';
  * @type {Record<string, number>}
  */
 export const LORD_HP = { coop: 1, easy: 0.5, shared: 0.5 };
+
+/**
+ * The Dark Lord grows stronger with the players (`lordScale` in game.js) up
+ * to this many; more make him no stronger.
+ */
+export const LORD_PLAYERS_MAX = 8;
 
 /**
  * The modes whose teams share one stock: stone, dark metal and food, and so
@@ -225,8 +244,9 @@ export const RAID_ROAM = 4;
  * out a wave, each bigger than the last: wave n is ceil(n / 2) ghouls and
  * floor(n / 3) ogres, as long as he has fewer than HORDE_MAX out. With more
  * than two players, waves and HORDE_MAX grow by the square root of
- * players / 2: twice as big at eight. They cost
- * him nothing, and hunt by themselves (`hunts` on a building type).
+ * players / 2: twice as big at eight, and no bigger with more
+ * (LORD_PLAYERS_MAX). They cost him nothing, and hunt by themselves
+ * (`hunts` on a building type).
  */
 export const HORDE_START = 2 * 60 * TICKS_PER_SECOND;
 export const HORDE_PERIOD = 60 * TICKS_PER_SECOND;
@@ -325,7 +345,7 @@ export const REPAIR_WORK = 500;
  * @property {boolean} [life] Its side's life: when it falls, the side has lost.
  * @property {boolean} [scales] The Dark Lord's: its hit points grow with the
  *   number of players, by players / 2 (never less than for two), so four
- *   times at eight (`lordScale` in game.js).
+ *   times at eight, and no more past eight (`lordScale` in game.js).
  * @property {boolean} [hunts] One of the Dark Lord's horde, which moves and
  *   fights by itself: it goes for the nearest enemy farm, or castle once no
  *   farm is left; it turns on any building that strikes it, and on the

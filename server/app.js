@@ -80,7 +80,7 @@ export const IDLE_MS = 3 * 24 * 60 * 60 * 1000;
  * for the page to put in its own words (`waiting` and `seated`, 0 for one
  * that isn't a reason), and those games, so they can go back to one, or
  * clear it (`clearing`).
- * @template {{ creator: string | null, seats: Array<string | null>, updatedAt: number }} G
+ * @template {{ creator: string | null, seats: Array<string | null>, fallen?: number[], updatedAt: number }} G
  * @param {G[]} games The player's games under way (`gamesUnderWayOf`).
  * @param {string} pid
  * @param {number} limit
@@ -89,7 +89,8 @@ export const IDLE_MS = 3 * 24 * 60 * 60 * 1000;
  */
 export function tooManyGames(games, pid, limit, now) {
   const fresh = games.filter((g) => now - g.updatedAt < IDLE_MS);
-  const waiting = fresh.filter((g) => g.creator === pid && g.seats.includes(null));
+  // A free seat whose castle has fallen waits for nobody.
+  const waiting = fresh.filter((g) => g.creator === pid && g.seats.some((s, i) => s === null && !g.fallen?.includes(i)));
   const seated = fresh.filter((g) => g.seats.includes(pid));
   const why = [
     ...(waiting.length >= limit ? [`${waiting.length} games of yours waiting for a player`] : []),

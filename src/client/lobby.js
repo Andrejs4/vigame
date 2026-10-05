@@ -9,7 +9,7 @@
  */
 
 import { hasLord } from '../core/game.js';
-import { MODES, SIDES, TICKS_PER_SECOND } from '../core/rules.js';
+import { MODES, SEAT_SIDES, SIDES, TICKS_PER_SECOND } from '../core/rules.js';
 import { getJson, post, reason } from './api.js';
 import { autoLanguage, browserLanguages, chosenLanguage } from './language.js';
 import { WORDS, say, translate } from './words.js';
@@ -55,7 +55,7 @@ const isWord = (key) => typeof key === 'string' && Object.hasOwn(WORDS.en, key);
 function result(game, language) {
   if (game.winner === null) return say(language, { word: 'nobodyWon' });
   if (hasLord(game.mode)) return say(language, { word: game.winner === 0 ? 'won' : 'lordWon' });
-  const side = SIDES[game.winner]?.name.toLowerCase();
+  const side = SIDES[SEAT_SIDES[game.winner]]?.name.toLowerCase();
   return isWord(side) ? say(language, { word: 'sideWon', values: { side: say(language, { word: side }) } }) : '?';
 }
 
@@ -80,7 +80,7 @@ function row(game, action, language) {
     if (i) who.append(between);
     const name = document.createElement('span');
     name.textContent = holder ? holder.name || '?' : '—';
-    name.style.color = holder ? SIDES[i]?.accent ?? '' : '';
+    name.style.color = holder ? SIDES[SEAT_SIDES[i]]?.accent ?? '' : '';
     who.append(name);
   });
   const when = document.createElement('span');
@@ -174,9 +174,11 @@ export function showLobby(token, me, { notice } = {}) {
     const going = games.filter((g) => g.over === null);
     const others = going.filter((g) => !isMine(g));
     fillList('mine', going.filter(isMine), 'open', language);
-    fillList('open', others.filter((g) => g.seats.some((s) => s === null)), 'join', language);
+    // A free seat whose castle stands; a fallen side's nobody can take.
+    const open = (/** @type {import('./api.js').GameSummary} */ g) => g.seats.some((s, i) => s === null && !g.fallen?.includes(i));
+    fillList('open', others.filter(open), 'join', language);
     // Every seat taken, most recently active first: opening one watches it.
-    fillList('playing', others.filter((g) => g.seats.every((s) => s !== null)).slice(0, ONGOING_SHOWN), 'watch', language);
+    fillList('playing', others.filter((g) => !open(g)).slice(0, ONGOING_SHOWN), 'watch', language);
     // Anyone's, all of them, most recent first: opening one shows its table of points.
     fillList('done', games.filter((g) => g.over !== null), 'scores', language);
   }

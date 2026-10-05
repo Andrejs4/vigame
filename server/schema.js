@@ -37,10 +37,12 @@ export const GameState = schema({
   buildings: t.map('string'),
   /** Each unit as JSON, by id. */
   units: t.map('string'),
-  /** Whether the game clock is running: only while every seated player is here. */
+  /** Whether the game clock is running: see `GameRoom.clockRuns`. */
   running: t.boolean().default(false),
   /** Player id per seat, '' when free. */
   seats: t.array('string'),
+  /** The player id of whoever started the game, '' if nobody did. */
+  creator: t.string().default(''),
   /** Keyed by session id. */
   viewers: t.map(ViewerState),
 }, 'GameState');

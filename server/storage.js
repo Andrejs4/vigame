@@ -64,7 +64,8 @@ export function openStorage(file = ':memory:') {
     SELECT seq, tick, player, command, at FROM commands WHERE game_id = ? AND seq > ? ORDER BY seq`);
   const SUMMARY = `id, seats, creator, created_at, updated_at, json_extract(state, '$.tick') AS tick,
     json_extract(state, '$.mode') AS mode, json_extract(state, '$.name') AS name,
-    json_extract(state, '$.over') AS over, json_extract(state, '$.winner') AS winner`;
+    json_extract(state, '$.over') AS over, json_extract(state, '$.winner') AS winner,
+    (SELECT json_group_array(key) FROM json_each(state, '$.players') WHERE json_extract(value, '$.lost') IS NOT NULL) AS fallen`;
   const selectRecent = db.prepare(`SELECT ${SUMMARY} FROM games ORDER BY updated_at DESC, id LIMIT ?`);
   const selectGoingOf = db.prepare(`
     SELECT ${SUMMARY} FROM games
@@ -460,9 +461,24 @@ function summary(row) {
     winner: row.winner ?? null,
     tick: row.tick,
     seats: parseSeats(row.seats),
+    fallen: parseFallen(row.fallen),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
+}
+
+/**
+ * The sides whose castles have fallen, by owner number.
+ * @param {unknown} text
+ * @returns {number[]}
+ */
+function parseFallen(text) {
+  try {
+    const list = JSON.parse(String(text));
+    return Array.isArray(list) ? list.filter((n) => Number.isInteger(n)) : [];
+  } catch {
+    return [];
+  }
 }
 
 /**
