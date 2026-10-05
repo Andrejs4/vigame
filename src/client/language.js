@@ -1,6 +1,6 @@
 /**
  * The page's language: the one the player chose, or for Auto, the one their
- * browser and name suggest. Only the login page is translated so far.
+ * browser and name suggest. The words themselves are in words.js.
  */
 
 /** The languages the page offers, each by its own name. */
@@ -60,10 +60,12 @@ export function browserLanguages() {
 }
 
 /**
- * A text with its `{placeholders}` filled in; one with no value stays as it is.
- * @param {string} text
- * @param {Record<string, string | number>} [values]
+ * The page's language for a setting: the language chosen, or for Auto, what
+ * Auto stands for on that page.
+ * @param {string} setting 'auto', or a language.
+ * @param {PageLanguage} auto
+ * @returns {PageLanguage}
  */
-export function fill(text, values = {}) {
-  return text.replace(/\{(\w+)\}/g, (all, key) => (Object.hasOwn(values, key) ? String(values[key]) : all));
+export function chosenLanguage(setting, auto) {
+  return Object.hasOwn(LANGUAGE_NAMES, setting) ? /** @type {PageLanguage} */ (setting) : auto;
 }

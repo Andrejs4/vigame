@@ -394,7 +394,8 @@ async function finished(browser, url) {
 /**
  * Ann's settings, from the lobby and back: a name with a symbol is refused,
  * a new name and language are kept, then she puts hers back; Back changes
- * nothing.
+ * nothing. The page is in the language chosen, or the one Auto stands for,
+ * and turns as either changes; the lobby stays in English.
  * @param {import('playwright').Page} a
  * @param {{ full: boolean }} options
  */
@@ -410,24 +411,40 @@ async function settings(a, { full }) {
     await waitText(a, '#lobby-name', name);
     assert.equal(new URL(a.url()).search, '', 'the address is the lobby again');
   };
+  const lang = () => a.evaluate(() => document.documentElement.lang);
   await open();
   assert.equal(await a.inputValue('#settings-name'), 'Ann');
   assert.equal(await a.inputValue('#settings-language'), 'auto');
   await waitText(a, '#settings-language option[value="auto"]', 'Auto (English)');
+  await waitText(a, '#settings-title', 'Settings');
   await a.fill('#settings-name', 'Ann \u{1F642}');
   await a.click('#settings-save');
   await waitMatch(a, '#settings-error', /letters or digits/);
+  // Once signed in, Auto puts the name first: a name in Cyrillic letters
+  // turns the page Russian, error and all.
   await a.fill('#settings-name', 'Анна');
-  await waitText(a, '#settings-language option[value="auto"]', 'Auto (Русский)');
+  await waitText(a, '#settings-language option[value="auto"]', 'Авто (Русский)');
+  await waitText(a, '#settings-title', 'Настройки');
+  await waitText(a, '#settings-save', 'Сохранить');
+  await waitMatch(a, '#settings-error', /букв или цифр/);
+  assert.equal(await lang(), 'ru');
+  // Choosing English turns it back, whatever the name.
+  await a.selectOption('#settings-language', 'en');
+  await waitText(a, '#settings-title', 'Settings');
   await a.selectOption('#settings-language', 'ru');
   await saved('Анна');
+  assert.equal(await lang(), 'en', 'the lobby is in English');
 
   await open();
   assert.equal(await a.inputValue('#settings-name'), 'Анна');
   assert.equal(await a.inputValue('#settings-language'), 'ru');
+  await waitText(a, '#settings-back', 'Назад');
   if (full) await a.screenshot({ path: join(OUT, 'settings.png') });
   await a.fill('#settings-name', 'Ann');
+  await waitText(a, '#settings-title', 'Настройки');
   await a.selectOption('#settings-language', 'auto');
+  await waitText(a, '#settings-title', 'Settings');
+  if (full) await a.screenshot({ path: join(OUT, 'settings-en.png') });
   await saved('Ann');
 
   await open();
@@ -1049,7 +1066,8 @@ async function phone(browser, url) {
   assert.ok(await fits(), 'the lobby scrolls sideways on a phone');
   await page.tap('#lobby-settings');
   await page.waitForSelector('#settings:not([hidden])');
-  await waitText(page, '#settings-language option[value="auto"]', 'Auto (Русский)');
+  await waitText(page, '#settings-language option[value="auto"]', 'Авто (Русский)');
+  await waitText(page, '#settings-title', 'Настройки');
   assert.ok(await fits(), 'the settings page scrolls sideways on a phone');
   await page.tap('#settings-back');
   await inLobby(page);

@@ -3,52 +3,14 @@
  * It signs this browser's token in as a new player. The settings page
  * changes the name and language later.
  *
- * It is the one page translated so far: it shows in the language chosen on
- * it, or for Auto, the browser's (`loginLanguage`), and turns as soon as the
- * choice does.
+ * It shows in the language chosen on it, or for Auto, the browser's
+ * (`loginLanguage`), and turns as soon as the choice does.
  */
 
 import { PLAYER_NAME_MAX, cleanPlayerName } from '../core/player.js';
 import { getJson, post, reason, saveName, savedName } from './api.js';
-import { LANGUAGE_NAMES, browserLanguages, fill, loginLanguage } from './language.js';
-
-/**
- * The login page's words in each language, each about as long as the
- * English, so the page keeps its shape. `{…}` is filled in.
- */
-export const LOGIN_WORDS = {
-  en: {
-    name: 'Your name',
-    namePlaceholder: 'Visible name ({max})',
-    language: 'Language',
-    auto: 'Auto',
-    play: 'Play',
-    loading: 'Loading the question…',
-    question: 'What is {sum}?',
-    noQuestion: 'Could not load the question. Press Play to try again.',
-    badName: 'Use 1–{max} letters or digits. Spaces and - _ . \' may go between them.',
-    wrongAnswer: 'That’s not it. Try this one.',
-    refused: 'The server said no ({why}).',
-    offline: 'Could not reach the game server.',
-  },
-  ru: {
-    name: 'Ваше имя',
-    namePlaceholder: 'Имя в игре ({max})',
-    language: 'Язык',
-    auto: 'Авто',
-    play: 'Играть',
-    loading: 'Загружаем вопрос…',
-    question: 'Сколько будет {sum}?',
-    noQuestion: 'Вопрос не загрузился. Нажмите «Играть» ещё раз.',
-    badName: 'От 1 до {max} букв или цифр. Между ними можно пробел и - _ . \'',
-    wrongAnswer: 'Неверно. Вот другой пример.',
-    refused: 'Сервер отказал ({why}).',
-    offline: 'Нет связи с игровым сервером.',
-  },
-};
-
-/** @typedef {keyof typeof LOGIN_WORDS.en} LoginWord */
-/** @typedef {{ word: LoginWord, values?: Record<string, string | number> }} Said */
+import { LANGUAGE_NAMES, browserLanguages, chosenLanguage, loginLanguage } from './language.js';
+import { WORDS, say } from './words.js';
 
 /**
  * Show the login page until the server accepts a name and an answer.
@@ -74,30 +36,28 @@ export function showLogin(token) {
   /** @type {string | null} */
   let challenge = null;
   /** What the question line says. */
-  /** @type {Said} */
+  /** @type {import('./words.js').Said} */
   let asked = { word: 'loading' };
   /** What the error line says, if anything. */
-  /** @type {Said | null} */
+  /** @type {import('./words.js').Said | null} */
   let problem = null;
 
   /** Every text on the page, in the language chosen, or for Auto, the browser's. */
   function show() {
     const auto = loginLanguage(browserLanguages(), nameInput.value);
-    const chosen = languageSelect.value;
-    const language = chosen === 'en' || chosen === 'ru' ? chosen : auto;
-    const words = LOGIN_WORDS[language];
-    const say = (/** @type {Said} */ { word, values }) => fill(words[word], values);
+    const language = chosenLanguage(languageSelect.value, auto);
+    const words = WORDS[language];
     document.documentElement.lang = language;
     nameLabel.textContent = words.name;
-    nameInput.placeholder = say({ word: 'namePlaceholder', values: { max: PLAYER_NAME_MAX } });
+    nameInput.placeholder = say(language, { word: 'namePlaceholder', values: { max: PLAYER_NAME_MAX } });
     languageLabel.textContent = words.language;
     autoOption.textContent = `${words.auto} (${LANGUAGE_NAMES[auto]})`;
     submit.textContent = words.play;
-    question.textContent = say(asked);
-    error.textContent = problem ? say(problem) : '';
+    question.textContent = say(language, asked);
+    error.textContent = problem ? say(language, problem) : '';
   }
 
-  /** @param {Said | null} said */
+  /** @param {import('./words.js').Said | null} said */
   function sayProblem(said) {
     problem = said;
     show();

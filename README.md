@@ -30,12 +30,13 @@ Run `npm start` and open http://127.0.0.1:2567.
   browser stays logged in across visits. **Settings**, next to your name
   in the lobby, changes the name and the language.
 - **Language**: Auto (the default), English or Russian; Auto's option says
-  which it picked. The login page is in Russian already: for Auto, when
-  the first of the browser's languages that is English or Russian is
-  Russian (or, with neither, for a name typed in Cyrillic letters), and at
-  once when Russian is chosen. Once signed in, Auto picks Russian for a
-  name in Cyrillic letters, else goes by the browser as above, else
-  English. The rest of the page is in English for now.
+  which it picked. The login and settings pages are in Russian already,
+  turning at once when Russian is chosen. On the login page, Auto goes by
+  the first of the browser's languages that is English or Russian, else
+  picks Russian for a name typed in Cyrillic letters, else English. Once
+  signed in (the settings page), Auto picks Russian for a name in Cyrillic
+  letters first, then goes by the browser, else English. The lobby and the
+  game are in English for now.
 - **The lobby** lists your games under way, games with a free seat, other
   people's under way with every seat taken (**Watch** opens one as an
   observer), and the finished ones (anyone's; **Scores** opens one at its
@@ -356,7 +357,7 @@ have one, install it with `npx playwright install chromium`.
 | `src/client/main.js` | Entry point: picks the view. |
 | `src/client/api.js` | The browser's token, and the HTTP calls. |
 | `src/client/login.js`, `lobby.js`, `settings.js` | The login page, the lobby, and the settings page (`?settings`: name and language). |
-| `src/client/language.js` | Which language Auto stands for, from the player's name and the browser. |
+| `src/client/language.js`, `words.js` | Which language Auto stands for, from the player's name and the browser; and the page's words in each language (so far the login and settings pages'). |
 | `src/client/play.js` | The game view: input, HUD, controls. |
 | `src/client/net.js` | The connection to a game on the server. |
 | `src/client/camera.js`, `render.js` | Pan and zoom, and the canvas renderer: terrain, buildings, marching units between cells, picks, hover. |

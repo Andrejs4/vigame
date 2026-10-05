@@ -1,8 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { LANGUAGE_NAMES, autoLanguage, fill, loginLanguage } from '../src/client/language.js';
-import { LOGIN_WORDS } from '../src/client/login.js';
+import { LANGUAGE_NAMES, autoLanguage, chosenLanguage, loginLanguage } from '../src/client/language.js';
+import { WORDS, fill, say } from '../src/client/words.js';
 import { LANGUAGES } from '../src/core/player.js';
 
 test('the page offers each language a player may choose, by its own name', () => {
@@ -39,6 +39,13 @@ test('Auto on the login page: the browser first, then the name typed, then Engli
   assert.equal(loginLanguage([]), 'en');
 });
 
+test('the page is in the language chosen, or for Auto, what Auto stands for there', () => {
+  assert.equal(chosenLanguage('ru', 'en'), 'ru');
+  assert.equal(chosenLanguage('en', 'ru'), 'en');
+  assert.equal(chosenLanguage('auto', 'ru'), 'ru');
+  assert.equal(chosenLanguage('toString', 'en'), 'en');
+});
+
 test('fill puts values in a text\'s {placeholders}, and leaves one with no value', () => {
   assert.equal(fill('What is {sum}?', { sum: '3 + 4' }), 'What is 3 + 4?');
   assert.equal(fill('Use 1–{max} of {max}', { max: 15 }), 'Use 1–15 of 15');
@@ -46,16 +53,19 @@ test('fill puts values in a text\'s {placeholders}, and leaves one with no value
   assert.equal(fill('Play'), 'Play');
 });
 
-test('the login page has every word in every language, about as long as the English', () => {
-  assert.deepEqual(Object.keys(LOGIN_WORDS), Object.keys(LANGUAGE_NAMES));
+test('every language has every word, with the same {placeholders}, about as long as the English', () => {
+  assert.deepEqual(Object.keys(WORDS), Object.keys(LANGUAGE_NAMES));
   const placeholders = (/** @type {string} */ text) => [...text.matchAll(/\{\w+\}/g)].map((m) => m[0]).sort();
-  for (const [language, words] of Object.entries(LOGIN_WORDS)) {
-    assert.deepEqual(Object.keys(words), Object.keys(LOGIN_WORDS.en), language);
+  for (const [language, words] of Object.entries(WORDS)) {
+    assert.deepEqual(Object.keys(words).sort(), Object.keys(WORDS.en).sort(), language);
     for (const [key, text] of Object.entries(words)) {
-      const english = LOGIN_WORDS.en[/** @type {keyof typeof LOGIN_WORDS.en} */ (key)];
+      const english = WORDS.en[/** @type {keyof typeof WORDS.en} */ (key)];
       assert.deepEqual(placeholders(text), placeholders(english), `${language}.${key}`);
-      assert.ok(text.length <= Math.ceil(english.length * 1.5), `${language}.${key} is much longer than the English`);
+      // Half again as long at most, or five letters more for a short word.
+      const most = Math.max(Math.ceil(english.length * 1.5), english.length + 5);
+      assert.ok(text.length <= most, `${language}.${key} is much longer than the English`);
     }
   }
-  assert.equal(fill(LOGIN_WORDS.en.namePlaceholder, { max: 15 }), 'Visible name (15)');
+  assert.equal(say('en', { word: 'namePlaceholder', values: { max: 15 } }), 'Visible name (15)');
+  assert.equal(say('ru', { word: 'refused', values: { why: 'bad name' } }), 'Сервер отказал (bad name).');
 });

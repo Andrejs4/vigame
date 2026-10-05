@@ -77,8 +77,9 @@ button[aria-pressed="true"] { background: rgba(255, 216, 77, 0.18); border-color
 .card.wide { width: min(520px, 100%); }
 /* The login page: a banner above the form and one below, as wide as the lobby's card. */
 #login { flex-direction: column; gap: 16px; }
-/* Its form has no hint under the title: the name field says what it is for. */
-#login h1 { margin-bottom: 14px; }
+/* The login and settings forms have no hint under the title: the name
+   field says what it is for. */
+#login h1, #settings h1 { margin-bottom: 14px; }
 .banner {
   display: block; width: min(520px, 100%); height: auto;
   border: 1px solid var(--panel-edge); border-radius: 10px;

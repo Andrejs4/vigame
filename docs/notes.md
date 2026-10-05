@@ -12,7 +12,7 @@ CLAUDE.md has the rules for working on the code; this is the background.
   player sees it, show screenshots, and say whether a deploy keeps saved
   games. `npm run smoke` leaves screenshots in `smoke-output/`: `game-blue.png`,
   `crew.png`, `heroes.png`, `phone.png`, `effects.png`, `lobby*.png`,
-  `login*.png`, `settings.png`, `scores.png`, and `failed-*.png` when a check
+  `login*.png`, `settings*.png`, `scores.png`, and `failed-*.png` when a check
   fails.
 - The work happens in Claude Code cloud sessions, on a `claude/…` branch.
   Each batch of requests becomes one pull request, opened when he asks for
@@ -189,11 +189,15 @@ which language Auto picked (src/client/language.js):
 - Once signed in, the name comes first: Russian for Cyrillic letters, else
   the browser's, else English (`autoLanguage`).
 
-The login page is translated: its words are `LOGIN_WORDS` in login.js, one
-table per language with `{…}` filled in (`fill`), all drawn by one `show()`
-that runs again when the language or the name changes. The tests check
-every language has every word with the same `{…}`, at most half again as
-long as the English. The lobby and the game wait until the author asks.
+The login and settings pages are translated. Their words are `WORDS` in
+src/client/words.js, one table per language with `{…}` filled in (`say`).
+Each page draws all its texts in one `show()`, which runs again when the
+language chosen or the name changes, so the page turns at once. The tests
+check every language has every word with the same `{…}`, at most half
+again as long as the English (five letters more for a short word: "Save",
+"Сохранить"). The settings page lost its two hints at the author's word:
+the name field says "Visible name (15)" when empty, as on the login page.
+The lobby and the game wait until the author asks.
 His plan: translate only the lobby and the game's controls, each text about
 as long as the English so the layout holds, and take care with short texts
 and texts built up as the game goes. Things to watch there:
