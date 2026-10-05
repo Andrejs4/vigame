@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { BOARD_OPTIONS, createBoard } from '../src/core/board.js';
 import {
   advance, applyCommand, capacityOf, checkState, crewOf, footprint, levelXp, newGame, occupancy, publicView, random,
-  breedRate, depthOf, fullMeal, isRising, killChance, maxHp, pointsOf, seatsOf, starveChance, ROOM_COMMANDS,
+  breedRate, depthOf, fullMeal, sharesStock, isRising, killChance, maxHp, pointsOf, seatsOf, starveChance, ROOM_COMMANDS,
 } from '../src/core/game.js';
 import {
   BUILDING_TYPES, COMBAT_PERIOD, DARK_LORD, HORDE_PERIOD, HORDE_START, RAIDERS, RAID_PERIOD, RAID_PER_PLAYER, SALVAGE, SIDES, FOOD_PER_UNIT, FOOD_PERIOD, KILL_XP, LEVEL_RATE, RANGED_DAMAGE, LEVEL_XP, MAX_HUNGER, MAX_LEVEL, SKILL_RATE, SKILL_XP, START_UNITS, UNIT_LIMIT, WAGON_PATIENCE,
@@ -713,12 +713,13 @@ test('in Easy Lord the Dark Lord\'s lair and horde have half the hit points, and
   assert.deepEqual(horde('easy'), usual.map(([type, hp]) => [type, /** @type {number} */ (hp) / 2]));
 });
 
-test('in Very Easy Lord castles raise units twice as fast, against the Dark Lord of Easy Lord', () => {
+test('in Very Easy Lord castles raise units twice as fast, otherwise as in Shared Easy Lord', () => {
   const map = createBoard({ ...BOARD_OPTIONS, seed: 3 });
   const game = newGame(map, { mode: 'veryEasy' });
   assert.deepEqual(checkState(map, game), []);
   assert.deepEqual(game.players.map((p) => p.team), [0, 0, 1, -1], 'the players together against him');
-  assert.deepEqual(game.players.map((p) => p.stone), newGame(map, { mode: 'easy' }).players.map((p) => p.stone), 'each with a stock of their own');
+  assert.deepEqual(game.players.map((p) => p.stone), [400, 0, 0, 0], 'one stock for the team, on its first side');
+  assert.equal(sharesStock('veryEasy'), true);
   assert.equal(Object.values(game.buildings).find((b) => b.type === 'lair')?.hp, BUILDING_TYPES.lair.hp / 2);
 
   const board = openBoard(4);

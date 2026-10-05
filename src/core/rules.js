@@ -59,13 +59,14 @@ export const DEFAULT_PLAYERS = 1;
 
 /**
  * Game modes. In cooperation the players are one team against the Dark
- * Lord; Easy Lord is the same against a weaker one; Very Easy Lord is Easy
- * Lord with castles that raise units twice as fast (BREED_RATE); Shared
- * Easy Lord is Easy Lord with one stock for the whole team (SHARED_STOCK);
- * in free for all, each against the others (two players at least).
+ * Lord; Easy Lord is the same against a weaker one; Shared Easy Lord is
+ * Easy Lord with one stock for the whole team (SHARED_STOCK); Very Easy
+ * Lord is Shared Easy Lord with castles that raise units twice as fast
+ * (BREED_RATE); in free for all, each against the others (two players at
+ * least).
  */
 export const MODES = {
-  coop: 'Cooperation', easy: 'Easy Lord', veryEasy: 'Very Easy Lord', shared: 'Shared Easy Lord', ffa: 'Free for all',
+  coop: 'Cooperation', easy: 'Easy Lord', shared: 'Shared Easy Lord', veryEasy: 'Very Easy Lord', ffa: 'Free for all',
 };
 export const DEFAULT_MODE = 'coop';
 
@@ -74,7 +75,7 @@ export const DEFAULT_MODE = 'coop';
  * lair's and his horde's), as a share of the usual.
  * @type {Record<string, number>}
  */
-export const LORD_HP = { coop: 1, easy: 0.5, veryEasy: 0.5, shared: 0.5 };
+export const LORD_HP = { coop: 1, easy: 0.5, shared: 0.5, veryEasy: 0.5 };
 
 /**
  * How fast castles raise new units in a mode, as a multiple of the usual:
@@ -96,7 +97,7 @@ export const LORD_PLAYERS_MAX = 8;
  * sides would have had, together.
  * @type {string[]}
  */
-export const SHARED_STOCK = ['shared'];
+export const SHARED_STOCK = ['shared', 'veryEasy'];
 
 /** Most units one player may have at once, inside buildings or out. */
 export const UNIT_LIMIT = 300;
