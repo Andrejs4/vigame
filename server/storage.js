@@ -22,7 +22,7 @@
 import Database from 'better-sqlite3';
 
 /** Bump when the tables change, and add the upgrade step to `migrate`. */
-const SCHEMA_VERSION = 22;
+const SCHEMA_VERSION = 23;
 
 /**
  * @typedef {{ id: string, seed: number, state: unknown, seq: number, seats: Array<string | null>,
@@ -440,6 +440,16 @@ function migrate(db) {
       if (!has) db.exec("ALTER TABLE players ADD COLUMN language TEXT NOT NULL DEFAULT 'auto'");
       db.exec('PRAGMA user_version = 22');
     })();
+  }
+  if (version < 23) {
+    // Up to sixteen players, players away, Very Easy Lord. The author's
+    // choice: every game from before goes, finished ones and their points
+    // too (test games). Players keep their names and languages.
+    db.transaction(() => db.exec(`
+      DELETE FROM commands;
+      DELETE FROM games;
+      PRAGMA user_version = 23;
+    `))();
   }
 }
 

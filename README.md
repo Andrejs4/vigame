@@ -602,8 +602,10 @@ comes next.
   - `npm audit` reports advisories in `@colyseus/auth`, which Colyseus
     installs alongside its core; this server switches it off (`auth: false`).
   - Some database upgrades drop the games saved before them, whose rules
-    differ (the latest that does: version 21); players keep their names.
-    Version 22, players' language, keeps games.
+    differ; players keep their names. Version 22, players' language, kept
+    games. Version 23 (sixteen players, Very Easy Lord) drops every game,
+    finished ones and their points too, at the author's wish: they were
+    test games.
 - A seat is held until its player releases it, however long they are away,
   and the game waits for them until its creator has it go on without them;
   if the creator is away too, it waits.

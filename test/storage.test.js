@@ -129,14 +129,12 @@ test('players are stored by public id with a language, Auto unless chosen, and s
   storage.close();
 });
 
-test('a version 21 database keeps its games, and its players get the language Auto', () => {
+test('a version 21 database\'s players get the language Auto', () => {
   const dir = mkdtempSync(join(tmpdir(), 'vigame-'));
   try {
     const file = join(dir, 'vigame.db');
     const storage = openStorage(file);
     storage.savePlayer('p1', 'Ann');
-    storage.createGame({ id: 'g1', seed: 1, state: STATE, seats: ['p1', null], creator: 'p1' });
-    storage.recordCommand('g1', { tick: 0, player: 0, command: { type: 'rename', name: 'Friday' } });
     storage.close();
     // Version 21's players had no language.
     const old = new Database(file);
@@ -144,10 +142,34 @@ test('a version 21 database keeps its games, and its players get the language Au
     old.close();
 
     const upgraded = openStorage(file);
-    assert.deepEqual(upgraded.loadGame('g1')?.seats, ['p1', null]);
-    assert.equal(upgraded.listCommands('g1').length, 1);
     assert.equal(upgraded.loadPlayer('p1')?.name, 'Ann');
     assert.equal(upgraded.loadPlayer('p1')?.language, 'auto');
+    upgraded.close();
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('a version 22 database drops every game, finished ones too; players keep their names and languages', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'vigame-'));
+  try {
+    const file = join(dir, 'vigame.db');
+    const storage = openStorage(file);
+    storage.savePlayer('p1', 'Ann', 'lv');
+    storage.createGame({ id: 'g1', seed: 1, state: STATE, seats: ['p1', null], creator: 'p1' });
+    storage.recordCommand('g1', { tick: 0, player: 0, command: { type: 'rename', name: 'Friday' } });
+    storage.createGame({ id: 'g2', seed: 2, state: { ...STATE, over: 90, winner: 0 }, seats: ['p1'] });
+    storage.close();
+    const old = new Database(file);
+    old.exec('PRAGMA user_version = 22;');
+    old.close();
+
+    const upgraded = openStorage(file);
+    assert.equal(upgraded.loadGame('g1'), null);
+    assert.equal(upgraded.loadGame('g2'), null, 'a finished game, with its points');
+    assert.deepEqual(upgraded.listGames(), []);
+    assert.deepEqual(upgraded.listCommands('g1'), []);
+    assert.deepEqual([upgraded.loadPlayer('p1')?.name, upgraded.loadPlayer('p1')?.language], ['Ann', 'lv']);
     upgraded.close();
   } finally {
     rmSync(dir, { recursive: true, force: true });
@@ -184,7 +206,7 @@ test('an older database is upgraded: turn-based games are dropped, players kept'
     storage.close();
 
     const check = new Database(file, { readonly: true });
-    assert.equal(check.pragma('user_version', { simple: true }), 22);
+    assert.equal(check.pragma('user_version', { simple: true }), 23);
     check.close();
   } finally {
     rmSync(dir, { recursive: true, force: true });
