@@ -72,7 +72,7 @@ Run `npm start` and open http://127.0.0.1:2567.
   panel show. Any player still in it may rename it with **✎** next to the
   name, even while the game waits for the others: up to 24 letters, digits
   and spaces, by the same rules as a player's name.
-- A game is in one of four modes:
+- A game is in one of five modes:
   - **Cooperation** (the default): all the players are one team against the
     Dark Lord, whose lair (36000 hit points) stands in the middle of the map
     and strikes the nearest enemy within 4 cells by itself, 40 hit points a
@@ -97,6 +97,8 @@ Run `npm start` and open http://127.0.0.1:2567.
     horde have half the hit points (the lair 18000, ghouls 600, ogres 3000,
     before growing with the players). Everything else is as in cooperation;
     the raiders are their own side, and as strong as ever.
+  - **Very Easy Lord**: Easy Lord where castles raise units twice as fast,
+    with units at home or none (the units learn breeding no faster).
   - **Shared Easy Lord**: Easy Lord where the team lives off one stock:
     stone, dark metal and food (so one hunger too), which any of them
     spends and all their pits, farms, castles and kills fill. It starts with
@@ -118,7 +120,7 @@ Run `npm start` and open http://127.0.0.1:2567.
   your side has lost. It is every unit's home, and starts with 12. The units at
   home raise new ones: the more of them, and the better they breed, the
   sooner. With nobody at home it still raises one every four minutes by
-  itself, even while damaged or upgraded. It has room for 40 units, and 10
+  itself (two in Very Easy Lord), even while damaged or upgraded. It has room for 40 units, and 10
   more with each upgrade (40, 50, 60); it takes in all its units, however
   many, but stops breeding while it holds more than its room.
 - **Units** each have a medieval name, a level from 1 to 100, and six
@@ -551,7 +553,7 @@ HTTP API:
 | `GET /api/challenge` | A sum to answer when signing in: `{ id, question }`. Each one answers once and lasts 10 minutes. |
 | `POST /api/players` | Signs in: `{ token, name, language?, challenge, answer }` gives `{ pid, name, language }` (`language` `auto` by default). `400` for a bad token, name or language, `403` for a wrong answer. |
 | `POST /api/settings` | Changes a signed-in player's settings: `{ token, name?, language? }` gives `{ pid, name, language }`; what isn't given stays. `401` if not signed in, `400` for a bad name or language. |
-| `POST /api/games` | Starts a game with a random map: `{ token, mode?, players? }` of a signed-in player (`mode` `coop`, `easy`, `shared` or `ffa`, `players` 1 to 16; by default a cooperation game for one) gives `201 { id }`; `401` if not signed in, `400` for a bad mode or number; `409 { error, waiting, seated, games }` while the player has too many games on the go (three of theirs waiting for a player, or seats in three under way): why in English, how many of each (0 for one that isn't why, so the page can say it in its own words), and those games as `GET /api/games` lists them, each with `clear`: `'delete'`, `'leave'` or `null`. |
+| `POST /api/games` | Starts a game with a random map: `{ token, mode?, players? }` of a signed-in player (`mode` `coop`, `easy`, `veryEasy`, `shared` or `ffa`, `players` 1 to 16; by default a cooperation game for one) gives `201 { id }`; `401` if not signed in, `400` for a bad mode or number; `409 { error, waiting, seated, games }` while the player has too many games on the go (three of theirs waiting for a player, or seats in three under way): why in English, how many of each (0 for one that isn't why, so the page can say it in its own words), and those games as `GET /api/games` lists them, each with `clear`: `'delete'`, `'leave'` or `null`. |
 | `POST /api/games/:id/delete` | `{ token }`: deletes a game under way that the player started and nobody else holds a seat in, closing its room if open; `403` if they didn't start it, `409` if someone else plays it or it is over. |
 | `POST /api/games/:id/leave` | `{ token }`: gives up the player's seat in a game under way, through its room if open; `409` if they hold none or it is over. |
 | `GET /api/games` | The 50 most recently active games, for the lobby, with their name, mode, who holds each seat (`{ pid, name }` or `null`) and `fallen`, the seats whose castles have fallen, which nobody can take. |

@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { BOARD_OPTIONS, createBoard } from '../src/core/board.js';
 import {
   advance, applyCommand, capacityOf, checkState, crewOf, footprint, levelXp, newGame, occupancy, publicView, random,
-  depthOf, fullMeal, isRising, killChance, maxHp, pointsOf, seatsOf, starveChance, ROOM_COMMANDS,
+  breedRate, depthOf, fullMeal, isRising, killChance, maxHp, pointsOf, seatsOf, starveChance, ROOM_COMMANDS,
 } from '../src/core/game.js';
 import {
   BUILDING_TYPES, COMBAT_PERIOD, DARK_LORD, HORDE_PERIOD, HORDE_START, RAIDERS, RAID_PERIOD, RAID_PER_PLAYER, SALVAGE, SIDES, FOOD_PER_UNIT, FOOD_PERIOD, KILL_XP, LEVEL_RATE, RANGED_DAMAGE, LEVEL_XP, MAX_HUNGER, MAX_LEVEL, SKILL_RATE, SKILL_XP, START_UNITS, UNIT_LIMIT, WAGON_PATIENCE,
@@ -52,7 +52,7 @@ test('games seat 1 to 16 players, on maps that grow with them', () => {
   for (const players of [1, 8, 9, 16]) {
     const board = createBoard({ ...BOARD_OPTIONS, seed: 9, players });
     assert.equal(board.starts.length, players + 1, 'a site per player, and the lair\'s');
-    for (const mode of players > 1 ? ['coop', 'easy', 'shared', 'ffa'] : ['coop', 'easy', 'shared']) {
+    for (const mode of players > 1 ? ['coop', 'easy', 'veryEasy', 'shared', 'ffa'] : ['coop', 'easy', 'veryEasy', 'shared']) {
       const state = newGame(board, { mode });
       assert.deepEqual(checkState(board, state), [], `${players} players, ${mode}`);
       assert.equal(seatsOf(state), players);
@@ -713,6 +713,43 @@ test('in Easy Lord the Dark Lord\'s lair and horde have half the hit points, and
   assert.deepEqual(horde('easy'), usual.map(([type, hp]) => [type, /** @type {number} */ (hp) / 2]));
 });
 
+test('in Very Easy Lord castles raise units twice as fast, against the Dark Lord of Easy Lord', () => {
+  const map = createBoard({ ...BOARD_OPTIONS, seed: 3 });
+  const game = newGame(map, { mode: 'veryEasy' });
+  assert.deepEqual(checkState(map, game), []);
+  assert.deepEqual(game.players.map((p) => p.team), [0, 0, 1, -1], 'the players together against him');
+  assert.deepEqual(game.players.map((p) => p.stone), newGame(map, { mode: 'easy' }).players.map((p) => p.stone), 'each with a stock of their own');
+  assert.equal(Object.values(game.buildings).find((b) => b.type === 'lair')?.hp, BUILDING_TYPES.lair.hp / 2);
+
+  const board = openBoard(4);
+  const { work = 0, idleWork = 0 } = BUILDING_TYPES.castle;
+  /**
+   * @param {string} mode
+   * @param {Array<Partial<import('../src/core/game.js').Unit> & { id: string }>} units
+   */
+  const firstBirth = (mode, units) => {
+    const state = stateWith([{ id: 'b1', type: 'castle' }], units);
+    state.mode = mode;
+    const before = Object.keys(state.units).length;
+    return runUntil(board, state, () => Object.keys(state.units).length > before, 2 * work);
+  };
+  const ten = unitsIn('b1', 10, 10);
+  assert.equal(firstBirth('easy', ten), Math.ceil(work / (10 * WORK_BASE + idleWork)));
+  assert.equal(firstBirth('veryEasy', ten), Math.ceil(work / (2 * (10 * WORK_BASE + idleWork))));
+  assert.equal(firstBirth('veryEasy', []), Math.ceil(work / (2 * idleWork)), 'and by itself, with nobody at home');
+
+  // The units learn breeding no faster.
+  const state = stateWith([{ id: 'b1', type: 'castle' }], ten);
+  const easy = structuredClone(state);
+  state.mode = 'veryEasy';
+  easy.mode = 'easy';
+  run(board, state, 100);
+  run(board, easy, 100);
+  assert.deepEqual(state.units.u10.practice, easy.units.u10.practice);
+  assert.equal(breedRate('veryEasy'), 2);
+  assert.equal(breedRate('easy'), 1);
+});
+
 test('in Shared Easy Lord the team lives off one stock, kept by its first side, against an easy Lord', () => {
   const map = createBoard({ ...BOARD_OPTIONS, seed: 3 });
   const game = newGame(map, { mode: 'shared' });
@@ -1161,6 +1198,7 @@ test('the same commands at the same ticks give the same game, saved and reloaded
   const reloaded = randomGame(11, 1000, () => {});
   assert.deepEqual(randomGame(11, 1000, () => {}, 'coop').state, randomGame(11, 1000, undefined, 'coop').state);
   assert.deepEqual(randomGame(11, 1000, () => {}, 'easy').state, randomGame(11, 1000, undefined, 'easy').state);
+  assert.deepEqual(randomGame(11, 1000, () => {}, 'veryEasy').state, randomGame(11, 1000, undefined, 'veryEasy').state);
   assert.deepEqual(randomGame(11, 1000, () => {}, 'shared').state, randomGame(11, 1000, undefined, 'shared').state);
   assert.deepEqual(reloaded.state, straight.state);
   assert.notDeepEqual(randomGame(12, 1000).state, straight.state);

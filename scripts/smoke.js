@@ -465,6 +465,7 @@ async function settings(a, { full }) {
   await waitText(a, '#lobby-settings', 'Настройки');
   await waitText(a, '#lobby-mine-section h2 [data-word]', 'Ваши игры');
   await waitText(a, '#lobby-mode option[value="ffa"]', 'Все против всех: каждый сам за себя');
+  await waitText(a, '#lobby-mode option[value="veryEasy"]', 'Очень Лёгкий Лорд: как Лёгкий, и юниты плодятся вдвое быстрее');
   await a.click('#lobby-how-section summary');
   await a.click('#lobby-about-section summary');
   assert.equal(await a.locator('#lobby-how-section [lang="ru"]').isVisible(), true);
@@ -1113,10 +1114,14 @@ async function latvianFinnish(browser, url) {
   await waitText(lv, '#lobby-mode option[value="coop"]', 'Sadarbība: kopā pret Tumšo Kungu');
   assert.equal(await lv.evaluate(() => document.documentElement.lang), 'lv');
   assert.equal(await lv.locator('#lobby-how-section [lang="lv"]').count(), 1);
+  // A Very Easy Lord game: castles raise units twice as fast.
+  await lv.selectOption('#lobby-mode', 'veryEasy');
+  assert.equal(await lv.locator('#lobby-mode option:checked').textContent(), 'Ļoti Vieglais Kungs: kā Vieglais, un vienības vairojas divreiz ātrāk');
   await lv.screenshot({ path: join(OUT, 'lobby-lv.png') });
   await lv.selectOption('#lobby-players', '2');
   await lv.tap('#lobby-new');
   await inGame(lv);
+  assert.equal(await lv.evaluate(() => /** @type {any} */ (window).__vigame.view.mode), 'veryEasy');
   const fi = await newPlayer(browser, lv.url(), 'finnish', 'Aino', { viewport: { width: 1280, height: 800 }, locale: 'fi-FI' });
   await inGame(fi);
   await waitMatch(lv, '#time', /^0:0[1-9]$/);

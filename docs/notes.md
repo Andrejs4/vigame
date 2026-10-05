@@ -221,7 +221,7 @@ game's terms), which the rest of the game should match: юниты (units),
 (Abort), «Герои…» (Heroes), «Атака…» (Attack), «Апгрейд» (Upgrade, the
 author's word), яма (pit), воз (wagon), отряд (band), башня, ферма,
 прочность (a building's hit points), кустарник (scrub), Тёмный Лорд (the
-Dark Lord), modes Кооператив, Лёгкий Лорд, Общий Лёгкий Лорд, Все против
+Dark Lord), modes Кооператив, Лёгкий Лорд, Очень Лёгкий Лорд, Общий Лёгкий Лорд, Все против
 всех, sides Синие, Багровые, Зелёные, Золотые, Бирюзовые, Оранжевые,
 Розовые, Серебряные (plural, as teams: "победили Синие"), and for seats 9
 to 16 Лазурные, Салатовые, Индиго, Вишнёвые, Оливковые, Коралловые, Белые,
