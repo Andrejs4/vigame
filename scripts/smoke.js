@@ -23,6 +23,7 @@ import { checkState, newGame } from '../src/core/game.js';
 import { axialToPixel, distance } from '../src/core/hex.js';
 import { GAME_NAMES } from '../src/core/names.js';
 import { BUILDING_TYPES } from '../src/core/rules.js';
+import { GROUND_PICTURES } from '../src/client/ground.js';
 import { PICTURES } from '../src/client/tokens.js';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -664,6 +665,7 @@ async function threeBrowsers(browser, url, { full, label }) {
   await waitInside(b, tower.id, 1);
   // Every picture arrived, here and behind the proxy alike.
   await a.waitForFunction((n) => /** @type {any} */ (window).__vigame.tokens.images.size === n, PICTURES.length);
+  await a.waitForFunction((n) => /** @type {any} */ (window).__vigame.ground.images.size === n, GROUND_PICTURES.length);
   if (!full) {
     for (const p of [a, b]) await p.context().close();
     return;
@@ -1211,6 +1213,13 @@ async function sixteen(browser, url) {
   for (let i = 0; i < 6; i++) await page.click('#zoom-out');
   await frames(page);
   await page.screenshot({ path: join(OUT, 'game-sixteen.png') });
+  // Close up, each cell shows a picture of its ground.
+  await page.waitForFunction((n) => /** @type {any} */ (window).__vigame.ground.images.size === n, GROUND_PICTURES.length);
+  await page.click('#recenter');
+  for (let i = 0; i < 12; i++) await page.click('#zoom-in');
+  assert.equal(await page.evaluate(() => /** @type {any} */ (window).__vigame.camera.zoom), 2.5, 'not at the closest zoom');
+  await frames(page);
+  await page.screenshot({ path: join(OUT, 'ground.png') });
   for (const p of [page, other]) await p.context().close();
 }
 

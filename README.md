@@ -325,7 +325,11 @@ Run `npm start` and open http://127.0.0.1:2567.
   counts those watching without a seat.
   **Recenter** looks at your own castle, close enough to read how many
   are in each building (a spectator sees the whole map).
-- Drag to pan, and use the wheel or the − / + buttons to zoom. The minimap
+- Drag to pan, and use the wheel or the − / + buttons to zoom. Close up
+  (from 1.1× zoom, fully from 1.3×) each cell shows a picture of its
+  ground, grass, meadow, scrub or water, turned and mirrored cell by cell
+  by the map, the same for every player; further out the cells keep their
+  flat colours, as does the minimap. The minimap
   in the corner shows the whole board and a frame around what you see;
   press or drag on it to look there. **M**, or the arrow in the stock
   panel's top right corner, hides it and brings it back; the status panel
@@ -591,9 +595,10 @@ comes next.
   rules; he builds nothing, raises no units and spends no dark metal.
   Raiders only wander.
 - Food has no use beyond keeping hunger down; dark metal only buys wagons.
-- Graphics are tokens on flat hexes: nothing faces a way or moves but by
-  sliding, the ground has no texture, and combat shows hits but not who
-  struck them.
+- Graphics are tokens on hexes, with pictures of the ground only close up:
+  nothing faces a way or moves but by sliding, and combat shows hits but
+  not who struck them. docs/notes.md has the plan for pictures of the
+  buildings and units.
 - A simulation harness: the core can already play games with no players (the
   tests do), but there are no bots or reports yet.
 - Game server:

@@ -20,6 +20,7 @@ import { Minimap } from './minimap.js';
 import { BoardRenderer, COUNT_ZOOM, pickAt } from './render.js';
 import { autoLanguage, browserLanguages, chosenLanguage, keyCandidates } from './language.js';
 import { Sounds, soundsFor } from './sounds.js';
+import { Ground } from './ground.js';
 import { Tokens } from './tokens.js';
 import { isWord, say, shortPoints, translate } from './words.js';
 
@@ -209,7 +210,8 @@ export async function startGame(net, me) {
   const camera = new Camera();
   // The pictures arrive after the first draws; each one redraws the board.
   const tokens = new Tokens(() => { needsDraw = true; });
-  let renderer = new BoardRenderer(canvas, board, tokens);
+  const ground = new Ground(() => { needsDraw = true; });
+  let renderer = new BoardRenderer(canvas, board, tokens, ground);
   let minimap = new Minimap(mapCanvas, mapFrame, board);
   /** The main view's size, in CSS pixels. */
   let viewW = 0;
@@ -298,7 +300,7 @@ export async function startGame(net, me) {
     if (next.seed !== board.seed || players !== boardPlayers) {
       boardPlayers = players;
       board = createBoard({ ...BOARD_OPTIONS, seed: next.seed, players });
-      renderer = new BoardRenderer(canvas, board, tokens);
+      renderer = new BoardRenderer(canvas, board, tokens, ground);
       renderer.showCoords = showCoords;
       minimap = new Minimap(mapCanvas, mapFrame, board);
       recenter();
@@ -1452,6 +1454,7 @@ export async function startGame(net, me) {
       get fallen() { return fallen; },
       effects,
       tokens,
+      ground,
       sounds,
       net,
       camera,

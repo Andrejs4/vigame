@@ -77,6 +77,10 @@ and share what they make of them under the same terms.
 | `portraits-women.png` | 64 portraits of women, 32 × 32 each, in an 8 × 8 sheet |
 | `portraits.hex` | the portraits' 14 colours, one a line: faces added later use these to match |
 | `portrait.svg` | a head-and-shoulders silhouette, the portrait of a unit that isn't a hero (one colour, made for Vigame) |
+| `ground-grass-1.webp`, `ground-grass-2.webp` | grass from above, two versions, a hex each (222 × 256) |
+| `ground-meadow-1.webp` | meadow from above, a hex |
+| `ground-scrub-1.webp` | scrub from above: trees and bushes on bare ground, a hex |
+| `ground-water-1.webp`, `ground-water-2.webp` | water from above, a lighter and a darker version, a hex each |
 
 The portraits were generated with Stable Diffusion (1.5 and SDXL base, whose
 licences allow using their images), then framed around each face, put on one
@@ -84,3 +88,8 @@ grey background, shrunk to 32 × 32 and given one shared palette with the
 `web-pixel-images` skill from
 [Andrejs4/my-claude-skills](https://github.com/Andrejs4/my-claude-skills).
 The full-size originals are not in this repository.
+
+The ground's pictures were generated with Stable Diffusion too, from above,
+then recoloured to each terrain's colour on the board, shrunk and cut to a
+hex by `scripts/ground.py`. Their originals aren't in this repository
+either.
