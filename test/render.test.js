@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { drawOrder, heading, pickAt, pipsOf } from '../src/client/render.js';
+import { countLabel, drawOrder, heading, pickAt, pipsOf } from '../src/client/render.js';
 import { BUILDING_TYPES } from '../src/core/rules.js';
 
 test('a building shows a pip for each upgrade, a pit for each grade of depth, a new one none', () => {
@@ -12,6 +12,14 @@ test('a building shows a pip for each upgrade, a pit for each grade of depth, a 
   assert.deepEqual([pipsOf({ type: 'farm', grade: 1 }), pipsOf({ type: 'band', grade: 1 }), pipsOf({ type: 'lair', grade: 1 })], [0, 0, 0]);
   const { perDepth = 1 } = BUILDING_TYPES.pit;
   assert.deepEqual([0, perDepth - 1, perDepth, 2 * perDepth, 3 * perDepth].map((dug) => pipsOf({ type: 'pit', grade: 1, dug })), [0, 0, 1, 2, 3]);
+});
+
+test('a castle full, and so not breeding, shows its room beside its count; others only their count', () => {
+  const castle = (/** @type {number} */ grade) => /** @type {any} */ ({ type: 'castle', grade });
+  assert.deepEqual([12, 39, 40, 41].map((n) => countLabel(castle(1), n)), ['12', '39', '40/40', '41/40']);
+  assert.deepEqual([59, 60, 65].map((n) => countLabel(castle(3), n)), ['59', '60/60', '65/60']);
+  assert.equal(countLabel(/** @type {any} */ ({ type: 'tower', grade: 1 }), 20), '20');
+  assert.equal(countLabel(/** @type {any} */ ({ type: 'band', grade: 1 }), 80), '80');
 });
 
 test('a moving building heads left or right by its next cell, and nowhere while it stands', () => {

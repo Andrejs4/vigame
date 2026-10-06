@@ -12,7 +12,7 @@
  */
 
 import { DIRECTIONS, axialToPixel, corners, key } from '../core/hex.js';
-import { depthOf, footprint, maxHp, occupancy, raiseWork, sideOf } from '../core/game.js';
+import { capacityOf, depthOf, footprint, maxHp, occupancy, raiseWork, sideOf } from '../core/game.js';
 import { BUILDING_TYPES } from '../core/rules.js';
 import { groundShown } from './ground.js';
 
@@ -115,6 +115,17 @@ function tokenHexes(type, rolling) {
 
 /** Zoomed out past this, buildings don't show how many units are inside. */
 export const COUNT_ZOOM = 0.45;
+
+/**
+ * The count on a building's corner: how many are inside. A castle full, which
+ * stops it breeding, shows its room too: 40/40, or 65/60.
+ * @param {Building} b
+ * @param {number} inside
+ */
+export function countLabel(b, inside) {
+  const room = capacityOf(b);
+  return BUILDING_TYPES[b.type].yields === 'unit' && inside >= room ? `${inside}/${room}` : String(inside);
+}
 
 /**
  * The pips under a building: one for each upgrade it has had, or for a pit
@@ -443,7 +454,7 @@ export class BoardRenderer {
         }
         const count = occ.inside.get(b.id)?.length ?? 0;
         if (count && zoom > COUNT_ZOOM) {
-          const label = String(count);
+          const label = countLabel(b, count);
           ctx.font = `600 ${Math.round(10 * zoom)}px ui-monospace, monospace`;
           const bw = ctx.measureText(label).width + 8 * zoom;
           const bx = centre.x + across * 0.42;

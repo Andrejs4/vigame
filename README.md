@@ -124,7 +124,8 @@ Run `npm start` and open http://127.0.0.1:2567.
   sooner. With nobody at home it still raises one every four minutes by
   itself (two in Very Easy Lord), even while damaged or upgraded. It has room for 40 units, and 10
   more with each upgrade (40, 50, 60); it takes in all its units, however
-  many, but stops breeding while it holds more than its room.
+  many, but stops breeding while it holds its room or more. Then its count
+  on the board shows its room too, as 40/40 or 65/60.
 - **Units** each have a medieval name, a level from 1 to 100, and six
   skills: breeding, ranged attack, close combat, building (which covers
   repairing and digging), farming and running. Work trains the skill it
