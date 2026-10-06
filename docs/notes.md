@@ -152,37 +152,83 @@ stay sharp on high-density screens. The icon is a 32 × 32 PNG.
 
 ## Plans not built yet
 
-### Graphics: a "Painted" look beside today's
+### Graphics: pictures at the closest zooms
 
-Agreed in outline; nothing built yet.
+Agreed in outline; nothing built yet. It waits on the pictures: the author
+will come back to it if he can get them. This replaces an earlier plan of
+one big texture per terrain pinned to the map, with decorations scattered
+over it.
 
-- **Switch:** a Graphics button in the View panel, Classic (today's look,
-  the default) or Painted, remembered by each browser like Mute. The Classic
-  code stays as it is, and a picture that fails to load falls back to its
-  flat colour. The minimap keeps flat colours.
-- **Painted:** a seamless texture for each terrain, pinned to the map rather
-  than to each hex, so a field flows across cells. Small decorations are
-  scattered on cells by the map's seed, the same for every player, and
-  hidden under buildings. Shorelines and a softer grid are drawn in code.
-- **Pictures from the author,** up to 16 in all, two of them spare:
+- **Where:** at the closest zooms only, from about 1.2× (the camera goes
+  from 0.4× to 2.5×). Further out, today's flat colours stay: they read
+  better far out and cost nothing. The minimap keeps flat colours, and a
+  picture that fails to load falls back to today's look. A Graphics switch
+  in the View panel (remembered by each browser, like Mute) can turn them
+  off on a weak phone.
+- **Ground, a picture per cell:** each terrain (grass, meadow, scrub,
+  water) has 2 to 4 pictures of one hex. A cell takes one, turned by a
+  sixth of a turn and maybe mirrored, picked from the map's seed so every
+  player sees the same map; that hides the repeats. Each version is cut to
+  a hex once and kept, so drawing a cell is one image copy, and at the
+  closest zooms only a few dozen cells are on screen. The grid lines hide
+  most joins, so keep each picture's edges plain, with no strong feature
+  near them.
+- **Buildings and units:** a picture each in place of today's icon token,
+  with the parts that take a side's colour painted in shades of one key
+  colour (say magenta) in the same file. The page swaps it for each side's
+  colour, keeping the shading, the first time a side needs it, and keeps
+  the result. Memory is the limit (17 sides, many pictures, several frames
+  each), so sizes stay moderate. Units inside a building aren't drawn one
+  by one (the building shows how many), so a unit's picture is for those
+  out on the map and for bands.
+- **Animation:** an action's frames side by side in one strip (idle,
+  attack, hit). Today the board redraws only when something changes, and
+  effects are short, so a still screen costs nothing. Triggered animations
+  (an attack, a hit, a fall) stop by themselves and cost little. A looping
+  idle animation means redrawing all the time, which drains a phone's
+  battery: if wanted, only at the closest zoom, at about 10 frames a
+  second, and never while the game is paused. That changes the rule in
+  CLAUDE.md, so it is the author's call.
+- **What the page knows of the fighting:**
+  - A building that loses hit points was hit, and by how much: today's hit
+    effects already work it out by comparing each update with the last
+    (effects.js).
+  - Units have no hit points: a strike kills or misses, and a miss leaves
+    no trace. So a unit can't look hurt, only die, and a death is already
+    seen. A hurt look would need units to have hit points, a bigger change
+    to the rules.
+  - Who is fighting isn't sent. The easy way, on the page alone: every
+    unit and building strikes the nearest enemy in its reach each second,
+    so one with an enemy in reach is fighting, near enough exactly; the
+    page can work that out for what is on screen, with no change to the
+    server and nothing more sent. It can't tell which way a blow went,
+    though a building's chosen target is known. The exact way, more work:
+    the server sends each round's blows (who hit whom, kill or miss) as a
+    message of its own, outside the game's state, for aimed swings and
+    arrows. In a big battle that is thousands of blows a second to every
+    player, unless trimmed to what each one sees. Start with the easy way.
+- **Pictures from the author:**
 
-  | # | What | Size | Notes |
-  | --- | --- | --- | --- |
-  | 4 | Ground: grass, meadow, scrub, water | Paint at 1024 × 1024; ship 512 unless 1024 looks clearly better | Seamless both ways, opaque |
-  | 9 | Decorations: grass 2 (tuft, stone), meadow 2 (flower patches), scrub 3 (bush, small tree, thorn bush), water 2 (reeds, lily pad) | 128 × 128 (paint at 256 if easier) | Transparent, seen from above, the object in the middle 60% |
-  | 1 | What lies around the board | 512 × 512, seamless | Optional |
+  | What | How many | Paint at | Ship | Notes |
+  | --- | --- | --- | --- | --- |
+  | Ground: grass, meadow, scrub, water | 2 to 4 each | 512 × 512, one hex filling it | 256 (more if soft on a phone) | Opaque, plain at the hex's edges |
+  | Buildings: castle, tower, wagon, pit, farm, band; lair, ghoul, ogre, raider | 1 each, plus frames if animated | 512 (a castle covers 7 cells) | 256 to 512 | Transparent; the side's colour in shades of the key colour |
+  | Units, out on the map | 1, plus frames | 256 | 128 | As above |
 
-- **Scale:** a hex is 34 px from centre to corner (`hexSize`), so a 512 tile
-  covers about 4 hexes across and 5 rows down. The first thing to make is a
-  guide image: a 512 tile with true-size hexes drawn on it.
+  WebP is much smaller than PNG for the same picture. A cell at the
+  closest zoom is about 150 × 170 px on screen (a hex is 34 px from centre
+  to corner, `hexSize`, times 2.5), and about twice that on a phone's
+  sharper screen. The first thing to make is a guide image: a 512 square
+  with a true-size hex on it.
 - **Readability:** keep each terrain's colour family: mid green grass,
-  yellow-green meadow, dark olive scrub, blue water. At the furthest zoom a
-  hex is 24 px wide, and colour is what tells where one can build or walk.
-  Keep textures low in contrast and mid in tone, with no standout feature
-  that would repeat every few hexes.
-- **Order:** first the switch and Painted mode with stand-in textures made
-  from noise, to check the approach and the speed; then his four ground
-  textures; then the decorations.
+  yellow-green meadow, dark olive scrub, blue water. Colour is what tells
+  where one can build or walk. Keep the ground low in contrast and mid in
+  tone, so units and buildings stand out on it.
+- **Order:** the ground pictures (nothing animated); then buildings and
+  units in the sides' colours; then attack and hit animations, from the
+  easy way above; idle animations last, if the battery cost is fine.
+  Before his pictures arrive, stand-ins made from noise can check the
+  approach and the speed.
 
 ### Translations: Russian, Latvian, Finnish
 
@@ -295,6 +341,34 @@ and texts built up as the game goes. Things to watch there:
 - Every view switch is a page load, so the page can read its language once,
   as it loads.
 
+The game's panels and the crew and heroes dialogs followed. What was
+decided there:
+
+- Building names change form after a preposition in all three languages
+  (в башне, к башне; tornī; tornissa), so where a unit is reads as just
+  the name, or "→" and the name for one on its way («башня», «→ башня»),
+  and a target as «цель: башня». English keeps "in a tower".
+- The team's stock labels are short (Общ. камень, Kop. akmens, Yht. kivi,
+  and Team metal in English): measured with the real fonts, the longer
+  ones were cut off on a desktop and a 360 px phone, and "Team dark metal"
+  was already cut in English once the stock reached four figures. Without
+  IBM Plex (the cloud's browser can't fetch it, so the smoke screenshots
+  show this) the fallback font is wider: «Общий камень» fit with Plex but
+  not without; the short forms nearly fit either way.
+- The dialogs' top lines are one short sentence each now, the heroes
+  list's with what each skill's three letters stand for.
+
+The heroes list's skill letters (Att, Mel, Bld, Frm, Brd, Run) can be
+translated without moving anything: they are set in IBM Plex Mono, where
+every letter, Cyrillic, Latvian and Finnish ones included, is as wide as
+any other. Measured: each "Att Lv 15" is 63 px in every language, two
+lines of three on a 390 or 360 px phone, one line on a desktop, with "Lv"
+translated too or not. Candidates, in the order ranged, close combat,
+building, farming, breeding, running: Атк, Бли, Стр, Зем, Плд, Бег (and Ур
+for Lv); Uzb, Tuv, Būv, Zem, Vai, Skr (Lī); Hyö, Läh, Rak, Vil, Lis, Juo
+(Ta). The top line already explains them. Three letters exactly, and two
+for Lv, is what keeps the columns: a test could hold them to that.
+
 ### Less drawing during play
 
 While anything moves, which is nearly always, the board redraws at the
@@ -305,7 +379,7 @@ screen's refresh rate (60 or 144 times a second). The author put these off
    a cell. Panning, hovering and clicks would still redraw at once.
 2. Redraw for movement only when something moving is on screen.
 3. Keep the terrain drawn in a buffer, redrawn only on a pan or zoom. This
-   fits the Painted graphics best, as textures make each redraw dearer.
+   fits pictured ground best (above), as pictures make each redraw dearer.
 
 ### Faster fighting for big games
 

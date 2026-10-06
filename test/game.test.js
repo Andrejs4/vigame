@@ -4,10 +4,10 @@ import assert from 'node:assert/strict';
 import { BOARD_OPTIONS, createBoard } from '../src/core/board.js';
 import {
   advance, applyCommand, capacityOf, checkState, crewOf, footprint, levelXp, newGame, occupancy, publicView, random,
-  breedRate, depthOf, fullMeal, sharesStock, isRising, killChance, maxHp, pointsOf, seatsOf, starveChance, ROOM_COMMANDS,
+  breedRate, depthOf, fullMeal, sharesStock, isRising, killChance, maxHp, pointsOf, quickWin, scoreOf, seatsOf, starveChance, ROOM_COMMANDS,
 } from '../src/core/game.js';
 import {
-  BUILDING_TYPES, COMBAT_PERIOD, DARK_LORD, HORDE_PERIOD, HORDE_START, RAIDERS, RAID_PERIOD, RAID_PER_PLAYER, SALVAGE, SIDES, FOOD_PER_UNIT, FOOD_PERIOD, KILL_XP, LEVEL_RATE, RANGED_DAMAGE, LEVEL_XP, MAX_HUNGER, MAX_LEVEL, SKILL_RATE, SKILL_XP, START_UNITS, UNIT_LIMIT, WAGON_PATIENCE,
+  BUILDING_TYPES, COMBAT_PERIOD, DARK_LORD, TICKS_PER_SECOND, HORDE_PERIOD, HORDE_START, RAIDERS, RAID_PERIOD, RAID_PER_PLAYER, SALVAGE, SIDES, FOOD_PER_UNIT, FOOD_PERIOD, KILL_XP, LEVEL_RATE, RANGED_DAMAGE, LEVEL_XP, MAX_HUNGER, MAX_LEVEL, SKILL_RATE, SKILL_XP, START_UNITS, UNIT_LIMIT, WAGON_PATIENCE,
   WALK_TICKS, WORK_BASE,
 } from '../src/core/rules.js';
 import { distance } from '../src/core/hex.js';
@@ -966,6 +966,24 @@ test('points are the tally by POINTS, each line rounded down', () => {
   assert.deepEqual(lines, { kills: 20, damage: 5, felled: 50, castles: 500, born: 15, stone: 4, food: 1, built: 20, upgrades: 250, won: 500 });
   assert.equal(total, 1365);
   assert.equal(pointsOf(noTally()).total, 0);
+});
+
+test('a quick win multiplies the winners\' points: twice from 10 to 20 minutes, half again to 40, else not', () => {
+  const minute = 60 * TICKS_PER_SECOND;
+  assert.deepEqual([0, 10 * minute - 1, 10 * minute, 20 * minute - 1, 20 * minute, 40 * minute - 1, 40 * minute, 90 * minute].map(quickWin),
+    [1, 1, 2, 2, 1.5, 1.5, 1, 1]);
+  assert.equal(quickWin(undefined), 1, 'not while it goes on');
+  const state = stateWith([]);
+  Object.assign(state.players[0].tally, { kills: 3, won: 1 });
+  Object.assign(state.players[1].tally, { kills: 5, damage: 7 });
+  Object.assign(state, { tick: 15 * minute, over: 15 * minute, winner: 0 });
+  assert.deepEqual(scoreOf(state, 0), { lines: pointsOf(state.players[0].tally).lines, times: 2, total: 2 * 530 });
+  assert.deepEqual([scoreOf(state, 1).times, scoreOf(state, 1).total], [1, 50], 'the losers get none');
+  Object.assign(state, { tick: 25 * minute, over: 25 * minute });
+  state.players[0].tally.stone = 1;
+  assert.equal(scoreOf(state, 0).total, 796, '1.5 × 531, rounded down');
+  delete state.winner;
+  assert.equal(scoreOf(state, 0).times, 1, 'nobody won');
 });
 
 test('the side whose castle falls has lost; when one team is left, the game is over', () => {

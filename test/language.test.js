@@ -3,8 +3,10 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 import { LANGUAGE_NAMES, RUSSIAN_KEYS, autoLanguage, chosenLanguage, keyCandidates, loginLanguage } from '../src/client/language.js';
-import { WORDS, fill, say } from '../src/client/words.js';
+import { WORDS, fill, say, shortPoints } from '../src/client/words.js';
+import { TERRAIN } from '../src/core/board.js';
 import { LANGUAGES } from '../src/core/player.js';
+import { BUILDING_TYPES, SIDES, SKILLS } from '../src/core/rules.js';
 
 test('the page offers each language a player may choose, by its own name', () => {
   assert.deepEqual(Object.keys(LANGUAGE_NAMES), LANGUAGES.filter((l) => l !== 'auto'));
@@ -155,4 +157,19 @@ test('the page\'s texts name words that exist, in their English; How to play and
     const blocks = [...section.matchAll(/<div lang="(\w+)"/g)].map((m) => m[1]);
     assert.deepEqual(blocks, Object.keys(LANGUAGE_NAMES), id);
   }
+});
+
+test('the game\'s panels have a word for every terrain, building type, skill and side', () => {
+  const sideKey = (/** @type {string} */ name) => name.replace(/ (\w)/g, (_, c) => c.toUpperCase()).replace(/^\w/, (c) => c.toLowerCase());
+  const skillKey = (/** @type {string} */ skill) => `skill${skill[0].toUpperCase()}${skill.slice(1)}`;
+  const keys = [...Object.keys(TERRAIN), ...Object.keys(BUILDING_TYPES), ...Object.keys(SKILLS).map(skillKey), ...SIDES.map((s) => sideKey(s.name))];
+  for (const key of keys) assert.ok(Object.hasOwn(WORDS.en, key), `no word "${key}"`);
+  assert.equal(say('ru', { word: 'heroesCount', values: { n: 3, total: 12 } }), '3 героя из 12');
+  assert.equal(say('ru', { word: 'fallenCount', values: { n: 5 } }), '5 павших');
+  assert.equal(say('fi', { word: 'depthLine', values: { n: 1, max: 3, stone: say('fi', { word: 'stoneCost', values: { n: 40 } }) } }), 'syvyys 1/3, 40 kiveä');
+});
+
+test('points from 10000 on show rounded to thousands, with a "k"', () => {
+  assert.deepEqual([0, 432, 9999, 10000, 10499, 10500, 12345, 999999, 1234567].map(shortPoints),
+    ['0', '432', '9999', '10k', '10k', '11k', '12k', '1000k', '1235k']);
 });

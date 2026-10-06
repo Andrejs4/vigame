@@ -11,9 +11,9 @@ docs/architecture.md. Read it before working on the core, networking or
 persistence.
 
 docs/notes.md has the background: how the author works, how the pictures
-were made (with the commands), tools that helped, and plans not yet built (a
-"Painted" graphics mode, less drawing during play). Read it before art or
-graphics work.
+were made (with the commands), tools that helped, and plans not yet built
+(pictures for the ground, buildings and units at the closest zooms, less
+drawing during play). Read it before art or graphics work.
 
 ## Working with the author
 
@@ -136,12 +136,17 @@ graphics work.
   comes first while the browser isn't signed in.
 - Each player has a language (Auto, English, Russian, Latvian or Finnish:
   `LANGUAGES` in player.js, `LANGUAGE_NAMES` in language.js), kept on the
-  server. The login page, the settings page, the lobby and the game's
-  buttons are translated: their words are `WORDS` in words.js, which the
+  server. The login page, the settings page, the lobby, and in a game the
+  buttons, the status, stock and selection panels, and the crew, heroes
+  and points dialogs are translated: their words are `WORDS` in words.js, which the
   tests keep complete and about as long as the English; a static text in
   index.html names its word with `data-word` (`-title`, `-label` for its
   tooltip and label), and the lobby's How to play and About are written
-  out in each language. The rest of the game waits until the author asks.
+  out in each language. Messages, the renaming dialog and the heroes
+  list's skill letters wait until the author asks. A building's,
+  skill's or side's name on the page goes through its word (`typeName`,
+  `skillName`, `sideName` in play.js), so every one needs a word: the tests
+  check.
   docs/notes.md has his plan, what to watch for, the Russian names already
   used, and how the buttons' words were measured.
 - A game button's key is a letter of its label, in bold (`keyLabel`),

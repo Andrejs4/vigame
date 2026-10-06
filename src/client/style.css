@@ -369,15 +369,17 @@ button.inline:hover:not(:disabled) { background: none; color: var(--amber); }
 #start-button:hover:not(:disabled) { text-decoration: underline; }
 
 /* The table at a game's end: a row a side, winners first, a column a line of points. */
-#scores { width: min(760px, calc(100vw - 32px)); }
+/* Wide enough for every column in each language, with five-figure points; a phone scrolls it, the total in view. */
+#scores { width: min(1000px, calc(100vw - 32px)); }
 #scores[open] { display: flex; flex-direction: column; gap: 10px; }
 .scores-wrap { overflow: auto; }
 .scores { border-collapse: collapse; width: 100%; font: 12px var(--mono); font-variant-numeric: tabular-nums; }
-.scores th, .scores td { padding: 5px 7px; text-align: right; white-space: nowrap; }
+.scores th, .scores td { padding: 5px 6px; text-align: right; white-space: nowrap; }
 .scores th:first-child, .scores td:first-child { text-align: left; }
 .scores thead th { color: var(--ink-dim); font-weight: 500; border-bottom: 1px solid var(--panel-edge); cursor: help; }
 .scores td { color: var(--ink-dim); }
 .scores td:first-child, .scores .total { color: var(--ink); font-weight: 600; }
+.scores td.bonus { color: var(--amber); }
 .scores tr.won td:first-child::after { content: " \2605"; color: var(--amber); }
 /* The crew chooser's orders: the list moves, the ticks stay. */
 .crew-sort { display: flex; align-items: center; gap: 6px; color: var(--ink-dim); font-size: 12px; }

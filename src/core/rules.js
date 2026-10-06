@@ -277,6 +277,17 @@ export const POINTS = Object.freeze({
 });
 
 /**
+ * A quick win: the winners' points are multiplied by `times` when the game
+ * ended at least `from` and less than `to` ticks of game time in: twice
+ * from 10 to 20 minutes, half again from 20 to 40. Under 10 minutes or
+ * from 40 on, no bonus, so a game won before it got going earns none.
+ */
+export const QUICK_WIN = Object.freeze([
+  { from: 10 * 60 * TICKS_PER_SECOND, to: 20 * 60 * TICKS_PER_SECOND, times: 2 },
+  { from: 20 * 60 * TICKS_PER_SECOND, to: 40 * 60 * TICKS_PER_SECOND, times: 1.5 },
+]);
+
+/**
  * Bringing down a building bought with dark metal (a wagon) yields the
  * striker's side this share of its price.
  */

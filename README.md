@@ -31,8 +31,9 @@ Run `npm start` and open http://127.0.0.1:2567.
   in the lobby, changes the name and the language.
 - **Language**: Auto (the default), English, Russian, Latvian or Finnish;
   Auto's option says which it picked. The login page, the settings page,
-  the lobby (How to play and About too) and a game's buttons are in each
-  of them; the login and settings pages turn at once when another is
+  the lobby (How to play and About too), and in a game the buttons, the
+  status panel, the stock and selection panel, the crew chooser, the
+  heroes list and the table of points are in each of them; the login and settings pages turn at once when another is
   chosen. On the login page, Auto goes by the first of the browser's
   languages that the game has, else picks Russian for a name typed in
   Cyrillic letters, else English. Once signed in (settings, lobby, game),
@@ -42,8 +43,9 @@ Run `npm start` and open http://127.0.0.1:2567.
   Ферма, Отряд, Апгрейд, Бригада…, Герои…, Вернуть, Бросить, Атака…,
   Отпусти; Tornis, Rati, Bedre, Ferma, Bars, Uzlabot, Komanda…, Varoņi…,
   Mājās, Atcelt, Atakot…, Atlaist; Torni, Vaunu, Kuoppa, Farmi, Joukko,
-  Kehitä, Ryhmä…, Sankarit…, Kotiin, Peru, Hyökkää…, Vapauta. The panels,
-  messages and dialogs are in English for now.
+  Kehitä, Ryhmä…, Sankarit…, Kotiin, Peru, Hyökkää…, Vapauta. Messages,
+  the renaming dialog, and the heroes list's three-letter skill names
+  (Att, Mel, Bld…, explained in its top line) are in English for now.
 - **The lobby** lists your games under way, games with a free seat, other
   people's under way with every seat taken (**Watch** opens one as an
   observer), and the finished ones (anyone's; **Scores** opens one at its
@@ -101,8 +103,8 @@ Run `npm start` and open http://127.0.0.1:2567.
     stone, dark metal and food (so one hunger too), which any of them
     spends and all their pits, farms, castles and kills fill. It starts with
     every player's stone together (400 for two), and keeps food for all
-    their castles. The HUD calls it Team stone, Team dark metal and Team
-    food. Each player's points still count what their own units did.
+    their castles. The HUD calls it Team stone, Team metal and Team food.
+    Each player's points still count what their own units did.
   - **Very Easy Lord**: Shared Easy Lord where castles raise units twice as
     fast, with units at home or none (the units learn breeding no faster).
   - **Free for all** (two players or more): each against the others; the
@@ -214,9 +216,16 @@ Run `npm start` and open http://127.0.0.1:2567.
   1 per 10 hit points taken off enemy buildings, 50 an enemy building
   brought down (500 a castle or the lair), 5 a unit born, 1 a stone dug,
   1 per 10 food grown by crews, 20 a building finished, 50 × the grade an
-  upgrade reaches, and 500 for winning. Nobody sees any of it before the
-  end. The table's **Leave the match** goes back to the lobby; **Keep
-  watching** closes it, and **Scores** brings it back. Once a game is
+  upgrade reaches, and 500 for winning. A quick win multiplies the
+  winners' points: twice for a game won from 10 to 20 minutes of game
+  time, 1.5 times from 20 to 40, nothing extra under 10 minutes or from 40
+  on. Nobody sees any of it before the end. The table shows each side's
+  total first, then the bonus (only when a side has one), then the lines,
+  the weightiest first: win, castles, buildings felled, kills, damage,
+  upgrades, buildings finished, units born, stone, food. From 10000 a
+  number shows rounded to thousands with a "k" (13516 is 14k), the exact
+  points in its tooltip. It is in the player's language. The table's **Leave the match** goes back to the
+  lobby; **Keep watching** closes it, and **Scores** brings it back. Once a game is
   over, seats can't be given up, so the table keeps their holders' names.
 - **Hunger**: one number per side, 0 to 100%. At each meal, if there isn't
   enough, the food is shared evenly and what doesn't divide waits for the

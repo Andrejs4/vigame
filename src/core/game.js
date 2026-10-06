@@ -41,7 +41,7 @@ import { tileAt } from './board.js';
 import { gameName, unitName } from './names.js';
 import { GAME_NAME_MAX, cleanGameName } from './player.js';
 import {
-  BREED_RATE, BUILDING_TYPES, BUILD_RANGE, DARK_LORD, HERO_LEVEL_GROWTH, HERO_LEVEL_XP, HERO_SHARE, LORD_HP, LORD_PLAYERS_MAX, SHARED_STOCK, HORDE_MAX, HORDE_PERIOD, HORDE_START, POINTS, RAIDERS, SALVAGE, SEAT_SIDES, RAID_CHANCE, RAID_CLEAR, RAID_PER_PLAYER, RAID_PERIOD, RAID_ROAM, START_METAL, DEFAULT_MODE, MAX_PLAYERS, MODES, COMBAT_PERIOD, DEPART_GAP, FOOD_PER_UNIT, KILL_EVEN, KILL_MAX, KILL_STEP, KILL_XP, MELEE_DAMAGE, MELEE_RANGE,
+  BREED_RATE, BUILDING_TYPES, BUILD_RANGE, DARK_LORD, HERO_LEVEL_GROWTH, HERO_LEVEL_XP, HERO_SHARE, LORD_HP, LORD_PLAYERS_MAX, SHARED_STOCK, HORDE_MAX, HORDE_PERIOD, HORDE_START, POINTS, QUICK_WIN, RAIDERS, SALVAGE, SEAT_SIDES, RAID_CHANCE, RAID_CLEAR, RAID_PER_PLAYER, RAID_PERIOD, RAID_ROAM, START_METAL, DEFAULT_MODE, MAX_PLAYERS, MODES, COMBAT_PERIOD, DEPART_GAP, FOOD_PER_UNIT, KILL_EVEN, KILL_MAX, KILL_STEP, KILL_XP, MELEE_DAMAGE, MELEE_RANGE,
   RANGED_DAMAGE, RANGED_RANGE, REPAIR_WORK, FOOD_PERIOD, FOOD_STORE, HUNGER_PULL, LEVEL_GROWTH,
   LEVEL_RATE, LEVEL_XP, MAX_HUNGER, MAX_LEVEL, SIDES, SKILLS, SKILL_RATE, SKILL_XP, START_STONE, START_UNITS, STARVE_CHANCE,
   UNIT_LIMIT, WAGON_PATIENCE, WALK_TICKS, WORK_BASE,
@@ -129,8 +129,8 @@ import {
  *   them (`away` and `back`, which only the game server gives): the Dark
  *   Lord's horde doesn't go for its buildings, though it fights them on its
  *   way.
- * @property {Tally} tally What it has done, for its points (see POINTS in
- *   rules.js). Players see it only once the game is over.
+ * @property {Tally} tally What it has done, for its points (`scoreOf`; see
+ *   POINTS in rules.js). Players see it only once the game is over.
  */
 
 /** @typedef {Record<keyof typeof POINTS, number>} Tally */
@@ -262,6 +262,28 @@ export function pointsOf(tally) {
     k, Math.floor((tally[/** @type {keyof Tally} */ (k)] ?? 0) * worth),
   ])));
   return { lines, total: Object.values(lines).reduce((sum, n) => sum + n, 0) };
+}
+
+/**
+ * What a quick win multiplies the winners' points by, for a game that ended
+ * at this tick (QUICK_WIN in rules.js): 1 for none.
+ * @param {number | undefined} over
+ */
+export function quickWin(over) {
+  return over === undefined ? 1 : QUICK_WIN.find((q) => over >= q.from && over < q.to)?.times ?? 1;
+}
+
+/**
+ * A side's points at a game's end: its tally's (`pointsOf`), and for the
+ * winners, times the quick win's bonus, rounded down.
+ * @param {Pick<GameState, 'players' | 'over' | 'winner'>} state
+ * @param {number} owner
+ */
+export function scoreOf(state, owner) {
+  const p = state.players[owner];
+  const { lines, total } = pointsOf(p.tally);
+  const times = state.winner !== undefined && p.team === state.winner ? quickWin(state.over) : 1;
+  return { lines, times, total: Math.floor(total * times) };
 }
 
 /**
