@@ -69,11 +69,15 @@ its session ends.
 - A file saved by Inkscape carries an XML header, its own tags and a
   `style`, and the tests refuse it: keep only the path's `d`, in the form
   above.
-- The unit's meeple is narrowed, as the author did in Inkscape, so it looks
-  less like an asterisk and more like a person, with its head less narrowed
-  and the whole a little taller: x' = 256 + (x − 256) · k, with k 0.9 above
-  y 140 easing to 0.693 below y 200, and y' = 256 + (y − 256) · 1.1, on
-  every point of the original path made absolute, centred as before.
+- The meeples (the unit's, and the band's four) are narrowed, as the
+  author did the unit's in Inkscape, so they look less like asterisks and
+  more like people, with the heads less narrowed and the whole a little
+  taller. Each figure (a subpath, from M to z) is changed around its own
+  middle (mx, my), on every point of the original path made absolute:
+  x' = mx + (x − mx) · k, with k 0.9 over the top 21% of the figure's
+  height easing to 0.693 below 36%, and y' = my + (y − my) · 1.1. The
+  band's figures then move to 0.8 of their distance from the icon's middle,
+  side to side, so the four stand together.
 - One file serves everywhere. The board paints it on tokens (`tokens.js`);
   the page uses it as a CSS mask over a colour: the text's own in the
   buttons and the stock, light ink in the selection's picture.
