@@ -727,6 +727,21 @@ async function threeBrowsers(browser, url, { full, label }) {
   await a.mouse.up();
   const camAfter = await a.evaluate(() => ({ .../** @type {any} */ (window).__vigame.camera }));
   assert.ok(Math.abs(camAfter.x - camBefore.x) > 10, 'drag did not pan');
+  // A click whose hand wobbles a few pixels is still a click, and the board
+  // holds still.
+  const wobbled = await castleOf(a, 0);
+  await lookAt(a, wobbled);
+  await a.keyboard.press('Escape');
+  await a.waitForFunction(() => /** @type {any} */ (window).__vigame.selected === null);
+  const camStill = await a.evaluate(() => ({ .../** @type {any} */ (window).__vigame.camera }));
+  const at = await hexPoint(a, wobbled.q, wobbled.r);
+  await a.mouse.move(at.x, at.y);
+  await a.mouse.down();
+  await a.mouse.move(at.x + 3, at.y + 2);
+  await a.mouse.move(at.x - 2, at.y + 4);
+  await a.mouse.up();
+  await a.waitForFunction((id) => /** @type {any} */ (window).__vigame.selected === id, wobbled.id);
+  assert.deepEqual(await a.evaluate(() => ({ .../** @type {any} */ (window).__vigame.camera })), camStill, 'a wobbling click moved the board');
 
   // Pressing the minimap's top left corner looks there. It repaints at most
   // twice a second.

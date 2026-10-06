@@ -40,6 +40,14 @@ function percent(part, whole) {
   return `${String(Math.floor((100 * part) / whole)).padStart(3, '\u2007')}%`;
 }
 
+/**
+ * How far a press may wander, in CSS pixels from where it went down, and
+ * still be a click: a few for a mouse, more for a finger or a pen. Until it
+ * goes further the board holds still; then it pans, the spot grabbed staying
+ * under the pointer.
+ */
+const DRAG_SLOP = Object.freeze({ mouse: 6, other: 10 });
+
 /** Recenter's zoom at least: close enough to read how many are in each building. */
 const HOME_ZOOM = COUNT_ZOOM + 0.15;
 
@@ -1071,7 +1079,10 @@ export async function startGame(net, me) {
   /** The pointer that is panning. A second finger must not hijack the drag. */
   /** @type {number | null} */
   let dragPointer = null;
+  /** Whether the press has gone past DRAG_SLOP: a drag, then, not a click. */
   let dragMoved = false;
+  let downX = 0;
+  let downY = 0;
   let lastX = 0;
   let lastY = 0;
 
@@ -1079,21 +1090,24 @@ export async function startGame(net, me) {
     if (dragPointer !== null) return;
     dragPointer = e.pointerId;
     dragMoved = false;
-    lastX = e.clientX;
-    lastY = e.clientY;
+    downX = lastX = e.clientX;
+    downY = lastY = e.clientY;
     canvas.setPointerCapture(e.pointerId);
   });
 
   canvas.addEventListener('pointermove', (e) => {
     const rect = canvas.getBoundingClientRect();
     if (e.pointerId === dragPointer) {
-      const dx = e.clientX - lastX;
-      const dy = e.clientY - lastY;
-      if (Math.abs(dx) + Math.abs(dy) > 2) dragMoved = true;
-      camera.pan(dx, dy);
-      lastX = e.clientX;
-      lastY = e.clientY;
-      needsDraw = true;
+      const slop = e.pointerType === 'mouse' ? DRAG_SLOP.mouse : DRAG_SLOP.other;
+      if (!dragMoved && Math.hypot(e.clientX - downX, e.clientY - downY) > slop) dragMoved = true;
+      // A hand's wobble during a click leaves the board still; past the
+      // slop it catches up, so the spot grabbed is under the pointer again.
+      if (dragMoved) {
+        camera.pan(e.clientX - lastX, e.clientY - lastY);
+        lastX = e.clientX;
+        lastY = e.clientY;
+        needsDraw = true;
+      }
     }
 
     const h = hexAtScreen(e.clientX - rect.left, e.clientY - rect.top);

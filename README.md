@@ -325,7 +325,9 @@ Run `npm start` and open http://127.0.0.1:2567.
   counts those watching without a seat.
   **Recenter** looks at your own castle, close enough to read how many
   are in each building (a spectator sees the whole map).
-- Drag to pan, and use the wheel or the − / + buttons to zoom. Close up
+- Drag to pan, and use the wheel or the − / + buttons to zoom. A press
+  that wanders less than 6 px with a mouse (10 with a finger) is still a
+  click, and the board holds still meanwhile; past that it pans. Close up
   (at the closest zoom and two presses of − out, or four wheel notches)
   each cell shows a picture of its ground, grass, meadow, scrub or water, turned and mirrored cell by cell
   by the map, the same for every player; further out the cells keep their
