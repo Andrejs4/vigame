@@ -23,6 +23,7 @@ import { checkState, newGame } from '../src/core/game.js';
 import { axialToPixel, distance } from '../src/core/hex.js';
 import { GAME_NAMES } from '../src/core/names.js';
 import { BUILDING_TYPES } from '../src/core/rules.js';
+import { GROUND_PICTURES } from '../src/client/ground.js';
 import { PICTURES } from '../src/client/tokens.js';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -664,6 +665,7 @@ async function threeBrowsers(browser, url, { full, label }) {
   await waitInside(b, tower.id, 1);
   // Every picture arrived, here and behind the proxy alike.
   await a.waitForFunction((n) => /** @type {any} */ (window).__vigame.tokens.images.size === n, PICTURES.length);
+  await a.waitForFunction((n) => /** @type {any} */ (window).__vigame.ground.images.size === n, GROUND_PICTURES.length);
   if (!full) {
     for (const p of [a, b]) await p.context().close();
     return;
@@ -725,6 +727,21 @@ async function threeBrowsers(browser, url, { full, label }) {
   await a.mouse.up();
   const camAfter = await a.evaluate(() => ({ .../** @type {any} */ (window).__vigame.camera }));
   assert.ok(Math.abs(camAfter.x - camBefore.x) > 10, 'drag did not pan');
+  // A click whose hand wobbles a few pixels is still a click, and the board
+  // holds still.
+  const wobbled = await castleOf(a, 0);
+  await lookAt(a, wobbled);
+  await a.keyboard.press('Escape');
+  await a.waitForFunction(() => /** @type {any} */ (window).__vigame.selected === null);
+  const camStill = await a.evaluate(() => ({ .../** @type {any} */ (window).__vigame.camera }));
+  const at = await hexPoint(a, wobbled.q, wobbled.r);
+  await a.mouse.move(at.x, at.y);
+  await a.mouse.down();
+  await a.mouse.move(at.x + 3, at.y + 2);
+  await a.mouse.move(at.x - 2, at.y + 4);
+  await a.mouse.up();
+  await a.waitForFunction((id) => /** @type {any} */ (window).__vigame.selected === id, wobbled.id);
+  assert.deepEqual(await a.evaluate(() => ({ .../** @type {any} */ (window).__vigame.camera })), camStill, 'a wobbling click moved the board');
 
   // Pressing the minimap's top left corner looks there. It repaints at most
   // twice a second.
@@ -1211,6 +1228,13 @@ async function sixteen(browser, url) {
   for (let i = 0; i < 6; i++) await page.click('#zoom-out');
   await frames(page);
   await page.screenshot({ path: join(OUT, 'game-sixteen.png') });
+  // Close up, each cell shows a picture of its ground.
+  await page.waitForFunction((n) => /** @type {any} */ (window).__vigame.ground.images.size === n, GROUND_PICTURES.length);
+  await page.click('#recenter');
+  for (let i = 0; i < 12; i++) await page.click('#zoom-in');
+  assert.equal(await page.evaluate(() => /** @type {any} */ (window).__vigame.camera.zoom), 2.5, 'not at the closest zoom');
+  await frames(page);
+  await page.screenshot({ path: join(OUT, 'ground.png') });
   for (const p of [page, other]) await p.context().close();
 }
 

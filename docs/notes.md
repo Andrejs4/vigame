@@ -154,17 +154,37 @@ stay sharp on high-density screens. The icon is a 32 × 32 PNG.
 
 ### Graphics: pictures at the closest zooms
 
-Agreed in outline; nothing built yet. It waits on the pictures: the author
-will come back to it if he can get them. This replaces an earlier plan of
-one big texture per terrain pinned to the map, with decorations scattered
-over it.
+Agreed in outline. Built: the ground's pictures (src/client/ground.js),
+from the author's first set: grass 2 versions, meadow 1, scrub 1 (trees
+on bare ground), water 2 (lighter and darker). Next: more versions of
+each, then buildings and units when he has their pictures. This replaces
+an earlier plan of one big texture per terrain pinned to the map, with
+decorations scattered over it.
 
-- **Where:** at the closest zooms only, from about 1.2× (the camera goes
-  from 0.4× to 2.5×). Further out, today's flat colours stay: they read
-  better far out and cost nothing. The minimap keeps flat colours, and a
-  picture that fails to load falls back to today's look. A Graphics switch
-  in the View panel (remembered by each browser, like Mute) can turn them
-  off on a weak phone.
+How the ground's pictures were made: the author generated them with Stable
+Diffusion on his machine, 512 × 512, straight down (LĢIA's orthophotos
+weren't usable as they were). His originals go in `art-src/ground/` as
+`<terrain>-<n>.png` (kept out of git), and `python3 scripts/ground.py`
+(Pillow and numpy) makes each one's `src/client/art/ground-<terrain>-<n>.webp`:
+shrunk to a hex 256 px from corner to corner, recoloured to the terrain's
+colour on the board keeping its detail (a little lighter or darker per
+version, `LIFT`), and cut to a hex with clear corners, which also cuts off
+the stripes some generated pictures have down an edge. A new version is
+its original in that folder, a run of the script, and its count in
+`GROUND_VERSIONS` (ground.js). Seen in previews: a strong feature (a pale
+ring in the meadow's middle, a dark streak in the grass) shows in every
+cell, turned; more versions hide it, and cutting the hex leaves anything
+in the middle. Pictures of one scale only: a cell of tree tops beside one
+of a single big tree looks wrong.
+
+- **Where:** at the closest zooms only: in full at the closest zoom and
+  two presses of − out (four wheel notches), gone at the third press (the
+  camera goes from 0.4× to 2.5×; − divides it by 1.25, a notch by 1.12). Further out, the flat colours stay: they
+  read better far out and cost nothing. The minimap keeps flat colours,
+  and a picture that fails to load leaves its cells flat. Not built yet: a
+  Graphics switch (remembered by each browser, like Mute) to turn them off
+  on a weak phone; the View panel has no room on a phone, so perhaps on
+  the settings page.
 - **Ground, a picture per cell:** each terrain (grass, meadow, scrub,
   water) has 2 to 4 pictures of one hex. A cell takes one, turned by a
   sixth of a turn and maybe mirrored, picked from the map's seed so every

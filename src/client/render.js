@@ -14,6 +14,7 @@
 import { DIRECTIONS, axialToPixel, corners, key } from '../core/hex.js';
 import { depthOf, footprint, maxHp, occupancy, raiseWork, sideOf } from '../core/game.js';
 import { BUILDING_TYPES } from '../core/rules.js';
+import { groundShown } from './ground.js';
 
 /** Base colours per terrain, before per-tile tint. */
 const TERRAIN_COLORS = {
@@ -194,14 +195,16 @@ export class BoardRenderer {
    * @param {HTMLCanvasElement} canvas
    * @param {import('../core/board.js').Board} board
    * @param {import('./tokens.js').Tokens | null} [tokens] The pictures, once loaded.
+   * @param {import('./ground.js').Ground | null} [ground] The ground's pictures, for the closest zooms.
    */
-  constructor(canvas, board, tokens = null) {
+  constructor(canvas, board, tokens = null, ground = null) {
     this.canvas = canvas;
     const ctx = canvas.getContext('2d');
     if (!ctx) throw new Error('2D canvas context unavailable');
     this.ctx = ctx;
     this.board = board;
     this.tokens = tokens;
+    this.ground = ground;
     this.cornerOffsets = corners(board.hexSize);
     this.showCoords = false;
     /** Moving buildings facing left, the way they last went; the pictures face right. */
@@ -327,11 +330,18 @@ export class BoardRenderer {
       if (onScreen(sp)) visible.push({ tile, cx: sp.x, cy: sp.y });
     }
 
-    // Pass 1: terrain fill.
+    // Pass 1: terrain fill, and close up, the ground's pictures over it,
+    // fading in as the view comes closer.
     for (const { tile, cx, cy } of visible) {
       this.hexPath(cx, cy, zoom);
       ctx.fillStyle = groundColor(tile);
       ctx.fill();
+    }
+    const pictured = this.ground ? groundShown(zoom) : 0;
+    if (pictured > 0) {
+      ctx.globalAlpha = pictured;
+      for (const { tile, cx, cy } of visible) this.ground?.draw(ctx, tile, cx, cy, size * zoom);
+      ctx.globalAlpha = 1;
     }
 
     // Pass 2: grid lines, drawn after all fills so no fill overlaps a line.
