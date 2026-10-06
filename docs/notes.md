@@ -302,10 +302,13 @@ decided there:
   (в башне, к башне; tornī; tornissa), so where a unit is reads as just
   the name, or "→" and the name for one on its way («башня», «→ башня»),
   and a target as «цель: башня». English keeps "in a tower".
-- The team's stock labels are short (Общий камень, Kop. akmens, Yht. kivi,
+- The team's stock labels are short (Общ. камень, Kop. akmens, Yht. kivi,
   and Team metal in English): measured with the real fonts, the longer
   ones were cut off on a desktop and a 360 px phone, and "Team dark metal"
-  was already cut in English once the stock reached four figures.
+  was already cut in English once the stock reached four figures. Without
+  IBM Plex (the cloud's browser can't fetch it, so the smoke screenshots
+  show this) the fallback font is wider: «Общий камень» fit with Plex but
+  not without; the short forms nearly fit either way.
 - The dialogs' top lines are one short sentence each now, the heroes
   list's with what each skill's three letters stand for.
 

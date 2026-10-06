@@ -1222,7 +1222,7 @@ async function phone(browser, url) {
   await waitMatch(page, '#time', /^0:0[1-9]$/);
   // Shared Easy Lord: both see the team's stock, both starts' stone together.
   for (const p of [page, other]) {
-    await waitText(p, '#stone-label', 'Общий камень');
+    await waitText(p, '#stone-label', 'Общ. камень');
     await waitText(p, '#stone', '400');
   }
 
