@@ -27,4 +27,8 @@ test('a cell\'s picture, turn and mirror come from its tint: the same on every p
 
 test('the pictures fade in as the view comes close, and not further out', () => {
   assert.deepEqual([0.4, 1, GROUND_FROM, (GROUND_FROM + GROUND_FULL) / 2, GROUND_FULL, 2.5].map((z) => Number(groundShown(z).toFixed(3))), [0, 0, 0, 0.5, 1, 1]);
+  // In full at the closest zoom and two presses of − out; gone at the third.
+  assert.deepEqual([0, 1, 2, 3].map((presses) => groundShown(2.5 / 1.25 ** presses)), [1, 1, 1, 0]);
+  // With the wheel: four notches out in full, gone at the sixth.
+  assert.deepEqual([4, 6].map((notches) => groundShown(2.5 / 1.12 ** notches)), [1, 0]);
 });

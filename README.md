@@ -326,8 +326,8 @@ Run `npm start` and open http://127.0.0.1:2567.
   **Recenter** looks at your own castle, close enough to read how many
   are in each building (a spectator sees the whole map).
 - Drag to pan, and use the wheel or the − / + buttons to zoom. Close up
-  (from 1.1× zoom, fully from 1.3×) each cell shows a picture of its
-  ground, grass, meadow, scrub or water, turned and mirrored cell by cell
+  (at the closest zoom and two presses of − out, or four wheel notches)
+  each cell shows a picture of its ground, grass, meadow, scrub or water, turned and mirrored cell by cell
   by the map, the same for every player; further out the cells keep their
   flat colours, as does the minimap. The minimap
   in the corner shows the whole board and a frame around what you see;

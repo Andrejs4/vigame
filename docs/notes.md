@@ -177,8 +177,9 @@ cell, turned; more versions hide it, and cutting the hex leaves anything
 in the middle. Pictures of one scale only: a cell of tree tops beside one
 of a single big tree looks wrong.
 
-- **Where:** at the closest zooms only, fading in from 1.1× to 1.3× (the
-  camera goes from 0.4× to 2.5×). Further out, the flat colours stay: they
+- **Where:** at the closest zooms only: in full at the closest zoom and
+  two presses of − out (four wheel notches), gone at the third press (the
+  camera goes from 0.4× to 2.5×; − divides it by 1.25, a notch by 1.12). Further out, the flat colours stay: they
   read better far out and cost nothing. The minimap keeps flat colours,
   and a picture that fails to load leaves its cells flat. Not built yet: a
   Graphics switch (remembered by each browser, like Mute) to turn them off

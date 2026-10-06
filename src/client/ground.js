@@ -16,11 +16,14 @@ export const GROUND_PICTURES = Object.freeze(Object.entries(GROUND_VERSIONS)
 
 /**
  * The zooms over which the pictures fade in: none below GROUND_FROM, all of
- * them from GROUND_FULL (the camera goes from 0.4 to 2.5). Further out the
- * flat colours read better, and cost nothing.
+ * them from GROUND_FULL. The camera goes from 0.4 to 2.5, and the − button
+ * divides the zoom by 1.25, a wheel notch by 1.12: so the pictures show in
+ * full at the closest zoom and two presses of − out (2.5, 2, 1.6), and are
+ * gone at the third (1.28); with the wheel, four notches out in full, gone
+ * at the sixth. Further out the flat colours read better, and cost nothing.
  */
-export const GROUND_FROM = 1.1;
-export const GROUND_FULL = 1.3;
+export const GROUND_FROM = 1.4;
+export const GROUND_FULL = 1.55;
 
 /**
  * How much of the pictures shows at a zoom, from 0 to 1.

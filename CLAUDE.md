@@ -107,8 +107,9 @@ drawing during play). Read it before art or graphics work.
   function the tests run in Node. Keep them gentle and short (the tests
   check the gain, the wave and the length), hear fighting only on screen,
   and don't add looping ones.
-- Close up (zoom 1.1 to 1.3, fading in), each cell shows a picture of its
-  ground over its flat colour (`ground.js`): `art/ground-<terrain>-<n>.webp`,
+- Close up (the closest zoom and two presses of − out: zoom 1.55 and up,
+  fading out to 1.4; `GROUND_FULL`, `GROUND_FROM`), each cell shows a
+  picture of its ground over its flat colour (`ground.js`): `art/ground-<terrain>-<n>.webp`,
   the author's, made by `scripts/ground.py` from his originals in
   `art-src/ground/`. A cell's version, turn and mirror come from its tint,
   so every page shows the same ground. The minimap stays flat.
