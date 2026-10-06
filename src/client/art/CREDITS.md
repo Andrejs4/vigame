@@ -4,7 +4,9 @@ The pictures here are icons from [game-icons.net](https://game-icons.net)
 (source: [github.com/game-icons/icons](https://github.com/game-icons/icons)),
 under the [Creative Commons Attribution 3.0](https://creativecommons.org/licenses/by/3.0/)
 licence. They are changed only in form: the black background square is
-removed and the icon left unfilled, for the page to colour.
+removed and the icon left unfilled, for the page to colour. The meeple
+(`unit.svg`) is also made narrower and a little taller, its head less
+narrowed than its body, to look more like a person: the author's idea.
 
 | File | Icon | By |
 | --- | --- | --- |
@@ -14,7 +16,7 @@ removed and the icon left unfilled, for the page to colour.
 | `pit.svg` | dig-hole | Delapouite |
 | `farm.svg` | barn | Delapouite |
 | `band.svg` | meeple-group | Delapouite |
-| `unit.svg` | meeple | Delapouite |
+| `unit.svg` | meeple, narrower and taller | Delapouite |
 | `lair.svg` | cave-entrance | Delapouite |
 | `ghoul.svg` | shambling-zombie | Delapouite |
 | `ogre.svg` | ogre | Delapouite |

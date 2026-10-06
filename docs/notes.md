@@ -66,6 +66,14 @@ its session ends.
 - All icons so far are by Lorc or Delapouite; staying with them means About
   needs no new names. File names are lowercase letters only: the test that
   reads the authors from the credits table matches `[a-z]+.svg`.
+- A file saved by Inkscape carries an XML header, its own tags and a
+  `style`, and the tests refuse it: keep only the path's `d`, in the form
+  above.
+- The unit's meeple is narrowed, as the author did in Inkscape, so it looks
+  less like an asterisk and more like a person, with its head less narrowed
+  and the whole a little taller: x' = 256 + (x − 256) · k, with k 0.9 above
+  y 140 easing to 0.693 below y 200, and y' = 256 + (y − 256) · 1.1, on
+  every point of the original path made absolute, centred as before.
 - One file serves everywhere. The board paints it on tokens (`tokens.js`);
   the page uses it as a CSS mask over a colour: the text's own in the
   buttons and the stock, light ink in the selection's picture.
