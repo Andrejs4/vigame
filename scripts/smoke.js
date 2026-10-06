@@ -811,7 +811,7 @@ async function threeBrowsers(browser, url, { full, label }) {
   // Near the castle: the crew walks two seconds a cell, four on scrub.
   const pitSpot = await openCell(a, await spotsNear(a, blue));
   await clickHex(a, pitSpot.q, pitSpot.r);
-  assert.match(await confirmCrew(a, { shot: 'crew.png', key: 'p' }), /^[1-8] of 8$/, 'up to half of those at home are ticked');
+  assert.match(await confirmCrew(a, { shot: 'crew.png', key: 'p' }), /^[1-3] of 8$/, 'with 20 or fewer at home, three at most are ticked');
   await a.waitForFunction((n) => Object.keys(/** @type {any} */ (window).__vigame.view.buildings).length === n, count + 1);
   const pit = (await buildings(a)).find((x) => x.type === 'pit');
   await a.waitForFunction((id) => /** @type {any} */ (window).__vigame.view.buildings[id].work > 0, pit.id, { timeout: 30000 });

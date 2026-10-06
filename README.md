@@ -190,9 +190,11 @@ Run `npm start` and open http://127.0.0.1:2567.
   buildable ground within three cells of one of your standing buildings (a
   wagon: of your castle). Scrub can be crossed but not built on; water is
   neither. One building per cell. Placing one asks for its crew first, with
-  the best at home for its work ticked, up to half of those at home. Short
-  of its price, the button (or its key) says so at once, as does clicking
-  a cell if the stock ran low meanwhile, so no crew is chosen for nothing.
+  the best at home for its work ticked, up to half of those at home, and
+  no more than three while the castle holds 20 or fewer, so it keeps
+  enough to breed. Short of its price, the button (or its key) says so at
+  once, as does clicking a cell if the stock ran low meanwhile, so no crew
+  is chosen for nothing.
 - **Going up**: a new tower, wagon, pit or farm is only a site until its crew
   raises it. They start once they get there, faster the more of them and the
   better they build, and it trains their building skill as they go (one
@@ -310,7 +312,8 @@ Run `npm start` and open http://127.0.0.1:2567.
   hit points to its 300 (800, 1300, 1800), but no room.
 - **Bands** are groups of up to 80 units (more than a tower at its last
   grade holds) that move like wagons, for free. Placing one asks who goes,
-  with the best fighters at home ticked, up to 30. A band is drawn over
+  with the best fighters at home ticked, up to 30 (and up to half of those
+  at home, three while 20 or fewer are). A band is drawn over
   whatever it passes, yours over another side's; a click on the cell picks
   your band, and another side's band can't be selected, only aimed at with
   Attack. A band holds no cell, so it passes anything of

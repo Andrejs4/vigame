@@ -48,6 +48,13 @@ function percent(part, whole) {
  */
 const DRAG_SLOP = Object.freeze({ mouse: 6, other: 10 });
 
+/**
+ * While a castle holds this many units or fewer (`most`), a new building's
+ * crew chooser ticks no more than `ticked` of them, so a small castle keeps
+ * enough to breed.
+ */
+const FEW_AT_HOME = Object.freeze({ most: 20, ticked: 3 });
+
 /** Recenter's zoom at least: close enough to read how many are in each building. */
 const HOME_ZOOM = COUNT_ZOOM + 0.15;
 
@@ -788,7 +795,8 @@ export async function startGame(net, me) {
   /**
    * Let the player choose a crew: a list of their units, with the current
    * crew ticked, or for a new building the ones at home best at its work, up
-   * to half of those at home, so the castle keeps some to breed.
+   * to half of those at home, and no more than three while 20 or fewer are
+   * (FEW_AT_HOME), so the castle keeps some to breed.
    * @param {object} options
    * @param {string} options.title
    * @param {string} options.hint
@@ -811,9 +819,10 @@ export async function startGame(net, me) {
     /** @param {typeof units[number]} a @param {typeof units[number]} b */
     const better = (a, b) => b.skills[skill] - a.skills[skill] || b.level - a.level || a.name.localeCompare(b.name);
     const atHome = units.filter((u) => u.in === home);
+    const few = atHome.length <= FEW_AT_HOME.most ? FEW_AT_HOME.ticked : Infinity;
     const chosen = new Set(target
       ? crewOf(view, target)
-      : atHome.sort(better).slice(0, Math.min(limit, ticked, Math.floor(atHome.length / 2))).map((u) => u.id));
+      : atHome.sort(better).slice(0, Math.min(limit, ticked, few, Math.floor(atHome.length / 2))).map((u) => u.id));
     const rank = (/** @type {typeof units[number]} */ u) => (chosen.has(u.id) ? 0 : u.in === home ? 1 : 2);
     units.sort((a, b) => rank(a) - rank(b) || better(a, b));
 

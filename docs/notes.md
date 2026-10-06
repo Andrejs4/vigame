@@ -149,7 +149,10 @@ stay sharp on high-density screens. The icon is a 32 × 32 PNG.
 - A pit costs 1% hunger instead of stone, so pits can't be put down by the
   dozen for nothing. At 100% hunger it is free.
 - Bands hold 80, more than a tower at its last grade (60); the crew chooser
-  ticks up to 30. A band is drawn over the buildings it passes, yours over
+  ticks up to 30.
+- The crew chooser ticks no more than three for a new building while the
+  castle holds 20 or fewer (`FEW_AT_HOME` in play.js), the author's choice.
+  The more at home, the faster a castle breeds. A band is drawn over the buildings it passes, yours over
   another side's. Another side's band can't be selected, only aimed at with
   Attack.
 - The author has looked at hunger's rules and the score table and chose to
