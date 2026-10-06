@@ -1222,7 +1222,7 @@ async function phone(browser, url) {
   await waitMatch(page, '#time', /^0:0[1-9]$/);
   // Shared Easy Lord: both see the team's stock, both starts' stone together.
   for (const p of [page, other]) {
-    await waitText(p, '#stone-label', 'Team stone');
+    await waitText(p, '#stone-label', 'Общий камень');
     await waitText(p, '#stone', '400');
   }
 
@@ -1333,6 +1333,32 @@ async function phone(browser, url) {
     await other.keyboard.press('Escape');
     assert.equal(await other.getAttribute(`#${id}`, 'aria-pressed'), 'false');
   }
+  // The panels and the crew and heroes dialogs are in Russian too.
+  assert.deepEqual(await other.$$eval('#status dt', (els) => els.map((el) => el.textContent)),
+    ['Игра', 'Время', 'Вы', 'Игроки', 'Юниты', 'Клетка', 'Зрители']);
+  await waitText(other, '#seat', 'Oli · Багровые');
+  const crimson = await castleOf(other, 1);
+  await selectBuilding(other, crimson);
+  await waitSelection(other, /^Замок \(ур\. 1\) \| \d+\/40 дома · новый юнит\s+\d+% \| Прочность \d+\/\d+$/);
+  await other.click('#heroes-button');
+  await other.waitForSelector('#heroes[open]');
+  assert.equal(await text(other, '#heroes-title'), 'Герои');
+  assert.match(await text(other, '#heroes-hint') ?? '', /^Сначала высший уровень, потом павшие\. Att стрельба · Mel ближний бой · /);
+  assert.match(await text(other, '#heroes-count') ?? '', /^\d+ геро(й|я|ев) из \d+$/);
+  await other.screenshot({ path: join(OUT, 'heroes-ru.png') });
+  await other.click('#heroes button[value="close"]');
+  await other.click('#build-tower');
+  const spot = await openCell(other, await spotsNear(other, crimson));
+  await clickHex(other, spot.q, spot.r);
+  await other.waitForSelector('#crew[open]');
+  assert.equal(await text(other, '#crew-title'), 'Стройка: Башня');
+  assert.equal(await text(other, '#crew-hint'), 'До 20; отмечены лучшие для этой работы из тех, кто дома.');
+  assert.equal(await text(other, '#crew-sort-skill'), 'Атака');
+  assert.match(await text(other, '#crew-count') ?? '', /^\d+ из 20$/);
+  await other.screenshot({ path: join(OUT, 'crew-ru.png') });
+  await other.click('#crew-cancel');
+  await other.keyboard.press('Escape');
+
   await buildWith(page, 'tower', castle, { touch: true });
   await frames(page);
   await page.screenshot({ path: join(OUT, 'phone.png') });

@@ -31,8 +31,9 @@ Run `npm start` and open http://127.0.0.1:2567.
   in the lobby, changes the name and the language.
 - **Language**: Auto (the default), English, Russian, Latvian or Finnish;
   Auto's option says which it picked. The login page, the settings page,
-  the lobby (How to play and About too) and a game's buttons are in each
-  of them; the login and settings pages turn at once when another is
+  the lobby (How to play and About too), and in a game the buttons, the
+  status panel, the stock and selection panel, and the crew chooser and
+  heroes list are in each of them; the login and settings pages turn at once when another is
   chosen. On the login page, Auto goes by the first of the browser's
   languages that the game has, else picks Russian for a name typed in
   Cyrillic letters, else English. Once signed in (settings, lobby, game),
@@ -42,8 +43,10 @@ Run `npm start` and open http://127.0.0.1:2567.
   Ферма, Отряд, Апгрейд, Бригада…, Герои…, Вернуть, Бросить, Атака…,
   Отпусти; Tornis, Rati, Bedre, Ferma, Bars, Uzlabot, Komanda…, Varoņi…,
   Mājās, Atcelt, Atakot…, Atlaist; Torni, Vaunu, Kuoppa, Farmi, Joukko,
-  Kehitä, Ryhmä…, Sankarit…, Kotiin, Peru, Hyökkää…, Vapauta. The panels,
-  messages and dialogs are in English for now.
+  Kehitä, Ryhmä…, Sankarit…, Kotiin, Peru, Hyökkää…, Vapauta. Messages,
+  the renaming and points dialogs, and the heroes list's three-letter
+  skill names (Att, Mel, Bld…, explained in its top line) are in English
+  for now.
 - **The lobby** lists your games under way, games with a free seat, other
   people's under way with every seat taken (**Watch** opens one as an
   observer), and the finished ones (anyone's; **Scores** opens one at its
@@ -101,8 +104,8 @@ Run `npm start` and open http://127.0.0.1:2567.
     stone, dark metal and food (so one hunger too), which any of them
     spends and all their pits, farms, castles and kills fill. It starts with
     every player's stone together (400 for two), and keeps food for all
-    their castles. The HUD calls it Team stone, Team dark metal and Team
-    food. Each player's points still count what their own units did.
+    their castles. The HUD calls it Team stone, Team metal and Team food.
+    Each player's points still count what their own units did.
   - **Very Easy Lord**: Shared Easy Lord where castles raise units twice as
     fast, with units at home or none (the units learn breeding no faster).
   - **Free for all** (two players or more): each against the others; the

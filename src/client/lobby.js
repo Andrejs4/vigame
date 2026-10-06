@@ -12,7 +12,7 @@ import { hasLord } from '../core/game.js';
 import { MODES, SEAT_SIDES, SIDES, TICKS_PER_SECOND } from '../core/rules.js';
 import { getJson, post, reason } from './api.js';
 import { autoLanguage, browserLanguages, chosenLanguage } from './language.js';
-import { WORDS, say, translate } from './words.js';
+import { WORDS, isWord, say, translate } from './words.js';
 
 /** @typedef {import('./language.js').PageLanguage} PageLanguage */
 /** @typedef {import('./words.js').Word} Word */
@@ -39,13 +39,6 @@ function gameTime(tick) {
   const s = Math.floor((tick || 0) / TICKS_PER_SECOND);
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 }
-
-/**
- * Whether a text from the server is one of the words, such as a mode's key.
- * @param {unknown} key
- * @returns {key is Word}
- */
-const isWord = (key) => typeof key === 'string' && Object.hasOwn(WORDS.en, key);
 
 /**
  * How a finished game came out, in a few words.

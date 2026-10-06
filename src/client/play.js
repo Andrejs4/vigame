@@ -5,14 +5,14 @@
  */
 
 import { axialToPixel, bounds, distance, key, pixelToAxial } from '../core/hex.js';
-import { BOARD_OPTIONS, TERRAIN, createBoard, tileAt } from '../core/board.js';
+import { BOARD_OPTIONS, createBoard, tileAt } from '../core/board.js';
 import {
   buildCost, capacityOf, castleOf, crewOf, depthOf, foodStore, fullMeal, inBuildRange, isDugOut, isRising, maxHp, occupancy, pointsOf, purseOf,
   raiseWork, seatsOf, sharesStock, shortOf, sideOf, upgradeCost,
 } from '../core/game.js';
 import { GAME_NAME_MAX, cleanGameName } from '../core/player.js';
 import { PORTRAIT_SIDE, portraitOf } from '../core/names.js';
-import { BUILDING_TYPES, POINTS, SKILL_SHORT, SKILLS, TICKS_PER_SECOND, UNIT_LIMIT } from '../core/rules.js';
+import { BUILDING_TYPES, POINTS, SKILL_SHORT, TICKS_PER_SECOND, UNIT_LIMIT } from '../core/rules.js';
 import { getJson, serverBase } from './api.js';
 import { Camera } from './camera.js';
 import { Effects, fallenHeroes, fallenHeroesNote } from './effects.js';
@@ -21,7 +21,7 @@ import { BoardRenderer, COUNT_ZOOM, pickAt } from './render.js';
 import { autoLanguage, browserLanguages, chosenLanguage, keyCandidates } from './language.js';
 import { Sounds, soundsFor } from './sounds.js';
 import { Tokens } from './tokens.js';
-import { say, translate } from './words.js';
+import { isWord, say, translate } from './words.js';
 
 /** @param {number} tick */
 function formatTime(tick) {
@@ -127,12 +127,36 @@ export async function startGame(net, me) {
   const mapFrame = /** @type {HTMLElement} */ (document.getElementById('minimap-frame'));
   const mapPanel = /** @type {HTMLElement} */ (document.getElementById('minimap'));
   const controls = /** @type {HTMLElement} */ (document.getElementById('controls'));
-  // The buttons are in the player's language; the rest of the game isn't
-  // translated yet.
+  // The panels, the buttons and the crew and heroes dialogs are in the
+  // player's language; messages, the other dialogs and the heroes list's
+  // skill letters aren't translated yet.
   const language = chosenLanguage(me.language, autoLanguage(browserLanguages(), me.name));
   const word = (/** @type {import('./words.js').Word} */ w, /** @type {Record<string, string | number>} */ values = {}) => say(language, { word: w, values });
-  controls.lang = language;
-  translate(controls, language);
+  for (const id of ['stage', 'crew', 'heroes']) {
+    const root = /** @type {HTMLElement} */ (document.getElementById(id));
+    root.lang = language;
+    translate(root, language);
+  }
+  /**
+   * A building type's name, in the player's language.
+   * @param {string} type
+   */
+  const typeName = (type) => (isWord(type) ? word(type) : BUILDING_TYPES[type]?.name ?? type);
+  /**
+   * A side's name, in the player's language ("Blue", "Dark Lord").
+   * @param {Pick<import('../core/game.js').GameState, 'players'>} state
+   * @param {number} owner
+   */
+  const sideName = (state, owner) => {
+    const { name } = sideOf(state, owner);
+    const key = name.replace(/ (\w)/g, (_, c) => c.toUpperCase()).replace(/^\w/, (c) => c.toLowerCase());
+    return isWord(key) ? word(key) : name;
+  };
+  /**
+   * A skill's name, in the player's language ("Close combat").
+   * @param {import('../core/rules.js').Skill} skill
+   */
+  const skillName = (skill) => word(/** @type {import('./words.js').Word} */ (`skill${skill[0].toUpperCase()}${skill.slice(1)}`));
   // Each button's key in the player's language, and the English one, which
   // works in every language.
   for (const button of /** @type {NodeListOf<HTMLElement>} */ (controls.querySelectorAll('[data-word-key]'))) {
@@ -481,16 +505,16 @@ export async function startGame(net, me) {
       const players = view?.players ?? [];
       const over = view?.over !== undefined;
       const winners = view?.winner;
-      const names = players.filter((p) => p.team === winners).map((p) => sideOf({ players }, p.id).name).join(' and ');
-      const outcome = !over ? '' : winners === undefined ? ' · over, nobody won' : seat === null
-        ? ` · over: ${names} won`
-        : players[seat]?.team === winners ? ' · over: you won' : ' · over: you lost';
-      hud.time.textContent = `${formatTime(view?.tick ?? 0)}${paused && !over ? ' · paused' : ''}${outcome}`;
-      hud.time.title = paused && !over ? 'The game waits until every player is here' : '';
+      const names = players.filter((p) => p.team === winners).map((p) => sideName({ players }, p.id)).join(', ');
+      const outcome = !over ? '' : winners === undefined ? word('nobodyWon') : seat === null
+        ? word('overSideWon', { side: names })
+        : word(players[seat]?.team === winners ? 'overYouWon' : 'overYouLost');
+      hud.time.textContent = [formatTime(view?.tick ?? 0), paused && !over ? word('paused') : '', outcome].filter(Boolean).join(' · ');
+      hud.time.title = paused && !over ? word('pausedTitle') : '';
     }
     if (hud.seat) {
       const mine = seat !== null && view ? sideOf(view, seat) : null;
-      hud.seat.textContent = `${me.name} · ${mine ? mine.name : 'Spectator'}`;
+      hud.seat.textContent = `${me.name} · ${mine && seat !== null && view ? sideName(view, seat) : word('spectator')}`;
       hud.seat.style.color = mine ? mine.accent : '';
     }
     if (hud.units) {
@@ -499,9 +523,11 @@ export async function startGame(net, me) {
     // The stock this side lives off: its own, or its team's when they share.
     const stock = seat !== null && view ? purseOf(view, seat) : null;
     const team = Boolean(view && sharesStock(view.mode));
-    for (const [id, label] of [['stone-label', 'Stone'], ['metal-label', 'Dark metal'], ['food-label', 'Food']]) {
+    for (const [id, label, ours] of /** @type {const} */ ([
+      ['stone-label', 'stone', 'teamStone'], ['metal-label', 'darkMetal', 'teamDarkMetal'], ['food-label', 'food', 'teamFood'],
+    ])) {
       const dt = document.getElementById(id);
-      const text = team ? `Team ${label.toLowerCase()}` : label;
+      const text = word(team ? ours : label);
       if (dt && dt.textContent !== text) dt.textContent = text;
     }
     if (hud.stone) {
@@ -520,12 +546,12 @@ export async function startGame(net, me) {
       hud.foodCount.textContent = stock ? String(stock.food) : '—';
       hud.foodCount.classList.toggle('marked', Boolean(stock) && meal.seat === seat && meal.short);
       hud.foodStore.textContent = stock && view && seat !== null ? ` / ${foodStore(view, seat)}` : '';
-      hud.hunger.textContent = stock ? ` · hunger ${stock.hunger}%` : '';
+      hud.hunger.textContent = stock ? ` · ${word('hungerShort', { n: stock.hunger })}` : '';
       hud.food.classList.toggle('hungry', Boolean(stock?.hunger));
     }
     if (hud.selectionName && hud.selectionWork && hud.selectionHp && hud.selectionPicture) {
       const b = selected ? view?.buildings[selected] : null;
-      const lines = b ? describe(b) : { name: 'Nothing selected', work: '', hp: '' };
+      const lines = b ? describe(b) : { name: word('nothingSelected'), work: '', hp: '' };
       const accent = b && view ? sideOf(view, b.owner).accent : '';
       hud.selectionName.textContent = lines.name;
       hud.selectionName.style.color = b ? accent : 'var(--ink-dim)';
@@ -544,14 +570,14 @@ export async function startGame(net, me) {
     }
     if (hud.tile) {
       const t = hover ? tileAt(board, hover.q, hover.r) : null;
-      const rule = t && !t.passable ? ' — impassable' : t && !t.buildable ? ' — no building' : '';
-      hud.tile.textContent = t ? `${TERRAIN[t.terrain].label} (${t.q}, ${t.r})${rule}` : '—';
+      const rule = t && !t.passable ? ` — ${word('impassable')}` : t && !t.buildable ? ` — ${word('noBuilding')}` : '';
+      hud.tile.textContent = t ? `${word(t.terrain)} (${t.q}, ${t.r})${rule}` : '—';
     }
     if (hud.players) {
       // Seated players who are here, of the seats; it blinks while the game waits.
       const here = new Set(peers.filter((p) => p.seat !== null).map((p) => p.seat)).size;
       const away = view ? view.players.filter((p) => p.away).length : 0;
-      hud.players.textContent = view ? `${here}/${seatsOf(view)}${away ? `, ${away} away` : ''}` : '—';
+      hud.players.textContent = view ? `${here}/${seatsOf(view)}${away ? `, ${word('awayCount', { n: away })}` : ''}` : '—';
       hud.players.classList.toggle('waiting', paused && view?.over === undefined);
     }
     startButton.hidden = !canStartNow();
@@ -559,7 +585,7 @@ export async function startGame(net, me) {
     if (startButton.textContent !== startLabel) startButton.textContent = startLabel;
     if (hud.observers) {
       const watching = peers.filter((p) => p.seat === null);
-      hud.observers.textContent = net.connected() ? String(watching.length) : 'offline';
+      hud.observers.textContent = net.connected() ? String(watching.length) : word('offlineShort');
       hud.observers.title = watching.map((p) => p.name).filter(Boolean).join(', ');
     }
 
@@ -605,32 +631,33 @@ export async function startGame(net, me) {
    */
   function describe(b) {
     const type = BUILDING_TYPES[b.type];
-    const name = type.grades > 1 ? `${type.name} (grade ${b.grade})` : type.name;
+    const name = type.grades > 1 ? word('graded', { name: typeName(b.type), n: b.grade }) : typeName(b.type);
     /** @type {string[]} */
     const parts = [];
     const done = percent(b.work ?? 0, type.work ?? 1);
     if (b.type === 'castle') {
-      parts.push(`${occ?.inside.get(b.id)?.length ?? 0}/${capacityOf(b)} at home`, `next unit ${done}`);
+      parts.push(word('atHome', { n: occ?.inside.get(b.id)?.length ?? 0, max: capacityOf(b) }), word('nextUnit', { done }));
     } else if (type.capacity) {
-      parts.push(`crew ${view ? crewOf(view, b.id).length : 0}/${capacityOf(b)}`);
+      parts.push(word('crewLine', { n: view ? crewOf(view, b.id).length : 0, max: capacityOf(b) }));
     }
     // The lair, raiders and the horde fight by themselves, at a level of their own.
-    if (type.attack) parts.push(`level ${type.attack.skill}`);
+    if (type.attack) parts.push(word('levelLine', { n: type.attack.skill }));
     const toward = (/** @type {number} */ sofar) => percent(sofar, raiseWork(b));
-    if (b.upgrading !== undefined) parts.push(`upgrading ${toward(b.upgrading)}`);
+    if (b.upgrading !== undefined) parts.push(word('upgrading', { done: toward(b.upgrading) }));
     if (isRising(b)) {
-      parts.push(`going up ${toward(b.raised ?? 0)}`);
+      parts.push(word('goingUp', { done: toward(b.raised ?? 0) }));
     } else {
       if (type.depth !== undefined) {
         // The stone left to dig before it is a grade deeper.
         const per = type.perDepth ?? 1;
-        parts.push(isDugOut(b) ? 'dug out' : `depth ${depthOf(b)}/${type.depth}, ${per - ((b.dug ?? 0) % per)} stone`);
+        const stone = word('stoneCost', { n: per - ((b.dug ?? 0) % per) });
+        parts.push(isDugOut(b) ? word('dugOut') : word('depthLine', { n: depthOf(b), max: type.depth, stone }));
       }
-      if (type.yields === 'food') parts.push(`next food ${done}`);
+      if (type.yields === 'food') parts.push(word('nextFood', { done }));
     }
     const target = b.target ? view?.buildings[b.target] : null;
-    if (target) parts.push(`attacking the ${BUILDING_TYPES[target.type].name.toLowerCase()}`);
-    const hp = b.hp !== undefined && view ? `HP ${b.hp}/${maxHp(view, b)}` : '';
+    if (target) parts.push(word('attacking', { name: typeName(target.type).toLowerCase() }));
+    const hp = b.hp !== undefined && view ? word('hpLine', { hp: b.hp, max: maxHp(view, b) }) : '';
     return { name, work: parts.join(' · '), hp };
   }
 
@@ -642,11 +669,10 @@ export async function startGame(net, me) {
   function whereIs(u, target) {
     const id = u.in ?? u.to;
     const b = id && view ? view.buildings[id] : null;
-    if (!b) return 'outside';
-    if (id === target) return u.in ? 'here' : 'on the way here';
-    if (b.type === 'castle') return u.in ? 'at home' : 'going home';
-    const name = BUILDING_TYPES[b.type].name.toLowerCase();
-    return u.in ? `in a ${name}` : `going to a ${name}`;
+    if (!b) return word('whereOutside');
+    if (id === target) return word(u.in ? 'whereHere' : 'whereComing');
+    if (b.type === 'castle') return word(u.in ? 'whereHome' : 'whereGoingHome');
+    return word(u.in ? 'whereIn' : 'whereTo', { name: typeName(b.type).toLowerCase() });
   }
 
   /**
@@ -707,13 +733,13 @@ export async function startGame(net, me) {
       stats.append(`${lv(u.level)} · `, years);
       const where = document.createElement('span');
       where.className = 'where';
-      where.textContent = u.died === undefined ? whereIs(u, null) : u.how === 'hunger' ? 'died of hunger' : 'died in combat';
+      where.textContent = u.died === undefined ? whereIs(u, null) : word(u.how === 'hunger' ? 'diedHunger' : 'diedCombat');
       const levels = document.createElement('span');
       levels.className = 'skills';
       levels.append(...skills.map(([skill, short]) => {
         const level = document.createElement('span');
         level.textContent = `${short} ${lv(u.skills[skill])}`;
-        level.title = SKILLS[skill];
+        level.title = skillName(skill);
         return level;
       }));
       const li = document.createElement('li');
@@ -726,11 +752,13 @@ export async function startGame(net, me) {
     if (!heroes.length) {
       const none = document.createElement('li');
       none.className = 'none';
-      none.textContent = gone.length ? 'None alive.' : 'None yet: about one unit in ten is born a hero.';
+      none.textContent = word(gone.length ? 'heroesNoneAlive' : 'heroesNoneYet');
       heroesList.append(none);
     }
     heroesList.append(...gone.map(row));
-    heroesCount.textContent = `${heroes.length} of your ${units.length} units${gone.length ? ` · ${gone.length} fallen` : ''}`;
+    heroesCount.textContent = [
+      word('heroesCount', { n: heroes.length, total: units.length }), gone.length ? word('fallenCount', { n: gone.length }) : '',
+    ].filter(Boolean).join(' · ');
     heroesDialog.showModal();
     heroesList.scrollTop = 0;
   }
@@ -770,7 +798,7 @@ export async function startGame(net, me) {
     crewParts.title.textContent = title;
     crewParts.hint.textContent = hint;
     crewParts.ok.textContent = action;
-    crewParts.ok.title = `${action} (Enter or ${keys[0]})`;
+    crewParts.ok.title = word('okTitle', { action, key: keys[0] });
     /** Each unit's row, by id. */
     /** @type {Map<string, HTMLElement>} */
     const rows = new Map();
@@ -789,12 +817,12 @@ export async function startGame(net, me) {
       years.textContent = `${minutesOld(u)}m`;
       if (u.hero) {
         years.className = 'hero';
-        years.title = 'A hero: levels up faster than the rest';
+        years.title = word('heroTitle');
       }
-      stats.append(`Lv ${u.level} · ${SKILLS[skill]} ${u.skills[skill]} · `, years);
+      stats.append(`Lv ${u.level} · ${skillName(skill)} ${u.skills[skill]} · `, years);
       const where = document.createElement('span');
       where.className = 'where';
-      where.textContent = extra ? `${whereIs(u, target)} · ${SKILLS[extra]} ${u.skills[extra]}` : whereIs(u, target);
+      where.textContent = extra ? `${whereIs(u, target)} · ${skillName(extra)} ${u.skills[extra]}` : whereIs(u, target);
       const label = document.createElement('label');
       label.append(box, portrait(u), name, stats, where);
       const li = document.createElement('li');
@@ -821,12 +849,12 @@ export async function startGame(net, me) {
     };
     const bySkill = /** @type {HTMLButtonElement} */ (document.getElementById('crew-sort-skill'));
     // A crew that fights is chosen for its attack: close combat comes too late.
-    bySkill.textContent = skill === 'ranged' ? 'Attack' : SKILLS[skill];
-    bySkill.title = `Best at ${SKILLS[skill].toLowerCase()} first`;
+    bySkill.textContent = skill === 'ranged' ? word('sortAttack') : skillName(skill);
+    bySkill.title = word('sortSkillTitle', { skill: skillName(skill).toLowerCase() });
     for (const button of crewParts.sorts) button.onclick = () => order(button.dataset.sort ?? 'default');
     order('default');
     const sync = () => {
-      crewParts.count.textContent = `${chosen.size} of ${limit}`;
+      crewParts.count.textContent = word('crewCount', { n: chosen.size, max: limit });
       for (const box of crewParts.list.querySelectorAll('input')) box.disabled = !box.checked && chosen.size >= limit;
     };
     crewParts.list.onchange = (e) => {
@@ -961,13 +989,9 @@ export async function startGame(net, me) {
       // Only for a cell it can go on: anywhere else, the server says why not.
       if (highlights.has(key(at.q, at.r))) {
         const chosen = await chooseCrew({
-          title: `New ${type.name.toLowerCase()}`,
-          hint: type.band
-            ? `Choose who goes, up to ${type.capacity}. The best fighters at home are ticked, up to ${type.ticked ?? type.capacity} `
-              + 'and up to half of those at home.'
-            : `Choose its crew, up to ${type.capacity}: they build it once they get there, then work it. `
-              + 'The best at home for the work are ticked, up to half of those at home.',
-          action: 'Build',
+          title: word('crewNewTitle', { name: typeName(kind) }),
+          hint: word(type.band ? 'crewHintBand' : 'crewHintNew', { n: type.capacity }),
+          action: word('groupBuild'),
           kind,
           limit: type.capacity,
           target: null,
@@ -1231,9 +1255,9 @@ export async function startGame(net, me) {
     if (!b) return;
     const type = BUILDING_TYPES[b.type];
     const units = await chooseCrew({
-      title: `${type.name} crew`,
-      hint: `Up to ${capacityOf(b)}. Those you untick go home; those you tick come from wherever they are.`,
-      action: 'Send',
+      title: word('crewOfTitle', { name: typeName(b.type) }),
+      hint: word('crewHint', { n: capacityOf(b) }),
+      action: word('send'),
       kind: b.type,
       limit: capacityOf(b),
       target: b.id,
@@ -1244,8 +1268,10 @@ export async function startGame(net, me) {
   });
 
   // The heroes list: H, as well as Enter or Escape, closes it again.
-  /** @type {HTMLElement} */ (document.getElementById('heroes-hint')).textContent = `Yours alive now, highest level first, with each skill's level: ${
-    Object.entries(SKILL_SHORT).map(([skill, short]) => `${short} ${SKILLS[/** @type {import('../core/rules.js').Skill} */ (skill)].toLowerCase()}`).join(', ')}. Below them, those that died while this page was open.`;
+  // Highest level first, then the fallen, and what each skill's three letters stand for.
+  /** @type {HTMLElement} */ (document.getElementById('heroes-hint')).textContent = word('heroesHint', {
+    skills: Object.entries(SKILL_SHORT).map(([skill, short]) => `${short} ${skillName(/** @type {import('../core/rules.js').Skill} */ (skill)).toLowerCase()}`).join(' · '),
+  });
   heroesButton.addEventListener('click', showHeroes);
   heroesDialog.addEventListener('keydown', (e) => {
     // Closed, it keeps the focus until the next frame: the key is the page's then.

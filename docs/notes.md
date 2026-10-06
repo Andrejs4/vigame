@@ -295,6 +295,31 @@ and texts built up as the game goes. Things to watch there:
 - Every view switch is a page load, so the page can read its language once,
   as it loads.
 
+The game's panels and the crew and heroes dialogs followed. What was
+decided there:
+
+- Building names change form after a preposition in all three languages
+  (в башне, к башне; tornī; tornissa), so where a unit is reads as just
+  the name, or "→" and the name for one on its way («башня», «→ башня»),
+  and a target as «цель: башня». English keeps "in a tower".
+- The team's stock labels are short (Общий камень, Kop. akmens, Yht. kivi,
+  and Team metal in English): measured with the real fonts, the longer
+  ones were cut off on a desktop and a 360 px phone, and "Team dark metal"
+  was already cut in English once the stock reached four figures.
+- The dialogs' top lines are one short sentence each now, the heroes
+  list's with what each skill's three letters stand for.
+
+The heroes list's skill letters (Att, Mel, Bld, Frm, Brd, Run) can be
+translated without moving anything: they are set in IBM Plex Mono, where
+every letter, Cyrillic, Latvian and Finnish ones included, is as wide as
+any other. Measured: each "Att Lv 15" is 63 px in every language, two
+lines of three on a 390 or 360 px phone, one line on a desktop, with "Lv"
+translated too or not. Candidates, in the order ranged, close combat,
+building, farming, breeding, running: Атк, Бли, Стр, Зем, Плд, Бег (and Ур
+for Lv); Uzb, Tuv, Būv, Zem, Vai, Skr (Lī); Hyö, Läh, Rak, Vil, Lis, Juo
+(Ta). The top line already explains them. Three letters exactly, and two
+for Lv, is what keeps the columns: a test could hold them to that.
+
 ### Less drawing during play
 
 While anything moves, which is nearly always, the board redraws at the

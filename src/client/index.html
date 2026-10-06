@@ -319,16 +319,16 @@
   <div class="hud" id="status">
     <!-- Folds the panel to this header, and unfolds it; this browser keeps the choice. -->
     <button class="masthead" id="status-toggle" aria-expanded="true" aria-controls="status-body" title="Hide the game's details">
-      <span>Vigame &middot; prototype</span><span class="chevron" aria-hidden="true"></span>
+      <span data-word="masthead">Vigame · prototype</span><span class="chevron" aria-hidden="true"></span>
     </button>
     <dl id="status-body">
-      <div class="row"><dt>Game</dt><dd><span id="game-name">&mdash;</span><button class="inline" id="rename-button" hidden aria-label="Rename the game" title="Rename the game">✎</button></dd></div>
-      <div class="row"><dt>Time</dt><dd id="time">0:00</dd></div>
-      <div class="row"><dt>You</dt><dd id="seat">&mdash;</dd></div>
-      <div class="row"><dt>Players</dt><dd><span id="players" title="Seated players here, of the game's seats; it blinks while the game waits for the rest">&mdash;</span><button class="inline" id="start-button" hidden title="Start without the players missing: the Dark Lord leaves their castles be until they are back" data-word-title="startNowTitle" data-word="startNow">Start</button></dd></div>
-      <div class="row"><dt>Units</dt><dd id="units">&mdash;</dd></div>
-      <div class="row"><dt>Tile</dt><dd id="tile">&mdash;</dd></div>
-      <div class="row"><dt>Observers</dt><dd id="observers">0</dd></div>
+      <div class="row"><dt data-word="statusGame">Game</dt><dd><span id="game-name">&mdash;</span><button class="inline" id="rename-button" hidden aria-label="Rename the game" title="Rename the game" data-word-label="renameTitle" data-word-title="renameTitle">✎</button></dd></div>
+      <div class="row"><dt data-word="statusTime">Time</dt><dd id="time">0:00</dd></div>
+      <div class="row"><dt data-word="statusYou">You</dt><dd id="seat">&mdash;</dd></div>
+      <div class="row"><dt data-word="players">Players</dt><dd><span id="players" title="Seated players here, of the game's seats; it blinks while the game waits for the rest" data-word-title="playersTitle">&mdash;</span><button class="inline" id="start-button" hidden title="Start without the players missing: the Dark Lord leaves their castles be until they are back" data-word-title="startNowTitle" data-word="startNow">Start</button></dd></div>
+      <div class="row"><dt data-word="statusUnits">Units</dt><dd id="units">&mdash;</dd></div>
+      <div class="row"><dt data-word="statusTile">Tile</dt><dd id="tile">&mdash;</dd></div>
+      <div class="row"><dt data-word="statusObservers">Observers</dt><dd id="observers">0</dd></div>
     </dl>
     <p class="notice" id="message" role="status" hidden></p>
   </div>
@@ -340,23 +340,23 @@
       <span class="chevron" aria-hidden="true"></span>
     </button>
     <div class="stocks">
-      <div class="stock stone" title="In bold from 60, enough for a tower">
+      <div class="stock stone" title="In bold from 60, enough for a tower" data-word-title="stoneTitle">
         <div class="figure"><span id="stone">&mdash;</span></div>
         <div class="label" id="stone-label">Stone</div>
       </div>
-      <div class="stock metal" title="In bold from 30, enough for a wagon's upgrade">
+      <div class="stock metal" title="In bold from 30, enough for a wagon's upgrade" data-word-title="metalTitle">
         <div class="figure"><span id="metal">&mdash;</span></div>
         <div class="label" id="metal-label">Dark metal</div>
       </div>
       <div class="stock food" id="food">
-        <div class="figure"><span id="food-count" title="In bold when the store, with what the castle and farms give by then, won't feed every unit a full next meal">&mdash;</span><span class="of" id="food-store" title="The most the store holds"></span></div>
+        <div class="figure"><span id="food-count" title="In bold when the store, with what the castle and farms give by then, won't feed every unit a full next meal" data-word-title="foodCountTitle">&mdash;</span><span class="of" id="food-store" title="The most the store holds" data-word-title="foodStoreTitle"></span></div>
         <div class="label"><span id="food-label">Food</span><span id="hunger"></span></div>
       </div>
     </div>
     <div class="selected">
       <span class="picture" id="selection-picture" aria-hidden="true"></span>
       <div id="selection">
-        <div class="name" id="selection-name">Nothing selected</div>
+        <div class="name" id="selection-name" data-word="nothingSelected">Nothing selected</div>
         <div id="selection-work" hidden></div>
         <div id="selection-hp" hidden></div>
       </div>
@@ -394,7 +394,7 @@
 
   <div class="hud" id="minimap">
     <div class="minimap-box">
-      <canvas id="minimap-canvas" aria-label="Map of the whole board: press or drag on it to look there"></canvas>
+      <canvas id="minimap-canvas" aria-label="Map of the whole board: press or drag on it to look there" data-word-label="minimapLabel"></canvas>
       <div class="minimap-frame" id="minimap-frame"></div>
     </div>
   </div>
@@ -404,18 +404,18 @@
   <form method="dialog">
     <h2 id="crew-title">Crew</h2>
     <p class="hint" id="crew-hint"></p>
-    <div class="crew-sort" id="crew-sort" role="group" aria-label="Order">
-      <span>Order</span>
-      <button type="button" data-sort="default" aria-pressed="true" title="Those ticked first, then those at home, the best at the work first">Default</button>
+    <div class="crew-sort" id="crew-sort" role="group" aria-label="Order" data-word-label="order">
+      <span data-word="order">Order</span>
+      <button type="button" data-sort="default" aria-pressed="true" title="Those ticked first, then those at home, the best at the work first" data-word-title="sortDefaultTitle" data-word="sortDefault">Default</button>
       <button type="button" data-sort="skill" aria-pressed="false" id="crew-sort-skill">Skill</button>
-      <button type="button" data-sort="hero" aria-pressed="false" title="Heroes first, who level up faster; then the highest level">Hero</button>
-      <button type="button" data-sort="level" aria-pressed="false" title="Highest level first">Level</button>
-      <button type="button" data-sort="near" aria-pressed="false" title="Closest to the building first">Nearest</button>
+      <button type="button" data-sort="hero" aria-pressed="false" title="Heroes first, who level up faster; then the highest level" data-word-title="sortHeroTitle" data-word="sortHero">Hero</button>
+      <button type="button" data-sort="level" aria-pressed="false" title="Highest level first" data-word-title="sortLevelTitle" data-word="sortLevel">Level</button>
+      <button type="button" data-sort="near" aria-pressed="false" title="Closest to the building first" data-word-title="sortNearTitle" data-word="sortNear">Nearest</button>
     </div>
     <ul class="crew-list" id="crew-list"></ul>
     <div class="crew-foot">
       <span id="crew-count"></span>
-      <button id="crew-cancel" value="cancel">Cancel</button>
+      <button id="crew-cancel" value="cancel" data-word="cancel">Cancel</button>
       <button id="crew-ok" value="ok" class="primary">Send</button>
     </div>
   </form>
@@ -423,12 +423,12 @@
 
 <dialog id="heroes" aria-labelledby="heroes-title">
   <form method="dialog">
-    <h2 id="heroes-title">Heroes</h2>
+    <h2 id="heroes-title" data-word="heroesHeading">Heroes</h2>
     <p class="hint" id="heroes-hint"></p>
     <ul class="crew-list heroes-list" id="heroes-list"></ul>
     <div class="crew-foot">
       <span id="heroes-count"></span>
-      <button value="close" class="primary">Close</button>
+      <button value="close" class="primary" data-word="close">Close</button>
     </div>
   </form>
 </dialog>
