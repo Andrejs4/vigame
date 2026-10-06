@@ -385,8 +385,9 @@ async function finished(browser, url) {
   const seed = 5;
   const board = createBoard({ ...BOARD_OPTIONS, seed, players: 1 });
   const state = newGame(board, { mode: 'coop' });
-  Object.assign(state, { tick: 3000, over: 3000, winner: 0 });
-  state.players[1].lost = 3000;
+  // Won at 15 minutes: a quick win, the winners' points twice over.
+  Object.assign(state, { tick: 9000, over: 9000, winner: 0 });
+  state.players[1].lost = 9000;
   Object.assign(state.players[0].tally, { kills: 12, damage: 4321, castles: 1, born: 9, stone: 30, food: 25, built: 3, upgrades: 2, won: 1 });
   Object.assign(state.players[1].tally, { kills: 5, damage: 800 });
   assert.deepEqual(checkState(board, state), []);
@@ -401,11 +402,34 @@ async function finished(browser, url) {
   await inGame(page);
   await page.waitForSelector('#scores[open]');
   assert.equal(await text(page, '#scores-title'), 'You won');
-  // Fay: 120 + 432 + 500 + 45 + 30 + 2 + 60 + 100 + 500; the Dark Lord: 50 + 80.
+  assert.equal(await text(page, '#scores-outcome'), '15:00 · Blue won · quick win: points ×2');
+  // The side, its total and bonus first, then the lines, the weightiest first.
+  assert.deepEqual(await page.$$eval('#scores-head th', (ths) => ths.map((th) => th.textContent)),
+    ['Side', 'Total', 'Bonus', 'Win', 'Castles', 'Felled', 'Kills', 'Damage', 'Upgrades', 'Built', 'Born', 'Stone', 'Food']);
+  // Fay: (120 + 432 + 500 + 45 + 30 + 2 + 60 + 100 + 500) × 2; the Dark Lord: 50 + 80, no bonus.
   await page.waitForFunction(() => document.querySelector('#scores-body tr td')?.textContent === 'Fay · Blue');
-  const rows = await page.$$eval('#scores-body tr', (trs) => trs.map((tr) => [tr.cells[0].textContent, tr.cells[tr.cells.length - 1].textContent]));
-  assert.deepEqual(rows, [['Fay · Blue', '1789'], ['Dark Lord', '130']]);
+  const rows = await page.$$eval('#scores-body tr', (trs) => trs.map((tr) => [...tr.cells].slice(0, 4).map((td) => td.textContent)));
+  assert.deepEqual(rows, [['Fay · Blue', '3578', '×2', '500'], ['Dark Lord', '130', '', '0']]);
+  // Every column in view on a desktop, and Keep watching has the focus.
+  const fitsTable = (/** @type {import('playwright').Page} */ p) => p.$eval('#scores .scores-wrap', (w) => w.scrollWidth <= w.clientWidth);
+  assert.ok(await fitsTable(page), 'the table of points scrolls on a desktop');
+  assert.equal(await page.evaluate(() => document.activeElement?.id), 'scores-close');
   await page.screenshot({ path: join(OUT, 'scores.png') });
+
+  // A viewer in Russian sees the table in Russian.
+  const ru = await newPlayer(browser, url, 'finished-ru', 'Фая', { viewport: { width: 1280, height: 800 }, locale: 'ru-RU' });
+  await inLobby(ru);
+  await ru.goto(`${url}?game=finished-game`);
+  await inGame(ru);
+  await ru.waitForSelector('#scores[open]');
+  assert.equal(await text(ru, '#scores-title'), 'Игра окончена');
+  assert.equal(await text(ru, '#scores-outcome'), '15:00 · победили Синие · быстрая победа: очки ×2');
+  await ru.waitForFunction(() => document.querySelector('#scores-body tr td')?.textContent === 'Fay · Синие');
+  assert.deepEqual(await ru.$$eval('#scores-head th', (ths) => ths.slice(0, 4).map((th) => th.textContent)), ['Сторона', 'Всего', 'Бонус', 'Победа']);
+  assert.equal(await text(ru, '#scores-leave'), 'Покинуть матч');
+  assert.ok(await fitsTable(ru), 'the Russian table of points scrolls on a desktop');
+  await ru.screenshot({ path: join(OUT, 'scores-ru.png') });
+  await ru.context().close();
 
   await page.click('#scores-close');
   assert.equal(await page.evaluate(() => /** @type {any} */ (window).__vigame.scoresOpen), false);

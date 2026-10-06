@@ -137,13 +137,13 @@ graphics work.
 - Each player has a language (Auto, English, Russian, Latvian or Finnish:
   `LANGUAGES` in player.js, `LANGUAGE_NAMES` in language.js), kept on the
   server. The login page, the settings page, the lobby, and in a game the
-  buttons, the status, stock and selection panels, and the crew and heroes
-  dialogs are translated: their words are `WORDS` in words.js, which the
+  buttons, the status, stock and selection panels, and the crew, heroes
+  and points dialogs are translated: their words are `WORDS` in words.js, which the
   tests keep complete and about as long as the English; a static text in
   index.html names its word with `data-word` (`-title`, `-label` for its
   tooltip and label), and the lobby's How to play and About are written
-  out in each language. Messages, the renaming and points dialogs and the
-  heroes list's skill letters wait until the author asks. A building's,
+  out in each language. Messages, the renaming dialog and the heroes
+  list's skill letters wait until the author asks. A building's,
   skill's or side's name on the page goes through its word (`typeName`,
   `skillName`, `sideName` in play.js), so every one needs a word: the tests
   check.

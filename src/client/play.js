@@ -7,12 +7,12 @@
 import { axialToPixel, bounds, distance, key, pixelToAxial } from '../core/hex.js';
 import { BOARD_OPTIONS, createBoard, tileAt } from '../core/board.js';
 import {
-  buildCost, capacityOf, castleOf, crewOf, depthOf, foodStore, fullMeal, inBuildRange, isDugOut, isRising, maxHp, occupancy, pointsOf, purseOf,
+  buildCost, capacityOf, castleOf, crewOf, depthOf, foodStore, fullMeal, inBuildRange, isDugOut, isRising, maxHp, occupancy, purseOf, quickWin, scoreOf,
   raiseWork, seatsOf, sharesStock, shortOf, sideOf, upgradeCost,
 } from '../core/game.js';
 import { GAME_NAME_MAX, cleanGameName } from '../core/player.js';
 import { PORTRAIT_SIDE, portraitOf } from '../core/names.js';
-import { BUILDING_TYPES, POINTS, SKILL_SHORT, TICKS_PER_SECOND, UNIT_LIMIT } from '../core/rules.js';
+import { BUILDING_TYPES, POINTS, QUICK_WIN, SKILL_SHORT, TICKS_PER_SECOND, UNIT_LIMIT } from '../core/rules.js';
 import { getJson, serverBase } from './api.js';
 import { Camera } from './camera.js';
 import { Effects, fallenHeroes, fallenHeroesNote } from './effects.js';
@@ -43,31 +43,13 @@ function percent(part, whole) {
 const HOME_ZOOM = COUNT_ZOOM + 0.15;
 
 /**
- * The columns of the table at a game's end: a line of a side's tally (see
- * POINTS in rules.js), its heading, and what it counts.
- * @type {Array<[keyof typeof POINTS, string, string]>}
+ * The lines of a side's tally (see POINTS in rules.js) in the table at a
+ * game's end, after the side, its total and its bonus: the weightiest
+ * first, fighting before building before the economy. Each has its words,
+ * `score…` and `score…What` (words.js).
+ * @type {Array<keyof typeof POINTS>}
  */
-const SCORE_LINES = [
-  ['kills', 'Kills', 'enemy units killed'],
-  ['damage', 'Damage', 'hit points taken off enemy buildings'],
-  ['felled', 'Felled', 'enemy buildings brought down'],
-  ['castles', 'Castles', 'enemy castles and lairs brought down'],
-  ['born', 'Born', 'units born'],
-  ['stone', 'Stone', 'stone dug'],
-  ['food', 'Food', 'food grown by crews'],
-  ['built', 'Built', 'buildings finished'],
-  ['upgrades', 'Upgrades', 'grades reached by upgrading'],
-  ['won', 'Win', 'for the winning team'],
-];
-
-/**
- * What a line of the tally is worth, in words.
- * @param {keyof typeof POINTS} line
- */
-function worth(line) {
-  const each = POINTS[line];
-  return each >= 1 ? `${each} points each` : `a point per ${Math.round(1 / each)}`;
-}
+const SCORE_LINES = ['won', 'castles', 'felled', 'kills', 'damage', 'upgrades', 'built', 'born', 'stone', 'food'];
 
 /** Where this browser keeps which panels are folded away: the status panel, the minimap. */
 const FOLDED_KEY = 'vigame.folded';
@@ -127,12 +109,12 @@ export async function startGame(net, me) {
   const mapFrame = /** @type {HTMLElement} */ (document.getElementById('minimap-frame'));
   const mapPanel = /** @type {HTMLElement} */ (document.getElementById('minimap'));
   const controls = /** @type {HTMLElement} */ (document.getElementById('controls'));
-  // The panels, the buttons and the crew and heroes dialogs are in the
-  // player's language; messages, the other dialogs and the heroes list's
-  // skill letters aren't translated yet.
+  // The panels, the buttons and the crew, heroes and points dialogs are in
+  // the player's language; messages, renaming and the heroes list's skill
+  // letters aren't translated yet.
   const language = chosenLanguage(me.language, autoLanguage(browserLanguages(), me.name));
   const word = (/** @type {import('./words.js').Word} */ w, /** @type {Record<string, string | number>} */ values = {}) => say(language, { word: w, values });
-  for (const id of ['stage', 'crew', 'heroes']) {
+  for (const id of ['stage', 'crew', 'heroes', 'scores']) {
     const root = /** @type {HTMLElement} */ (document.getElementById(id));
     root.lang = language;
     translate(root, language);
@@ -369,16 +351,34 @@ export async function startGame(net, me) {
     }
   }
 
-  /** Fill the table of points: a row a side, winners first, then by points. */
+  /**
+   * What a line of the tally is worth, in words.
+   * @param {keyof typeof POINTS} line
+   */
+  function worth(line) {
+    const each = POINTS[line];
+    return each >= 1 ? word('pointsEach', { n: each }) : word('pointPer', { n: Math.round(1 / each) });
+  }
+
+  /**
+   * Fill the table of points: a row a side, winners first, then by points;
+   * the side, its total, a quick win's bonus if any side has one, then each
+   * line of its tally.
+   */
   function fillScores() {
     if (!view || view.over === undefined) return;
     const { players, winner } = view;
     const seat = net.seat();
     const winners = players.filter((p) => p.team === winner && !sideOf(view, p.id).wild);
-    /** @type {HTMLElement} */ (document.getElementById('scores-title')).textContent = winner === undefined
-      ? 'Game over' : seat === null ? 'Game over' : players[seat]?.team === winner ? 'You won' : 'You lost';
-    /** @type {HTMLElement} */ (document.getElementById('scores-outcome')).textContent = `${formatTime(view.over)} · ${
-      winner === undefined ? 'nobody won' : `${winners.map((p) => sideOf(view, p.id).name).join(' and ')} won`}`;
+    /** @type {HTMLElement} */ (document.getElementById('scores-title')).textContent = word(winner === undefined || seat === null
+      ? 'scoresGameOver' : players[seat]?.team === winner ? 'scoresYouWon' : 'scoresYouLost');
+    const times = quickWin(view.over);
+    const number = new Intl.NumberFormat(language);
+    const time = formatTime(view.over);
+    /** @type {HTMLElement} */ (document.getElementById('scores-outcome')).textContent = [
+      winner === undefined ? word('scoresNobody', { time }) : word('scoresWon', { time, sides: winners.map((p) => sideName(view, p.id)).join(', ') }),
+      winner !== undefined && times > 1 ? word('quickWinNote', { times: number.format(times) }) : '',
+    ].filter(Boolean).join(' · ');
 
     const cell = (/** @type {'th' | 'td'} */ tag, /** @type {string} */ text, /** @type {string} */ title = '') => {
       const c = document.createElement(tag);
@@ -386,23 +386,32 @@ export async function startGame(net, me) {
       if (title) c.title = title;
       return c;
     };
-    /** @type {HTMLElement} */ (document.getElementById('scores-head')).replaceChildren(
-      cell('th', 'Side'),
-      ...SCORE_LINES.map(([line, heading, what]) => cell('th', heading, `${heading}: ${what}, ${worth(line)}`)),
-      Object.assign(cell('th', 'Total'), { className: 'total' }),
-    );
     const rows = players
       .filter((p) => p.tally && !sideOf(view, p.id).wild)
-      .map((p) => ({ p, side: sideOf(view, p.id), points: pointsOf(/** @type {any} */ (p.tally)), won: p.team === winner }))
-      .sort((a, b) => Number(b.won) - Number(a.won) || b.points.total - a.points.total);
-    /** @type {HTMLElement} */ (document.getElementById('scores-body')).replaceChildren(...rows.map(({ p, side, points, won }) => {
+      .map((p) => ({ p, side: sideOf(view, p.id), score: scoreOf(view, p.id), won: p.team === winner }))
+      .sort((a, b) => Number(b.won) - Number(a.won) || b.score.total - a.score.total);
+    const bonus = rows.some((r) => r.score.times > 1);
+    const minutes = (/** @type {number} */ ticks) => ticks / (60 * TICKS_PER_SECOND);
+    const ranges = QUICK_WIN.map((q) => word('quickWinRange', { times: number.format(q.times), from: minutes(q.from), to: minutes(q.to) })).join('; ');
+    const heading = (/** @type {keyof typeof POINTS} */ line) => {
+      const name = /** @type {import('./words.js').Word} */ (`score${line[0].toUpperCase()}${line.slice(1)}`);
+      return cell('th', word(name), `${word(name)}: ${word(/** @type {import('./words.js').Word} */ (`${name}What`))}, ${worth(line)}`);
+    };
+    /** @type {HTMLElement} */ (document.getElementById('scores-head')).replaceChildren(
+      cell('th', word('scoresSide')),
+      Object.assign(cell('th', word('scoresTotal')), { className: 'total' }),
+      ...(bonus ? [cell('th', word('scoresBonus'), word('scoresBonusTitle', { ranges }))] : []),
+      ...SCORE_LINES.map(heading),
+    );
+    /** @type {HTMLElement} */ (document.getElementById('scores-body')).replaceChildren(...rows.map(({ p, side, score, won }) => {
       const tr = document.createElement('tr');
       if (won) tr.className = 'won';
-      const name = seatNames[p.id] ? `${seatNames[p.id]} · ${side.name}` : side.name;
+      const name = seatNames[p.id] ? `${seatNames[p.id]} · ${sideName(view, p.id)}` : sideName(view, p.id);
       const who = cell('td', name);
       who.style.color = side.accent;
-      tr.append(who, ...SCORE_LINES.map(([line]) => cell('td', String(points.lines[line]))),
-        Object.assign(cell('td', String(points.total)), { className: 'total' }));
+      tr.append(who, Object.assign(cell('td', String(score.total)), { className: 'total' }),
+        ...(bonus ? [Object.assign(cell('td', score.times > 1 ? `×${number.format(score.times)}` : ''), { className: 'bonus' })] : []),
+        ...SCORE_LINES.map((line) => cell('td', String(score.lines[line]))));
       return tr;
     }));
   }

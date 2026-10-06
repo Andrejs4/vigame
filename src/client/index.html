@@ -448,7 +448,7 @@
 </dialog>
 
 <dialog id="scores" aria-labelledby="scores-title">
-  <h2 id="scores-title">Game over</h2>
+  <h2 id="scores-title" data-word="scoresGameOver">Game over</h2>
   <p class="hint" id="scores-outcome"></p>
   <div class="scores-wrap">
     <table class="scores">
@@ -458,8 +458,8 @@
   </div>
   <div class="crew-foot">
     <span></span>
-    <button id="scores-close">Keep watching</button>
-    <a class="button primary" id="scores-leave" href="">Leave the match</a>
+    <button id="scores-close" data-word="keepWatching" autofocus>Keep watching</button>
+    <a class="button primary" id="scores-leave" href="" data-word="leaveMatch">Leave the match</a>
   </div>
 </dialog>
 
