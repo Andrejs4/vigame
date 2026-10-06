@@ -11,9 +11,9 @@ docs/architecture.md. Read it before working on the core, networking or
 persistence.
 
 docs/notes.md has the background: how the author works, how the pictures
-were made (with the commands), tools that helped, and plans not yet built (a
-"Painted" graphics mode, less drawing during play). Read it before art or
-graphics work.
+were made (with the commands), tools that helped, and plans not yet built
+(pictures for the ground, buildings and units at the closest zooms, less
+drawing during play). Read it before art or graphics work.
 
 ## Working with the author
 
