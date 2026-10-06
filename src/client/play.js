@@ -21,7 +21,7 @@ import { BoardRenderer, COUNT_ZOOM, pickAt } from './render.js';
 import { autoLanguage, browserLanguages, chosenLanguage, keyCandidates } from './language.js';
 import { Sounds, soundsFor } from './sounds.js';
 import { Tokens } from './tokens.js';
-import { isWord, say, translate } from './words.js';
+import { isWord, say, shortPoints, translate } from './words.js';
 
 /** @param {number} tick */
 function formatTime(tick) {
@@ -386,6 +386,9 @@ export async function startGame(net, me) {
       if (title) c.title = title;
       return c;
     };
+    // From 10000 a "k", with the exact points in its tooltip.
+    const points = (/** @type {number} */ n, className = '') => Object.assign(
+      cell('td', shortPoints(n), shortPoints(n) === String(n) ? '' : String(n)), className ? { className } : {});
     const rows = players
       .filter((p) => p.tally && !sideOf(view, p.id).wild)
       .map((p) => ({ p, side: sideOf(view, p.id), score: scoreOf(view, p.id), won: p.team === winner }))
@@ -409,9 +412,9 @@ export async function startGame(net, me) {
       const name = seatNames[p.id] ? `${seatNames[p.id]} · ${sideName(view, p.id)}` : sideName(view, p.id);
       const who = cell('td', name);
       who.style.color = side.accent;
-      tr.append(who, Object.assign(cell('td', String(score.total)), { className: 'total' }),
+      tr.append(who, points(score.total, 'total'),
         ...(bonus ? [Object.assign(cell('td', score.times > 1 ? `×${number.format(score.times)}` : ''), { className: 'bonus' })] : []),
-        ...SCORE_LINES.map((line) => cell('td', String(score.lines[line]))));
+        ...SCORE_LINES.map((line) => points(score.lines[line])));
       return tr;
     }));
   }

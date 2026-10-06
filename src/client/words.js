@@ -1156,6 +1156,14 @@ export function say(language, { word, values = {} }) {
 }
 
 /**
+ * Points as the table of points shows them: as they are up to 9999, and
+ * from 10000 rounded to thousands with a "k" (12345 is "12k"), so its
+ * columns stay narrow.
+ * @param {number} n
+ */
+export const shortPoints = (n) => (n > 9999 ? `${Math.round(n / 1000)}k` : String(n));
+
+/**
  * Whether a text, such as a mode's key from the server, is one of the words.
  * @param {unknown} key
  * @returns {key is Word}

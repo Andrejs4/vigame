@@ -388,7 +388,7 @@ async function finished(browser, url) {
   // Won at 15 minutes: a quick win, the winners' points twice over.
   Object.assign(state, { tick: 9000, over: 9000, winner: 0 });
   state.players[1].lost = 9000;
-  Object.assign(state.players[0].tally, { kills: 12, damage: 4321, castles: 1, born: 9, stone: 30, food: 25, built: 3, upgrades: 2, won: 1 });
+  Object.assign(state.players[0].tally, { kills: 120, damage: 43210, castles: 1, born: 9, stone: 30, food: 25, built: 3, upgrades: 2, won: 1 });
   Object.assign(state.players[1].tally, { kills: 5, damage: 800 });
   assert.deepEqual(checkState(board, state), []);
   games.storage.createGame({ id: 'finished-game', seed, state, seats: [playerId(/** @type {string} */ (token))] });
@@ -406,10 +406,12 @@ async function finished(browser, url) {
   // The side, its total and bonus first, then the lines, the weightiest first.
   assert.deepEqual(await page.$$eval('#scores-head th', (ths) => ths.map((th) => th.textContent)),
     ['Side', 'Total', 'Bonus', 'Win', 'Castles', 'Felled', 'Kills', 'Damage', 'Upgrades', 'Built', 'Born', 'Stone', 'Food']);
-  // Fay: (120 + 432 + 500 + 45 + 30 + 2 + 60 + 100 + 500) × 2; the Dark Lord: 50 + 80, no bonus.
+  // Fay: (1200 + 4321 + 500 + 45 + 30 + 2 + 60 + 100 + 500) × 2 = 13516, shown as 14k with the
+  // exact points in its tooltip; the Dark Lord: 50 + 80, no bonus.
   await page.waitForFunction(() => document.querySelector('#scores-body tr td')?.textContent === 'Fay · Blue');
   const rows = await page.$$eval('#scores-body tr', (trs) => trs.map((tr) => [...tr.cells].slice(0, 4).map((td) => td.textContent)));
-  assert.deepEqual(rows, [['Fay · Blue', '3578', '×2', '500'], ['Dark Lord', '130', '', '0']]);
+  assert.deepEqual(rows, [['Fay · Blue', '14k', '×2', '500'], ['Dark Lord', '130', '', '0']]);
+  assert.equal(await page.getAttribute('#scores-body tr td.total', 'title'), '13516');
   // Every column in view on a desktop, and Keep watching has the focus.
   const fitsTable = (/** @type {import('playwright').Page} */ p) => p.$eval('#scores .scores-wrap', (w) => w.scrollWidth <= w.clientWidth);
   assert.ok(await fitsTable(page), 'the table of points scrolls on a desktop');

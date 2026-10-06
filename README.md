@@ -222,8 +222,9 @@ Run `npm start` and open http://127.0.0.1:2567.
   on. Nobody sees any of it before the end. The table shows each side's
   total first, then the bonus (only when a side has one), then the lines,
   the weightiest first: win, castles, buildings felled, kills, damage,
-  upgrades, buildings finished, units born, stone, food. It is in the
-  player's language. The table's **Leave the match** goes back to the
+  upgrades, buildings finished, units born, stone, food. From 10000 a
+  number shows rounded to thousands with a "k" (13516 is 14k), the exact
+  points in its tooltip. It is in the player's language. The table's **Leave the match** goes back to the
   lobby; **Keep watching** closes it, and **Scores** brings it back. Once a game is
   over, seats can't be given up, so the table keeps their holders' names.
 - **Hunger**: one number per side, 0 to 100%. At each meal, if there isn't
