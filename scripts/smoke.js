@@ -1055,7 +1055,11 @@ async function threeBrowsers(browser, url, { full, label }) {
       .map((t) => [t.q, t.r]);
   }, wagon);
   const dest = await openCell(b, goal);
+  // Attack, then an empty cell: the band goes there, as a plain click sends it.
+  await b.keyboard.press('a');
+  assert.equal(await b.evaluate(() => /** @type {any} */ (window).__vigame.aiming), wagon.id, 'B aims');
   await clickHex(b, dest.q, dest.r);
+  assert.equal(await b.evaluate(() => /** @type {any} */ (window).__vigame.aiming), null, 'B aims no more');
   // Going left, its picture is mirrored, on the other side's page too.
   await a.waitForFunction((id) => {
     const v = /** @type {any} */ (window).__vigame;

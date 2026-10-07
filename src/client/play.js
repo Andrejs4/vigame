@@ -1041,10 +1041,15 @@ export async function startGame(net, me) {
     // Bands are on top, your own first; another side's is only for aiming at.
     const here = pickAt(view.buildings, occ.buildingAt, at, net.seat(), aiming !== null);
     if (aiming) {
-      // After Attack: an enemy band or building becomes the target; anywhere else clears it.
+      // After Attack: an enemy band or building becomes the target. An empty
+      // cell is a plain click's: a wagon or band goes there (and, driven by
+      // hand, drops its target); anything else just drops its target.
       const from = aiming;
       aiming = null;
-      if (canCommand() && (here || view.buildings[from]?.target)) {
+      const moves = !here && Boolean(BUILDING_TYPES[view.buildings[from]?.type ?? '']?.speed);
+      if (canCommand() && moves) {
+        await give({ type: 'move', building: from, q: at.q, r: at.r }, 'go there');
+      } else if (canCommand() && (here || view.buildings[from]?.target)) {
         await give({ type: 'target', building: from, target: here ?? '' }, 'attack that');
       }
       updateHud();

@@ -275,7 +275,9 @@ Run `npm start` and open http://127.0.0.1:2567.
   an enemy building or band (a band's units are struck first). A building that can't move strikes its target while it
   is in reach, and the nearest enemy otherwise; a wagon or band goes after
   it until it's close enough for close combat. Driving a wagon or band by
-  hand drops its target.
+  hand drops its target. After **Attack…**, a click on an empty cell does
+  what a plain click would: a wagon or band goes there (dropping its
+  target), and any other building drops its target.
 - **Keys**: a button's bold letter presses it: **T**ower, **W**agon, **P**it,
   **F**arm and **B**and pick what to place (again to stop), **U**pgrade,
   **C**rew and **A**ttack act on the selected building, **H**eroes on your
