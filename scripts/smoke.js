@@ -1092,12 +1092,25 @@ async function threeBrowsers(browser, url, { full, label }) {
   const redrawn = await a.evaluate(() => /** @type {any} */ (window).__vigame.draws) - stillFrom;
   assert.ok(redrawn <= 1, `a paused board was redrawn ${redrawn} times in half a second`);
 
-  // Bēla comes back: same seat, same game, no login. Then she goes to the
-  // lobby, finds the game among hers, and opens it again.
+  // Ann started the game, so she has Go on: the game goes on without Bēla,
+  // who is away, and her clock runs again.
+  await waitText(a, '#start-button', 'Go on');
+  await a.screenshot({ path: join(OUT, 'go-on.png') });
+  const pausedAt = await a.evaluate(() => /** @type {any} */ (window).__vigame.view.tick);
+  await a.click('#start-button');
+  await waitText(a, '#players', '1/2, 1 away');
+  await a.waitForFunction((t) => /** @type {any} */ (window).__vigame.view.tick > t + 5, pausedAt);
+  assert.doesNotMatch(await text(a, '#time') ?? '', /paused/);
+  assert.equal(await a.locator('#start-button').isVisible(), false, 'nobody left to go on without');
+  assert.equal(await a.locator('#build-tower').isDisabled(), false, 'Ann plays on');
+
+  // Bēla comes back: same seat, same game, no login, and no longer away.
+  // Then she goes to the lobby, finds the game among hers, and opens it again.
   await b.goto(gameUrl);
   await inGame(b);
   assert.equal(await b.locator('#login').isHidden(), true);
   await waitText(b, '#seat', 'Bēla · Crimson');
+  await waitText(a, '#players', '2/2');
   await b.click('#to-lobby');
   await inLobby(b);
   await openFromLobby(b, 'mine', 'Ann & Bēla');
