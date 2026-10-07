@@ -320,8 +320,9 @@ export const REPAIR_WORK = 500;
  *   At none left, the building collapses at once, and whoever was inside is
  *   left standing on its cell. A band has none: it protects nobody.
  * @property {number} [ticked] For a new one, the most its crew chooser ticks
- *   (the best at home, up to half of them), if fewer than its room: a band
- *   holds more than a tower at its last grade, but sets out with fewer.
+ *   (the best at home, up to half of them, and three while 20 or fewer are
+ *   home), if fewer than its room: a band holds more than a tower at its
+ *   last grade, but sets out with fewer.
  * @property {boolean} [band] A band: a group of units, free, that moves like
  *   a wagon but holds no cell, so it blocks nothing, and breaks up once it
  *   has nobody.

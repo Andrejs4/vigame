@@ -124,7 +124,8 @@ Run `npm start` and open http://127.0.0.1:2567.
   sooner. With nobody at home it still raises one every four minutes by
   itself (two in Very Easy Lord), even while damaged or upgraded. It has room for 40 units, and 10
   more with each upgrade (40, 50, 60); it takes in all its units, however
-  many, but stops breeding while it holds more than its room.
+  many, but stops breeding while it holds its room or more. Then its count
+  on the board shows its room too, as 40/40 or 65/60.
 - **Units** each have a medieval name, a level from 1 to 100, and six
   skills: breeding, ranged attack, close combat, building (which covers
   repairing and digging), farming and running. Work trains the skill it
@@ -190,9 +191,13 @@ Run `npm start` and open http://127.0.0.1:2567.
   buildable ground within three cells of one of your standing buildings (a
   wagon: of your castle). Scrub can be crossed but not built on; water is
   neither. One building per cell. Placing one asks for its crew first, with
-  the best at home for its work ticked, up to half of those at home. Short
-  of its price, the button (or its key) says so at once, as does clicking
-  a cell if the stock ran low meanwhile, so no crew is chosen for nothing.
+  the best at home for its work ticked, up to half of those at home, and
+  no more than three while the castle holds 20 or fewer, one while it
+  holds fewer than 8, so it keeps enough to breed. Short of its price, the button (or its key) says so at
+  once, as does clicking a cell if the stock ran low meanwhile, so no crew
+  is chosen for nothing. Each button's tooltip says what its building is
+  for in play (a tower defends from farthest, a pit blocks wagons, a farm
+  is weak, and so on), then its price.
 - **Going up**: a new tower, wagon, pit or farm is only a site until its crew
   raises it. They start once they get there, faster the more of them and the
   better they build, and it trains their building skill as they go (one
@@ -270,7 +275,9 @@ Run `npm start` and open http://127.0.0.1:2567.
   an enemy building or band (a band's units are struck first). A building that can't move strikes its target while it
   is in reach, and the nearest enemy otherwise; a wagon or band goes after
   it until it's close enough for close combat. Driving a wagon or band by
-  hand drops its target.
+  hand drops its target. After **Attack…**, a click on an empty cell does
+  what a plain click would: a wagon or band goes there (dropping its
+  target), and any other building drops its target.
 - **Keys**: a button's bold letter presses it: **T**ower, **W**agon, **P**it,
   **F**arm and **B**and pick what to place (again to stop), **U**pgrade,
   **C**rew and **A**ttack act on the selected building, **H**eroes on your
@@ -310,7 +317,8 @@ Run `npm start` and open http://127.0.0.1:2567.
   hit points to its 300 (800, 1300, 1800), but no room.
 - **Bands** are groups of up to 80 units (more than a tower at its last
   grade holds) that move like wagons, for free. Placing one asks who goes,
-  with the best fighters at home ticked, up to 30. A band is drawn over
+  with the best fighters at home ticked, up to 30 (and up to half of those
+  at home, three while 20 or fewer are, one while fewer than 8). A band is drawn over
   whatever it passes, yours over another side's; a click on the cell picks
   your band, and another side's band can't be selected, only aimed at with
   Attack. A band holds no cell, so it passes anything of

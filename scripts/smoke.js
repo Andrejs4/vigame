@@ -811,7 +811,12 @@ async function threeBrowsers(browser, url, { full, label }) {
   // Near the castle: the crew walks two seconds a cell, four on scrub.
   const pitSpot = await openCell(a, await spotsNear(a, blue));
   await clickHex(a, pitSpot.q, pitSpot.r);
-  assert.match(await confirmCrew(a, { shot: 'crew.png', key: 'p' }), /^[1-8] of 8$/, 'up to half of those at home are ticked');
+  // Ticked: the best at home, up to half of them, three at most while 20
+  // or fewer are home, one while fewer than 8; as the chooser found them.
+  await a.waitForSelector('#crew[open]');
+  const atHome = await a.$$eval('#crew-list .where', (els) => els.filter((e) => e.textContent === 'at home').length);
+  const ticks = Math.min(8, Math.floor(atHome / 2), atHome < 8 ? 1 : atHome <= 20 ? 3 : 8);
+  assert.equal(await confirmCrew(a, { shot: 'crew.png', key: 'p' }), `${ticks} of 8`, `${atHome} at home`);
   await a.waitForFunction((n) => Object.keys(/** @type {any} */ (window).__vigame.view.buildings).length === n, count + 1);
   const pit = (await buildings(a)).find((x) => x.type === 'pit');
   await a.waitForFunction((id) => /** @type {any} */ (window).__vigame.view.buildings[id].work > 0, pit.id, { timeout: 30000 });
@@ -1050,7 +1055,11 @@ async function threeBrowsers(browser, url, { full, label }) {
       .map((t) => [t.q, t.r]);
   }, wagon);
   const dest = await openCell(b, goal);
+  // Attack, then an empty cell: the band goes there, as a plain click sends it.
+  await b.keyboard.press('a');
+  assert.equal(await b.evaluate(() => /** @type {any} */ (window).__vigame.aiming), wagon.id, 'B aims');
   await clickHex(b, dest.q, dest.r);
+  assert.equal(await b.evaluate(() => /** @type {any} */ (window).__vigame.aiming), null, 'B aims no more');
   // Going left, its picture is mirrored, on the other side's page too.
   await a.waitForFunction((id) => {
     const v = /** @type {any} */ (window).__vigame;
@@ -1065,6 +1074,12 @@ async function threeBrowsers(browser, url, { full, label }) {
   assert.equal(await insideOf(a, wagon.id), riders, 'the units rode along');
   await frames(a);
   await a.screenshot({ path: join(OUT, 'game-blue.png') });
+  // Each Build button's tooltip is play help, then the price, its numbers
+  // from the rules.
+  assert.equal(await a.getAttribute('#build-tower', 'title'),
+    'Tower (T). Defends, striking from 5 cells away, the farthest of all; no strike reaches those inside. Cost: 60 stone.');
+  assert.equal(await a.getAttribute('#build-band', 'title'),
+    'Band (B). Up to 80 units moving together, with no cover: every strike reaches them. Cost: free.');
 
   // Bēla steps away, so the game pauses with her band still on its way:
   // Ann's board then stands still, and is not redrawn frame after frame.
@@ -1180,7 +1195,8 @@ async function latvianFinnish(browser, url) {
   await lv.screenshot({ path: join(OUT, 'game-lv-phone.png') });
 
   assert.equal(await fi.locator('#build-farm').innerText(), 'Farmi · 30');
-  assert.equal(await fi.getAttribute('#build-farm', 'title'), 'Farmi (F): 30 kiveä');
+  assert.equal(await fi.getAttribute('#build-farm', 'title'),
+    'Farmi (F). Kasvattaa ruokaa. Heikko: puolet siihen osuvista iskuista osuu sisällä oleviin. Hinta: 30 kiveä.');
   assert.deepEqual(await bold(fi), ['T', 'V', 'p', 'F', 'J', 'K', 'R', 'S', 'y']);
   const fiFit = await controlsFit(fi);
   assert.deepEqual(fiFit.over, [], 'a Finnish label overflows its button');
@@ -1359,8 +1375,11 @@ async function phone(browser, url) {
   // tooltips are in Russian.
   assert.equal(await other.locator('#build-tower').innerText(), 'Башня · 60');
   assert.equal(await other.$eval('#build-tower b', (b) => Number(getComputedStyle(b).fontWeight) > 500), true, 'key letters are not bold on a desktop');
-  assert.equal(await other.getAttribute('#build-tower', 'title'), 'Башня (Б): 60 камней');
-  assert.equal(await other.getAttribute('#build-wagon', 'title'), 'Воз (В): 15 тёмного металла, возле вашего замка');
+  assert.equal(await other.getAttribute('#build-tower', 'title'),
+    'Башня (Б). Защита: бьёт на 5 клеток, дальше всех; удары не достают тех, кто внутри. Цена: 60 камней.');
+  assert.equal(await other.getAttribute('#build-wagon', 'title'),
+    'Воз (В). Едет и везёт до 15; удары их не достают. Цена: 15 тёмного металла, возле вашего замка.');
+  assert.match(await other.getAttribute('#build-pit', 'title') ?? '', /^Яма \(Я\)\. Добывает камень\. .+\. Цена: \+1% к голоду/);
   await waitText(other, '#controls .group-label', 'Строить');
   const desktopFit = await controlsFit(other);
   assert.deepEqual(desktopFit.over, [], 'a button\'s label overflows it on a desktop');
