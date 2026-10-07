@@ -169,6 +169,14 @@ test('the game\'s panels have a word for every terrain, building type, skill and
   assert.equal(say('fi', { word: 'depthLine', values: { n: 1, max: 3, stone: say('fi', { word: 'stoneCost', values: { n: 40 } }) } }), 'syvyys 1/3, 40 kiveä');
 });
 
+test('every building a player may build has a line of play help on its button, with its numbers', () => {
+  const helpKey = (/** @type {string} */ kind) => `help${kind[0].toUpperCase()}${kind.slice(1)}`;
+  const buildable = Object.keys(BUILDING_TYPES).filter((kind) => BUILDING_TYPES[kind].build);
+  for (const kind of buildable) assert.ok(Object.hasOwn(WORDS.en, helpKey(kind)), `no word "${helpKey(kind)}"`);
+  assert.equal(say('en', { word: 'helpBand', values: { n: BUILDING_TYPES.band.capacity } }), 'Up to 80 units moving together, with no cover: every strike reaches them');
+  assert.equal(say('en', { word: 'buildTitle', values: { name: 'Pit', key: 'P', help: 'Digs stone', price: '1% more hunger' } }), 'Pit (P). Digs stone. Cost: 1% more hunger.');
+});
+
 test('points from 10000 on show rounded to thousands, with a "k"', () => {
   assert.deepEqual([0, 432, 9999, 10000, 10499, 10500, 12345, 999999, 1234567].map(shortPoints),
     ['0', '432', '9999', '10k', '10k', '11k', '12k', '1000k', '1235k']);

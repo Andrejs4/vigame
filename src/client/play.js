@@ -12,7 +12,7 @@ import {
 } from '../core/game.js';
 import { GAME_NAME_MAX, cleanGameName } from '../core/player.js';
 import { PORTRAIT_SIDE, portraitOf } from '../core/names.js';
-import { BUILDING_TYPES, POINTS, QUICK_WIN, SKILL_SHORT, TICKS_PER_SECOND, UNIT_LIMIT } from '../core/rules.js';
+import { BUILDING_TYPES, POINTS, QUICK_WIN, RANGED_RANGE, SKILL_SHORT, TICKS_PER_SECOND, UNIT_LIMIT } from '../core/rules.js';
 import { getJson, serverBase } from './api.js';
 import { Camera } from './camera.js';
 import { Effects, fallenHeroes, fallenHeroesNote } from './effects.js';
@@ -49,11 +49,11 @@ function percent(part, whole) {
 const DRAG_SLOP = Object.freeze({ mouse: 6, other: 10 });
 
 /**
- * While a castle holds this many units or fewer (`most`), a new building's
- * crew chooser ticks no more than `ticked` of them, so a small castle keeps
- * enough to breed.
+ * While a castle holds fewer than `under` units, a new building's crew
+ * chooser ticks no more than `ticked` of them, so a small castle keeps
+ * enough to breed: one under 8, three up to 20.
  */
-const FEW_AT_HOME = Object.freeze({ most: 20, ticked: 3 });
+const FEW_AT_HOME = Object.freeze([{ under: 8, ticked: 1 }, { under: 21, ticked: 3 }]);
 
 /** Recenter's zoom at least: close enough to read how many are in each building. */
 const HOME_ZOOM = COUNT_ZOOM + 0.15;
@@ -795,8 +795,8 @@ export async function startGame(net, me) {
   /**
    * Let the player choose a crew: a list of their units, with the current
    * crew ticked, or for a new building the ones at home best at its work, up
-   * to half of those at home, and no more than three while 20 or fewer are
-   * (FEW_AT_HOME), so the castle keeps some to breed.
+   * to half of those at home, and no more than three while 20 or fewer are,
+   * one while fewer than 8 (FEW_AT_HOME), so the castle keeps some to breed.
    * @param {object} options
    * @param {string} options.title
    * @param {string} options.hint
@@ -819,7 +819,7 @@ export async function startGame(net, me) {
     /** @param {typeof units[number]} a @param {typeof units[number]} b */
     const better = (a, b) => b.skills[skill] - a.skills[skill] || b.level - a.level || a.name.localeCompare(b.name);
     const atHome = units.filter((u) => u.in === home);
-    const few = atHome.length <= FEW_AT_HOME.most ? FEW_AT_HOME.ticked : Infinity;
+    const few = FEW_AT_HOME.find((f) => atHome.length < f.under)?.ticked ?? Infinity;
     const chosen = new Set(target
       ? crewOf(view, target)
       : atHome.sort(better).slice(0, Math.min(limit, ticked, few, Math.floor(atHome.length / 2))).map((u) => u.id));
@@ -1232,12 +1232,16 @@ export async function startGame(net, me) {
   });
 
   for (const button of buildButtons) {
-    const { name, cost, metal, hunger } = BUILDING_TYPES[button.dataset.kind ?? ''];
-    const label = word(/** @type {import('./words.js').Word} */ (button.dataset.kind));
+    const kind = button.dataset.kind ?? '';
+    const { name, cost, metal, hunger, capacity, reach = 0 } = BUILDING_TYPES[kind];
+    const label = word(/** @type {import('./words.js').Word} */ (kind));
     keyLabel(button, label, cost ? String(cost) : metal ? `${metal}◆` : hunger ? `${hunger}%` : '');
+    // What it is for, in a line of play help, then its price.
+    const help = /** @type {import('./words.js').Word} */ (`help${kind[0].toUpperCase()}${kind.slice(1)}`);
     button.title = word('buildTitle', {
       name: label,
       key: keysOf(button)[0] ?? '',
+      help: word(help, { n: capacity, reach: RANGED_RANGE + reach }),
       price: cost ? word('stoneCost', { n: cost }) : metal ? word('metalCost', { n: metal }) : hunger ? word('hungerCost', { n: hunger }) : word('free'),
     });
     button.addEventListener('click', () => {
