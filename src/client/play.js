@@ -21,7 +21,7 @@ import { BoardRenderer, COUNT_ZOOM, pickAt } from './render.js';
 import { autoLanguage, browserLanguages, chosenLanguage, keyCandidates } from './language.js';
 import { Sounds, soundsFor } from './sounds.js';
 import { Ground } from './ground.js';
-import { Tokens } from './tokens.js';
+import { PICTURES, Tokens } from './tokens.js';
 import { isWord, say, shortPoints, translate } from './words.js';
 
 /** @param {number} tick */
@@ -776,7 +776,8 @@ export async function startGame(net, me) {
     const heroes = units.filter((u) => u.hero).sort((a, b) => b.level - a.level || a.name.localeCompare(b.name));
     const gone = fallen.filter((u) => u.owner === seat);
     const skills = /** @type {[import('../core/rules.js').Skill, string][]} */ (Object.entries(SKILL_SHORT));
-    const lv = (/** @type {number} */ n) => `Lv${String(n).padStart(3)}`;
+    // Each level padded to three places, so the skills line up.
+    const lv = (/** @type {number} */ n) => String(n).padStart(3);
     /** @param {typeof heroes[number] & { died?: number, how?: string }} u */
     const row = (u) => {
       const name = document.createElement('span');
@@ -882,6 +883,14 @@ export async function startGame(net, me) {
       const where = document.createElement('span');
       where.className = 'where';
       where.textContent = extra ? `${whereIs(u, target)} · ${skillName(extra)} ${u.skills[extra]}` : whereIs(u, target);
+      // A small picture of the building it is in; none while it walks.
+      const inside = u.in !== undefined ? view?.buildings[u.in] : null;
+      if (inside && PICTURES.includes(inside.type)) {
+        const place = document.createElement('span');
+        place.className = 'place';
+        place.style.setProperty('--icon', `url(art/${inside.type}.svg)`);
+        where.prepend(place);
+      }
       const label = document.createElement('label');
       label.append(box, portrait(u), name, stats, where);
       const li = document.createElement('li');

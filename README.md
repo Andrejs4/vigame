@@ -151,9 +151,9 @@ Run `npm start` and open http://127.0.0.1:2567.
   Select your castle and press **Heroes…**
   (in Crew's place, as the castle has no crew) for yours alive now, highest
   level first, each with its face, where it is and
-  every skill's level, as "Att Lv 15"
+  every skill's level, as "Att 15"
   (ranged attack; then close combat, building, farming, breeding and
-  running), each level padded to line up ("Lv  8", "Lv100"). Below them
+  running), each level padded to line up ("Att   8", "Att 100"). Below them
   come those that died while the page was open, in the order they died, as
   they last were: how long each lived, in silver, and how it died. The page
   keeps them only while it is open: a reload forgets them, and it misses
@@ -166,7 +166,9 @@ Run `npm start` and open http://127.0.0.1:2567.
   chance of a unit's strikes.
 - **Crews**: units walk only when they're given to a building's crew or sent
   home. Select one of your buildings and press **Crew…** for a list of your
-  units, each with its level, skill and age in minutes ("12m"): tick up to
+  units, each with its level, skill and age in minutes ("12m"), and where
+  it is, after a small picture of the building it is in (none while it
+  walks): tick up to
   what it holds (with a mouse, drag down the list to tick or untick a run
   of them). The skill shown is the one the building wants: building for
   a pit, farming for a farm, and ranged attack for a tower, wagon or band,

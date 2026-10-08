@@ -1007,8 +1007,8 @@ async function threeBrowsers(browser, url, { full, label }) {
       img.src = url;
     });
   }))), [256, 256], 'both sheets of faces load');
-  // Each level takes three places, "Lv  8" to "Lv100", so the skills line up.
-  const skillLine = new RegExp(`^${['Att', 'Mel', 'Bld', 'Frm', 'Brd', 'Run'].map((s) => `${s} Lv[ \\d]{2}\\d`).join('')}$`);
+  // Each level takes three places, "  8" to "100", so the skills line up.
+  const skillLine = new RegExp(`^${['Att', 'Mel', 'Bld', 'Frm', 'Brd', 'Run'].map((s) => `${s} [ \\d]{2}\\d`).join('')}$`);
   for (const { skills } of listed) assert.match(skills, skillLine);
   await a.screenshot({ path: join(OUT, 'heroes.png') });
   // A hero the page saw die goes below the living, as last seen: how long
