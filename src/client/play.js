@@ -351,23 +351,34 @@ export async function startGame(net, me) {
 
   /** Whether the table of points has come up since the game was over. */
   let scoresSeen = false;
-  /** Seat holders' names, by seat, for the table: those who have left too. */
+  /** Seat holders' names, by seat, for the table and a selected castle. */
   /** @type {string[]} */
   let seatNames = [];
+  /** The seats' holders the names were last fetched for. */
+  let seatHolders = '';
 
-  /** Show the table of points, and fetch every seat holder's name for it. */
-  async function showScores() {
-    if (!view || view.over === undefined) return;
-    fillScores();
-    if (!scoresDialog.open) scoresDialog.showModal();
+  /**
+   * Fetch every seat holder's name, for the table and a selected castle:
+   * when the game opens, and whenever someone takes or frees a seat.
+   */
+  async function loadSeatNames() {
     try {
       /** @type {Array<{ name: string } | null>} */
       const seats = await getJson(`api/games/${encodeURIComponent(gameId)}/seats`);
       seatNames = seats.map((s) => s?.name ?? '');
-      fillScores();
     } catch {
-      // The sides' names will do.
+      return; // the sides' names will do
     }
+    if (scoresDialog.open) fillScores();
+    updateHud();
+  }
+
+  /** Show the table of points, with every seat holder's name. */
+  async function showScores() {
+    if (!view || view.over === undefined) return;
+    fillScores();
+    if (!scoresDialog.open) scoresDialog.showModal();
+    await loadSeatNames();
   }
 
   /**
@@ -672,7 +683,12 @@ export async function startGame(net, me) {
    */
   function describe(b) {
     const type = BUILDING_TYPES[b.type];
-    const name = type.grades > 1 ? word('graded', { name: typeName(b.type), n: b.grade }) : typeName(b.type);
+    const graded = type.grades > 1 ? word('graded', { name: typeName(b.type), n: b.grade }) : typeName(b.type);
+    // A castle says whose it is: its seat's player, or that the seat is free.
+    const holder = b.type === 'castle' && net.seats()[b.owner] !== undefined
+      ? (net.seats()[b.owner] === null ? word('seatFree') : seatNames[b.owner] ?? '')
+      : '';
+    const name = holder ? `${graded} · ${holder}` : graded;
     /** @type {string[]} */
     const parts = [];
     const done = percent(b.work ?? 0, type.work ?? 1);
@@ -1484,6 +1500,12 @@ export async function startGame(net, me) {
     updateHud();
   });
   net.onSeat(() => {
+    // Someone took or freed a seat (or this viewer did): their names again.
+    const holders = JSON.stringify(net.seats());
+    if (holders !== seatHolders) {
+      seatHolders = holders;
+      loadSeatNames();
+    }
     // The first time this viewer has a castle, look at it.
     if (!homed && net.seat() !== null) recenter();
     refreshHighlights();

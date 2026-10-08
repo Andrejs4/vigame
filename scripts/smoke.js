@@ -652,6 +652,11 @@ async function threeBrowsers(browser, url, { full, label }) {
   await waitText(a, '#game-name', rename);
   assert.equal(await a.title(), `${rename} · Vigame`);
 
+  // Before Bēla comes, Ann selects the other castle: its seat is free.
+  const crimsonHome = await castleOf(a, 1);
+  await selectBuilding(a, crimsonHome);
+  await waitSelection(a, /^Castle \(grade 1\) · free seat \|/);
+
   // Bēla logs in and finds the game in the lobby by its name, waiting for her.
   const b = await newPlayer(browser, url, `${label}-b`, 'Bēla');
   await inLobby(b);
@@ -659,6 +664,10 @@ async function threeBrowsers(browser, url, { full, label }) {
   if (full) await b.screenshot({ path: join(OUT, 'lobby-games.png') });
   await openFromLobby(b, 'open', 'Ann & —');
   await waitText(b, '#seat', 'Bēla · Crimson');
+  // Now the castle Ann has selected says it is Bēla's.
+  await waitSelection(a, /^Castle \(grade 1\) · Bēla \|/);
+  if (full) await a.locator('#selection').screenshot({ path: join(OUT, 'castle-owner.png') });
+  await a.keyboard.press('Escape');
   await waitMatch(a, '#time', /^0:0[1-9]$/);
   assert.equal(await a.locator('#start-button').isVisible(), false, 'nobody missing, nothing to start');
   assert.equal(await b.locator('#start-button').isVisible(), false, 'Start is the creator\'s');
@@ -1451,7 +1460,7 @@ async function phone(browser, url) {
   await waitText(other, '#seat', 'Oli · Багровые');
   const crimson = await castleOf(other, 1);
   await selectBuilding(other, crimson);
-  await waitSelection(other, /^Замок \(ур\. 1\) \| \d+\/40 дома · новый юнит\s+\d+% \| Прочность \d+\/\d+$/);
+  await waitSelection(other, /^Замок \(ур\. 1\) · Oli \| \d+\/40 дома · новый юнит\s+\d+% \| Прочность \d+\/\d+$/);
   await other.click('#heroes-button');
   await other.waitForSelector('#heroes[open]');
   assert.equal(await text(other, '#heroes-title'), 'Герои');
