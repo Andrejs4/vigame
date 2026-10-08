@@ -202,6 +202,9 @@ export async function startGame(net, me) {
   const crewDialog = /** @type {HTMLDialogElement} */ (document.getElementById('crew'));
   const renameDialog = /** @type {HTMLDialogElement} */ (document.getElementById('rename'));
   const heroesDialog = /** @type {HTMLDialogElement} */ (document.getElementById('heroes'));
+  const heroesHome = /** @type {HTMLButtonElement} */ (document.getElementById('heroes-home'));
+  /** Whether the heroes list waits for the next update to show them going home. */
+  let heroesAgain = false;
   const heroesList = /** @type {HTMLElement} */ (document.getElementById('heroes-list'));
   const heroesCount = /** @type {HTMLElement} */ (document.getElementById('heroes-count'));
   const renameButton = /** @type {HTMLButtonElement} */ (document.getElementById('rename-button'));
@@ -342,6 +345,11 @@ export async function startGame(net, me) {
     refreshHighlights();
     updateHud();
     needsDraw = true;
+    // Heroes called home: the open list shows them on their way.
+    if (heroesAgain && heroesDialog.open) {
+      heroesAgain = false;
+      showHeroes();
+    }
     // The table of points, once, when the game is over (or opens over).
     if (next.over !== undefined && !scoresSeen) {
       scoresSeen = true;
@@ -833,8 +841,25 @@ export async function startGame(net, me) {
     heroesCount.textContent = [
       word('heroesCount', { n: heroes.length, total: units.length }), gone.length ? word('fallenCount', { n: gone.length }) : '',
     ].filter(Boolean).join(' · ');
-    heroesDialog.showModal();
-    heroesList.scrollTop = 0;
+    // All home: those not home and not on their way there, if any.
+    const castle = castleOf(view, seat)?.id;
+    const away = heroes.filter((u) => u.in !== castle && u.to !== castle).map((u) => u.id);
+    heroesHome.disabled = !away.length || !canCommand();
+    heroesHome.onclick = async () => {
+      // A disabled button lets go of the focus; Close keeps it in the list,
+      // so its keys (H, Escape) still reach it.
+      heroesDialog.querySelector('button[value="close"]')?.focus();
+      heroesHome.disabled = true;
+      // The room takes lists as long as a band's crew at most.
+      for (let i = 0; i < away.length; i += BUILDING_TYPES.band.capacity) {
+        if (!(await give({ type: 'home', units: away.slice(i, i + BUILDING_TYPES.band.capacity) }, 'call them home'))) break;
+      }
+      heroesAgain = true;
+    };
+    if (!heroesDialog.open) {
+      heroesDialog.showModal();
+      heroesList.scrollTop = 0;
+    }
   }
 
   /**

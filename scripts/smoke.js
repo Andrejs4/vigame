@@ -960,6 +960,7 @@ async function threeBrowsers(browser, url, { full, label }) {
     id: /** @type {HTMLElement} */ (e).dataset.unit,
     level: Number(/^Lv *(\d+) · \d+m$/.exec(e.querySelector('.stats')?.textContent ?? '')?.[1]),
     skills: e.querySelector('.skills')?.textContent ?? '',
+    where: e.querySelector('.where')?.textContent ?? '',
   })));
   // Each listed unit is a hero of hers (unless gone since), and each of
   // hers born before it opened is listed.
@@ -1011,6 +1012,18 @@ async function threeBrowsers(browser, url, { full, label }) {
   const skillLine = new RegExp(`^${['Att', 'Mel', 'Bld', 'Frm', 'Brd', 'Run'].map((s) => `${s} [ \\d]{2}\\d`).join('')}$`);
   for (const { skills } of listed) assert.match(skills, skillLine);
   await a.screenshot({ path: join(OUT, 'heroes.png') });
+  // All home calls the heroes out of their buildings: the list shows them
+  // going home, and has nothing more to call. (With all of them home
+  // already, it has nothing to call from the start.)
+  const awayHeroes = listed.filter((h) => !/^(at home|going home)$/.test(h.where)).length;
+  assert.equal(await a.locator('#heroes-home').isDisabled(), awayHeroes === 0, `${awayHeroes} heroes away`);
+  if (awayHeroes) {
+    await a.click('#heroes-home');
+    await a.waitForFunction(() => [...document.querySelectorAll('#heroes-list li:not(.fallen) .where')]
+      .every((e) => /^(at home|going home)$/.test(e.textContent ?? '')));
+    assert.equal(await a.locator('#heroes-home').isDisabled(), true, 'nobody left to call');
+    await a.screenshot({ path: join(OUT, 'heroes-home.png') });
+  }
   // A hero the page saw die goes below the living, as last seen: how long
   // it lived in silver, and how it died where it would be. (One is made up
   // here, from one of her units: nobody dies this early in the game.)

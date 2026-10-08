@@ -138,6 +138,7 @@ import {
 /**
  * @typedef {{ type: 'build', kind: string, q: number, r: number, units?: string[] }
  *   | { type: 'crew', building: string, units: string[] }
+ *   | { type: 'home', units: string[] }
  *   | { type: 'target', building: string, target: string }
  *   | { type: 'upgrade', building: string }
  *   | { type: 'abort', building: string }
@@ -913,6 +914,7 @@ export function applyCommand(board, state, player, command) {
   switch (cmd.type) {
     case 'build': return build(board, state, occ, player, cmd);
     case 'crew': return crew(board, state, occ, player, cmd);
+    case 'home': return callHome(board, state, occ, player, cmd);
     case 'target': return aim(state, player, cmd);
     case 'upgrade': return upgrade(state, player, cmd);
     case 'abort': return abort(board, state, occ, player, cmd);
@@ -1068,6 +1070,38 @@ function crew(board, state, occ, player, cmd) {
   const ids = unitList(state, player, cmd.units);
   if (typeof ids === 'string') return refuse(ids);
   return setCrew(board, state, occ, b, ids);
+}
+
+/**
+ * Call these units home to the castle from wherever they are: out of a
+ * building's crew or a band, or off the way to one. Those home already, or
+ * on their way home, stay as they are. The units that leave one building
+ * go out a tick apart, as a crew's do.
+ * @param {Board} board
+ * @param {GameState} state
+ * @param {Occupancy} occ
+ * @param {number} player
+ * @param {Record<string, unknown>} cmd
+ * @returns {Outcome}
+ */
+function callHome(board, state, occ, player, cmd) {
+  const home = castleOf(state, player);
+  if (!home) return refuse('no castle');
+  const ids = unitList(state, player, cmd.units);
+  if (typeof ids === 'string') return refuse(ids);
+  const away = ids.map((id) => state.units[id]).filter((u) => u.in !== home.id && u.to !== home.id);
+  if (!away.length) return refuse('they are all home');
+  const routes = away.map((u) => routeFor(board, state, occ, u, home));
+  if (routes.some((route) => !route)) return refuse('no way there');
+  /** @type {Map<string, number>} */
+  const leaving = new Map();
+  away.forEach((u, i) => {
+    const from = u.in ?? '';
+    const n = leaving.get(from) ?? 0;
+    leaving.set(from, n + 1);
+    dispatch(board, state, u, home, /** @type {Cell[]} */ (routes[i]), state.tick + n * DEPART_GAP);
+  });
+  return { ok: true };
 }
 
 /**

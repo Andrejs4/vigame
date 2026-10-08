@@ -154,7 +154,8 @@ Run `npm start` and open http://127.0.0.1:2567.
   its building, as in the crew chooser) and
   every skill's level, as "Att 15"
   (ranged attack; then close combat, building, farming, breeding and
-  running), each level padded to line up ("Att   8", "Att 100"). Below them
+  running), each level padded to line up ("Att   8", "Att 100"). **All home**, at its foot, calls every living hero home to the castle
+  from wherever they are (a building, a band, or the way to one). Below them
   come those that died while the page was open, in the order they died, as
   they last were: how long each lived, in silver, and how it died. The page
   keeps them only while it is open: a reload forgets them, and it misses
@@ -534,6 +535,7 @@ http://127.0.0.1:2567;` with the same headers.
   refuses with a reason and changes nothing:
   - `{ type: 'build', kind, q, r, units? }`: a tower, wagon, pit, farm or band, with a crew if `units` lists one;
   - `{ type: 'crew', building, units }`: that building's whole crew (`[]` sends them all home);
+  - `{ type: 'home', units }`: calls these units home to the castle from wherever they are (a building's crew, a band, or the way to one); those home or on their way home stay. Refused if all are.
   - `{ type: 'upgrade', building }`: paid now, then worked on by its crew;
   - `{ type: 'abort', building }`: gives up a building still going up;
   - `{ type: 'move', building, q, r }`: a wagon or band;
