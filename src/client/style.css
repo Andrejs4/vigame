@@ -366,6 +366,8 @@ button.inline {
 button.inline:hover:not(:disabled) { background: none; color: var(--amber); }
 /* The creator's Start, beside the players: the one thing to do while they wait. */
 #start-button { color: var(--amber); font-weight: 600; }
+/* End sits quietly beside the time: it ends the game for everyone. */
+#end-button { margin-left: 8px; color: var(--ink-dim); }
 #start-button:hover:not(:disabled) { text-decoration: underline; }
 
 /* The table at a game's end: a row a side, winners first, a column a line of points. */

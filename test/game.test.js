@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { BOARD_OPTIONS, createBoard } from '../src/core/board.js';
 import {
   advance, applyCommand, capacityOf, checkState, crewOf, footprint, levelXp, newGame, occupancy, publicView, random,
-  breedRate, depthOf, fullMeal, sharesStock, isRising, killChance, maxHp, pointsOf, quickWin, scoreOf, seatsOf, starveChance, ROOM_COMMANDS,
+  breedRate, depthOf, endWinner, fullMeal, sharesStock, isRising, killChance, maxHp, pointsOf, quickWin, scoreOf, seatsOf, starveChance, ROOM_COMMANDS,
 } from '../src/core/game.js';
 import {
   BUILDING_TYPES, COMBAT_PERIOD, DARK_LORD, TICKS_PER_SECOND, HORDE_PERIOD, HORDE_START, RAIDERS, RAID_PERIOD, RAID_PER_PLAYER, SALVAGE, SIDES, FOOD_PER_UNIT, FOOD_PERIOD, KILL_XP, LEVEL_RATE, RANGED_DAMAGE, LEVEL_XP, MAX_HUNGER, MAX_LEVEL, SKILL_RATE, SKILL_XP, START_UNITS, UNIT_LIMIT, WAGON_PATIENCE,
@@ -854,7 +854,7 @@ test('the horde leaves a side whose player is away alone, but fights it on its w
 
   assert.deepEqual(applyCommand(board, away, 2, { type: 'away' }), { ok: false, reason: 'already away' });
   assert.deepEqual(applyCommand(board, away, 1, { type: 'away' }), { ok: false, reason: 'not a seat' }, 'the Dark Lord is never away');
-  assert.deepEqual(ROOM_COMMANDS, ['away', 'back']);
+  assert.deepEqual(ROOM_COMMANDS, ['away', 'back', 'end']);
   const odd = structuredClone(away);
   /** @type {any} */ (odd.players[2]).away = false;
   /** @type {any} */ (odd.players[1]).away = true;
@@ -984,6 +984,33 @@ test('a quick win multiplies the winners\' points: twice from 10 to 20 minutes, 
   assert.equal(scoreOf(state, 0).total, 796, '1.5 × 531, rounded down');
   delete state.winner;
   assert.equal(scoreOf(state, 0).times, 1, 'nobody won');
+});
+
+test('a player may end the game: against the Dark Lord he wins; in free for all the one side left, or nobody', () => {
+  const ended = (/** @type {string} */ mode, /** @type {number} */ players, /** @type {(s: any) => void} */ setUp = () => {}) => {
+    const board = createBoard({ ...BOARD_OPTIONS, seed: 7, players });
+    const state = newGame(board, { mode });
+    setUp(state);
+    state.tick = 9000;
+    const who = endWinner(state, 0);
+    assert.deepEqual(applyCommand(board, state, 0, { type: 'end' }), OK);
+    assert.deepEqual(checkState(board, state), []);
+    assert.equal(state.over, 9000, 'the clock stops where it was');
+    assert.equal(state.winner, who, 'as the page says before asking');
+    assert.deepEqual(applyCommand(board, state, 1, { type: 'end' }), { ok: false, reason: 'the game is over' });
+    return state;
+  };
+  const lord = ended('coop', 3);
+  const lordTeam = lord.players.find((p) => p.side === DARK_LORD)?.team;
+  assert.equal(lord.winner, lordTeam);
+  assert.deepEqual(lord.players.map((p) => p.tally.won), lord.players.map((p) => Number(p.team === lordTeam)), 'he gets the win');
+  assert.equal(ended('ffa', 4).winner, undefined, 'three others standing: nobody wins');
+  const duel = ended('ffa', 2);
+  assert.equal(duel.winner, duel.players[1].team, 'the other one of two wins');
+  assert.equal(duel.players[1].tally.won, 1);
+  // A player whose castle has fallen may still end it; the raiders never win.
+  const fallen = ended('ffa', 3, (s) => { s.players[0].lost = 0; s.players[2].lost = 0; });
+  assert.equal(fallen.winner, fallen.players[1].team);
 });
 
 test('the side whose castle falls has lost; when one team is left, the game is over', () => {

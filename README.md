@@ -303,6 +303,13 @@ Run `npm start` and open http://127.0.0.1:2567.
   a castle (or lair) standing, it has won and the game is over: the clock
   stops, commands are refused, the page says who won, and the lobby lists
   the game as finished.
+- **Ending a game early**: **End**, beside the time, ends the game for
+  everyone, after asking. The player who started it may at any time; any
+  other seated player (castle standing or not) after an hour of game time.
+  Their team gives up: if just one other team still has a castle or lair
+  standing, it wins (the Dark Lord, in cooperation, or the last rival in a
+  duel); otherwise nobody does (free for all with more left). Then it is
+  over as when one team is left, with the points as they stand.
 - **Raiders** turn up in every game: wandering hostile wagons, against
   everyone, with 500 hit points, that strike whatever comes within 2
   cells (20 a strike, level 20). Every minute and a half one may appear
@@ -524,6 +531,7 @@ http://127.0.0.1:2567;` with the same headers.
   - `{ type: 'target', building, target }`: an enemy building or band to go for (`''` clears it);
   - `{ type: 'rename', name }`: the game's name (the room takes this one while the game is paused too);
   - `{ type: 'away' }` and `{ type: 'back' }`: the side's player has gone, and the game goes on without them, or is back. Only the room gives these (`ROOM_COMMANDS`), and logs them like the rest, so replays agree.
+  - `{ type: 'end' }`: the side's player ends the game for everyone (see Ending a game early). Only the room gives it, for the game's creator or, after an hour, any seated player, and saves the game at once.
 - `advance(board, state)` runs one tick: every second a round of fighting,
   collapses, every minute food and a meal, empty bands breaking up, mending,
   raising and upgrading, work in castles, pits and farms, wagons and bands,

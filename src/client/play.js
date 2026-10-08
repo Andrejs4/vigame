@@ -7,12 +7,12 @@
 import { axialToPixel, bounds, distance, key, pixelToAxial } from '../core/hex.js';
 import { BOARD_OPTIONS, createBoard, tileAt } from '../core/board.js';
 import {
-  buildCost, capacityOf, castleOf, crewOf, depthOf, foodStore, fullMeal, inBuildRange, isDugOut, isRising, maxHp, occupancy, purseOf, quickWin, scoreOf,
+  buildCost, capacityOf, castleOf, crewOf, depthOf, endWinner, foodStore, fullMeal, inBuildRange, isDugOut, isRising, maxHp, occupancy, purseOf, quickWin, scoreOf,
   raiseWork, seatsOf, sharesStock, shortOf, sideOf, upgradeCost,
 } from '../core/game.js';
 import { GAME_NAME_MAX, cleanGameName } from '../core/player.js';
 import { PORTRAIT_SIDE, portraitOf } from '../core/names.js';
-import { BUILDING_TYPES, POINTS, QUICK_WIN, RANGED_RANGE, SKILL_SHORT, TICKS_PER_SECOND, UNIT_LIMIT } from '../core/rules.js';
+import { BUILDING_TYPES, END_ANYONE_TICKS, POINTS, QUICK_WIN, RANGED_RANGE, SKILL_SHORT, TICKS_PER_SECOND, UNIT_LIMIT } from '../core/rules.js';
 import { getJson, serverBase } from './api.js';
 import { Camera } from './camera.js';
 import { Effects, fallenHeroes, fallenHeroesNote } from './effects.js';
@@ -184,6 +184,8 @@ export async function startGame(net, me) {
   // For the game's creator, while it waits for players: go on without them.
   const startButton = /** @type {HTMLButtonElement} */ (document.getElementById('start-button'));
   startButton.title = word('startNowTitle');
+  // For a player in the game: end it for everyone (its creator at any time).
+  const endButton = /** @type {HTMLButtonElement} */ (document.getElementById('end-button'));
   const upgradeButton = /** @type {HTMLButtonElement} */ (document.getElementById('upgrade'));
   const crewButton = /** @type {HTMLButtonElement} */ (document.getElementById('crew-button'));
   const heroesButton = /** @type {HTMLButtonElement} */ (document.getElementById('heroes-button'));
@@ -490,6 +492,15 @@ export async function startGame(net, me) {
     return present.some((p, i) => p && awaited(i)) && present.some((p, i) => !p && awaited(i));
   }
 
+  /**
+   * Whether this viewer may end the game for everyone: a seated player, its
+   * creator at any time, anyone else after an hour of play (the room checks).
+   */
+  function canEndGame() {
+    if (net.seat() === null || !view || view.over !== undefined) return false;
+    return net.isCreator() || view.tick >= END_ANYONE_TICKS;
+  }
+
   /** Whether this viewer may rename the game: a player still in it, paused or not. */
   function canRename() {
     const seat = net.seat();
@@ -610,6 +621,7 @@ export async function startGame(net, me) {
       hud.players.classList.toggle('waiting', paused && view?.over === undefined);
     }
     startButton.hidden = !canStartNow();
+    endButton.hidden = !canEndGame();
     const startLabel = word(view?.tick ? 'goOn' : 'startNow');
     if (startButton.textContent !== startLabel) startButton.textContent = startLabel;
     if (hud.observers) {
@@ -1367,6 +1379,22 @@ export async function startGame(net, me) {
   startButton.addEventListener('click', async () => {
     const outcome = await net.startNow();
     if (!outcome.ok) flash(`Can't start: ${outcome.reason}.`);
+  });
+
+  // Ending the game asks first, saying who would win: the one other team
+  // still standing, if just one is (the Dark Lord, in cooperation), or nobody.
+  endButton.addEventListener('click', async () => {
+    const seat = net.seat();
+    if (!view || seat === null) return;
+    const players = view.players;
+    const team = endWinner(view, seat);
+    const winners = players.filter((p) => p.team === team);
+    const ask = team === undefined ? word('askEndNobody')
+      : winners.some((p) => sideOf(view, p.id)?.npc) ? word('askEndLord')
+        : word('askEndSide', { side: winners.map((p) => sideName({ players }, p.id)).join(', ') });
+    if (!confirm(ask)) return;
+    const outcome = await net.endGame();
+    if (!outcome.ok) flash(`Can't end the game: ${outcome.reason}.`);
   });
 
   document.getElementById('toggle-coords')?.addEventListener('click', (e) => {

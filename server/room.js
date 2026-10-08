@@ -26,7 +26,7 @@ import { ErrorCode, Room, ServerError, logger } from '@colyseus/core';
 
 import { BOARD_OPTIONS, createBoard, tileAt } from '../src/core/board.js';
 import { ROOM_COMMANDS, advance, applyCommand, checkState, newGame, publicView } from '../src/core/game.js';
-import { BUILDING_TYPES, DEFAULT_MODE, MODES, TICKS_PER_SECOND } from '../src/core/rules.js';
+import { BUILDING_TYPES, DEFAULT_MODE, END_ANYONE_TICKS, MODES, TICKS_PER_SECOND } from '../src/core/rules.js';
 import { GameState, ViewerState, syncGame, syncSeats } from './schema.js';
 
 /** What a player token must look like: long, random, URL-safe. */
@@ -250,6 +250,10 @@ export class GameRoom extends Room {
       const why = this.startNow(client.auth.pid);
       return why === null ? true : ctx?.reject(why);
     });
+    this.onMessage('endGame', (client, _message, ctx) => {
+      const why = this.endGame(client.auth.pid);
+      return why === null ? true : ctx?.reject(why);
+    });
     this.onMessage('select', (client, message) => this.select(client, message));
 
     // Patches go out once per tick, after the tick has changed things.
@@ -310,6 +314,26 @@ export class GameRoom extends Room {
     const missing = this.seats.flatMap((_, i) => (awaited[i] && !present[i] ? [i] : []));
     if (!missing.length) return 'nobody is missing';
     for (const seat of missing) this.commit(seat, { type: 'away' });
+    return null;
+  }
+
+  /**
+   * A seated player ends the game for everyone, as a command the room logs:
+   * its creator at any time, anyone else after an hour of play
+   * (END_ANYONE_TICKS). It is saved at once, so the lobby lists it finished.
+   * @param {string} pid Who asks.
+   * @returns {string | null} Why not, or null once done.
+   */
+  endGame(pid) {
+    if (this.deleted) return 'the game is gone';
+    if (this.game.over !== undefined) return 'the game is over';
+    const seat = this.seatOf(pid);
+    if (seat === null) return 'not seated';
+    if (pid !== this.creator && this.game.tick < END_ANYONE_TICKS) return 'only its creator may end it in its first hour';
+    const outcome = this.commit(seat, { type: 'end' });
+    if (!outcome.ok) return outcome.reason;
+    this.state.running = false;
+    this.snapshot();
     return null;
   }
 

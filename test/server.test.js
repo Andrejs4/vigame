@@ -18,7 +18,7 @@ import { advance, castleOf, checkState, nearStanding, newGame, occupancy, public
 import { key } from '../src/core/hex.js';
 import { GAME_NAMES } from '../src/core/names.js';
 import { createServerNet } from '../src/client/net.js';
-import { BUILDING_TYPES, TICKS_PER_SECOND } from '../src/core/rules.js';
+import { BUILDING_TYPES, END_ANYONE_TICKS, TICKS_PER_SECOND } from '../src/core/rules.js';
 
 /** @type {Awaited<ReturnType<typeof startGameServer>>} */
 let server;
@@ -498,6 +498,31 @@ test('the game\'s creator may have it go on without the players missing, until t
   await c.leave();
   await until(() => !seen(a).running);
   await leaveAll(a, b);
+});
+
+test('a game ends for everyone when its creator ends it, or anyone seated after an hour; saved at once', async () => {
+  const res = await post('/api/games', { token: TOKENS.a, players: 2 });
+  const id = /** @type {string} */ ((await res.json()).id);
+  const a = await join(id, TOKENS.a);
+  const b = await join(id, TOKENS.b);
+  const c = await join(id, TOKENS.c);
+  await until(() => seen(a).tick >= 5);
+  assert.equal(await refusal(b.request('endGame')), 'only its creator may end it in its first hour');
+  assert.equal(await refusal(c.request('endGame')), 'not seated', 'a spectator may not');
+  assert.equal(await refusal(give(a, { type: 'end' })), 'unknown command', 'only the room ends it');
+
+  // An hour on, Crimson may; against the Dark Lord, he wins.
+  const room = matchMaker.getLocalRoomById(a.roomId);
+  room.game.tick = END_ANYONE_TICKS;
+  assert.equal(await b.request('endGame'), true);
+  await until(() => seen(a).over !== undefined);
+  const lord = seen(a).players.find((/** @type {any} */ p) => p.side === 8);
+  assert.equal(seen(a).winner, lord.team);
+  assert.equal(seen(a).running, false);
+  assert.deepEqual(server.storage.listCommands(id).map((x) => [x.player, x.command]), [[1, { type: 'end' }]], 'logged');
+  assert.ok(server.storage.loadGame(id)?.state.over !== undefined, 'saved finished at once');
+  assert.equal(await refusal(a.request('endGame')), 'the game is over');
+  await leaveAll(a, b, c);
 });
 
 test('a player whose castle fell may take a free base; the game waits for no fallen side', async () => {

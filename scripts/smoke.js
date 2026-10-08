@@ -1264,6 +1264,22 @@ async function sixteen(browser, url) {
   assert.equal(await page.evaluate(() => /** @type {any} */ (window).__vigame.camera.zoom), 2.5, 'not at the closest zoom');
   await frames(page);
   await page.screenshot({ path: join(OUT, 'ground.png') });
+
+  // Its creator may end it for everyone at any time, the other player only
+  // after an hour. She ends it, after saying yes to who would win: her team
+  // gives up, the Dark Lord wins, and the points table opens for both.
+  await page.click('#zoom-out');
+  assert.equal(await other.locator('#end-button').isVisible(), false, 'only the creator, in the first hour');
+  await page.locator('#status').screenshot({ path: join(OUT, 'end-button.png') });
+  const asked = new Promise((res) => page.once('dialog', (d) => { res(d.message()); d.accept(); }));
+  await page.click('#end-button');
+  assert.equal(await asked, 'End the game for everyone now? Your team gives up, and the Dark Lord wins. The points are counted as they stand.');
+  for (const p of [page, other]) {
+    await p.waitForSelector('#scores[open]');
+    await waitMatch(p, '#time', /over: you lost$/);
+  }
+  assert.equal(await page.locator('#end-button').isVisible(), false, 'nothing left to end');
+  await page.screenshot({ path: join(OUT, 'ended.png') });
   for (const p of [page, other]) await p.context().close();
 }
 
