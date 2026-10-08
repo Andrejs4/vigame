@@ -288,6 +288,12 @@ export const QUICK_WIN = Object.freeze([
 ]);
 
 /**
+ * Game time after which any seated player may end the game for everyone
+ * (End, in the status panel); its creator may at any time.
+ */
+export const END_ANYONE_TICKS = 60 * 60 * TICKS_PER_SECOND;
+
+/**
  * Bringing down a building bought with dark metal (a wagon) yields the
  * striker's side this share of its price.
  */

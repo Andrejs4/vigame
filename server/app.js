@@ -10,6 +10,7 @@
  *   POST /api/settings          change name or language: { token, name?, language? } -> { pid, name, language }
  *   POST /api/games             start a game: { token } -> 201 { id }, or 409 { error, waiting, seated, games } with too many on the go
  *   GET  /api/games             recently active games, with who holds each seat (the lobby)
+ *   GET  /api/scores            the ten best scores ever (the lobby's high scores)
  *   GET  /api/games/:id         one game's snapshot and seats
  *   GET  /api/games/:id/commands  its command log (history, replays)
  *   POST /api/games/:id/delete  delete a game you started that nobody else plays: { token }
@@ -254,6 +255,9 @@ export async function startGameServer({
       };
       app.get('/api/games', (_req, res) => {
         res.set('cache-control', 'no-store').json(seatNames(storage.listGames()));
+      });
+      app.get('/api/scores', (_req, res) => {
+        res.set('cache-control', 'no-store').json(storage.bestScores());
       });
       app.get('/api/games/:id', (req, res) => {
         const saved = GAME_ID.test(req.params.id) ? storage.loadGame(req.params.id) : null;

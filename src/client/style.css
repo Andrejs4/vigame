@@ -142,6 +142,8 @@ button[aria-pressed="true"] { background: rgba(255, 216, 77, 0.18); border-color
 .games .when { color: var(--ink-dim); font: 12px var(--mono); margin-left: 6px; }
 .games .button { flex: none; }
 .games .actions { display: flex; gap: 8px; flex: none; }
+/* The high scores: each total big, beside its game's Scores. */
+.games .points { font: 600 16px var(--mono); align-self: center; }
 
 /* --- the game ------------------------------------------------------------- */
 
@@ -366,6 +368,8 @@ button.inline {
 button.inline:hover:not(:disabled) { background: none; color: var(--amber); }
 /* The creator's Start, beside the players: the one thing to do while they wait. */
 #start-button { color: var(--amber); font-weight: 600; }
+/* End sits quietly beside the time: it ends the game for everyone. */
+#end-button { margin-left: 8px; color: var(--ink-dim); }
 #start-button:hover:not(:disabled) { text-decoration: underline; }
 
 /* The table at a game's end: a row a side, winners first, a column a line of points. */
@@ -400,6 +404,14 @@ button.inline:hover:not(:disabled) { background: none; color: var(--amber); }
 .crew-list label { user-select: none; } /* a mouse drags across rows to tick them */
 .crew-list .stats, .crew-list .where { font: 12px var(--mono); color: var(--ink-dim); }
 .crew-list .where { grid-column: 3 / 5; }
+/* The picture of the building a unit is in, small, before where it is
+   (the heroes list is a crew-list too). */
+.crew-list .where .place {
+  display: inline-block; width: 12px; height: 12px; margin-right: 5px; vertical-align: -2px;
+  background: currentColor;
+  -webkit-mask: var(--icon) center / contain no-repeat;
+  mask: var(--icon) center / contain no-repeat;
+}
 .crew-list .stats .hero { color: var(--amber); font-weight: 600; }
 .crew-list label:has(input:disabled) { opacity: 0.5; cursor: not-allowed; }
 /* The heroes list: the crew chooser's rows, to read rather than tick, with every skill. */

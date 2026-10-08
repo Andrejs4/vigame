@@ -26,6 +26,8 @@
  *   isCreator()     whether this viewer started the game
  *   startNow()      as its creator, have the game go on without the players
  *                   missing; resolves to { ok } or { ok: false, reason }
+ *   endGame()       end the game for everyone (its creator at any time, any
+ *                   seated player after an hour); { ok } or { ok: false, reason }
  *   viewers()       number of people currently viewing
  *   connected()     boolean
  *   leave()
@@ -293,6 +295,11 @@ export async function createServerNet({ client, gameId, token, now = () => perfo
     isCreator: () => amCreator,
     /** @returns {Promise<{ ok: boolean, reason?: string }>} */
     startNow: () => room.request('startNow').then(
+      () => ({ ok: true }),
+      (/** @type {any} */ e) => ({ ok: false, reason: String(e?.reason ?? e?.message ?? e) }),
+    ),
+    /** @returns {Promise<{ ok: boolean, reason?: string }>} */
+    endGame: () => room.request('endGame').then(
       () => ({ ok: true }),
       (/** @type {any} */ e) => ({ ok: false, reason: String(e?.reason ?? e?.message ?? e) }),
     ),

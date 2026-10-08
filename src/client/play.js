@@ -7,12 +7,12 @@
 import { axialToPixel, bounds, distance, key, pixelToAxial } from '../core/hex.js';
 import { BOARD_OPTIONS, createBoard, tileAt } from '../core/board.js';
 import {
-  buildCost, capacityOf, castleOf, crewOf, depthOf, foodStore, fullMeal, inBuildRange, isDugOut, isRising, maxHp, occupancy, purseOf, quickWin, scoreOf,
+  buildCost, capacityOf, castleOf, crewOf, depthOf, endWinner, foodStore, fullMeal, inBuildRange, isDugOut, isRising, maxHp, occupancy, purseOf, quickWin, scoreOf,
   raiseWork, seatsOf, sharesStock, shortOf, sideOf, upgradeCost,
 } from '../core/game.js';
 import { GAME_NAME_MAX, cleanGameName } from '../core/player.js';
 import { PORTRAIT_SIDE, portraitOf } from '../core/names.js';
-import { BUILDING_TYPES, POINTS, QUICK_WIN, RANGED_RANGE, SKILL_SHORT, TICKS_PER_SECOND, UNIT_LIMIT } from '../core/rules.js';
+import { BUILDING_TYPES, END_ANYONE_TICKS, POINTS, QUICK_WIN, RANGED_RANGE, SKILL_SHORT, TICKS_PER_SECOND, UNIT_LIMIT } from '../core/rules.js';
 import { getJson, serverBase } from './api.js';
 import { Camera } from './camera.js';
 import { Effects, fallenHeroes, fallenHeroesNote } from './effects.js';
@@ -21,7 +21,7 @@ import { BoardRenderer, COUNT_ZOOM, pickAt } from './render.js';
 import { autoLanguage, browserLanguages, chosenLanguage, keyCandidates } from './language.js';
 import { Sounds, soundsFor } from './sounds.js';
 import { Ground } from './ground.js';
-import { Tokens } from './tokens.js';
+import { PICTURES, Tokens } from './tokens.js';
 import { isWord, say, shortPoints, translate } from './words.js';
 
 /** @param {number} tick */
@@ -184,6 +184,8 @@ export async function startGame(net, me) {
   // For the game's creator, while it waits for players: go on without them.
   const startButton = /** @type {HTMLButtonElement} */ (document.getElementById('start-button'));
   startButton.title = word('startNowTitle');
+  // For a player in the game: end it for everyone (its creator at any time).
+  const endButton = /** @type {HTMLButtonElement} */ (document.getElementById('end-button'));
   const upgradeButton = /** @type {HTMLButtonElement} */ (document.getElementById('upgrade'));
   const crewButton = /** @type {HTMLButtonElement} */ (document.getElementById('crew-button'));
   const heroesButton = /** @type {HTMLButtonElement} */ (document.getElementById('heroes-button'));
@@ -349,23 +351,34 @@ export async function startGame(net, me) {
 
   /** Whether the table of points has come up since the game was over. */
   let scoresSeen = false;
-  /** Seat holders' names, by seat, for the table: those who have left too. */
+  /** Seat holders' names, by seat, for the table and a selected castle. */
   /** @type {string[]} */
   let seatNames = [];
+  /** The seats' holders the names were last fetched for. */
+  let seatHolders = '';
 
-  /** Show the table of points, and fetch every seat holder's name for it. */
-  async function showScores() {
-    if (!view || view.over === undefined) return;
-    fillScores();
-    if (!scoresDialog.open) scoresDialog.showModal();
+  /**
+   * Fetch every seat holder's name, for the table and a selected castle:
+   * when the game opens, and whenever someone takes or frees a seat.
+   */
+  async function loadSeatNames() {
     try {
       /** @type {Array<{ name: string } | null>} */
       const seats = await getJson(`api/games/${encodeURIComponent(gameId)}/seats`);
       seatNames = seats.map((s) => s?.name ?? '');
-      fillScores();
     } catch {
-      // The sides' names will do.
+      return; // the sides' names will do
     }
+    if (scoresDialog.open) fillScores();
+    updateHud();
+  }
+
+  /** Show the table of points, with every seat holder's name. */
+  async function showScores() {
+    if (!view || view.over === undefined) return;
+    fillScores();
+    if (!scoresDialog.open) scoresDialog.showModal();
+    await loadSeatNames();
   }
 
   /**
@@ -490,6 +503,15 @@ export async function startGame(net, me) {
     return present.some((p, i) => p && awaited(i)) && present.some((p, i) => !p && awaited(i));
   }
 
+  /**
+   * Whether this viewer may end the game for everyone: a seated player, its
+   * creator at any time, anyone else after an hour of play (the room checks).
+   */
+  function canEndGame() {
+    if (net.seat() === null || !view || view.over !== undefined) return false;
+    return net.isCreator() || view.tick >= END_ANYONE_TICKS;
+  }
+
   /** Whether this viewer may rename the game: a player still in it, paused or not. */
   function canRename() {
     const seat = net.seat();
@@ -610,6 +632,7 @@ export async function startGame(net, me) {
       hud.players.classList.toggle('waiting', paused && view?.over === undefined);
     }
     startButton.hidden = !canStartNow();
+    endButton.hidden = !canEndGame();
     const startLabel = word(view?.tick ? 'goOn' : 'startNow');
     if (startButton.textContent !== startLabel) startButton.textContent = startLabel;
     if (hud.observers) {
@@ -660,7 +683,12 @@ export async function startGame(net, me) {
    */
   function describe(b) {
     const type = BUILDING_TYPES[b.type];
-    const name = type.grades > 1 ? word('graded', { name: typeName(b.type), n: b.grade }) : typeName(b.type);
+    const graded = type.grades > 1 ? word('graded', { name: typeName(b.type), n: b.grade }) : typeName(b.type);
+    // A castle says whose it is: its seat's player, or that the seat is free.
+    const holder = b.type === 'castle' && net.seats()[b.owner] !== undefined
+      ? (net.seats()[b.owner] === null ? word('seatFree') : seatNames[b.owner] ?? '')
+      : '';
+    const name = holder ? `${graded} · ${holder}` : graded;
     /** @type {string[]} */
     const parts = [];
     const done = percent(b.work ?? 0, type.work ?? 1);
@@ -702,6 +730,21 @@ export async function startGame(net, me) {
     if (id === target) return word(u.in ? 'whereHere' : 'whereComing');
     if (b.type === 'castle') return word(u.in ? 'whereHome' : 'whereGoingHome');
     return word(u.in ? 'whereIn' : 'whereTo', { name: typeName(b.type).toLowerCase() });
+  }
+
+  /**
+   * Put a small picture of the building a unit is in before where it is,
+   * in the crew chooser and the heroes list; none while it walks.
+   * @param {HTMLElement} where
+   * @param {{ in?: string }} u
+   */
+  function placeIcon(where, u) {
+    const inside = u.in !== undefined ? view?.buildings[u.in] : null;
+    if (!inside || !PICTURES.includes(inside.type)) return;
+    const place = document.createElement('span');
+    place.className = 'place';
+    place.style.setProperty('--icon', `url(art/${inside.type}.svg)`);
+    where.prepend(place);
   }
 
   /**
@@ -748,7 +791,8 @@ export async function startGame(net, me) {
     const heroes = units.filter((u) => u.hero).sort((a, b) => b.level - a.level || a.name.localeCompare(b.name));
     const gone = fallen.filter((u) => u.owner === seat);
     const skills = /** @type {[import('../core/rules.js').Skill, string][]} */ (Object.entries(SKILL_SHORT));
-    const lv = (/** @type {number} */ n) => `Lv${String(n).padStart(3)}`;
+    // Each level padded to three places, so the skills line up.
+    const lv = (/** @type {number} */ n) => String(n).padStart(3);
     /** @param {typeof heroes[number] & { died?: number, how?: string }} u */
     const row = (u) => {
       const name = document.createElement('span');
@@ -763,6 +807,7 @@ export async function startGame(net, me) {
       const where = document.createElement('span');
       where.className = 'where';
       where.textContent = u.died === undefined ? whereIs(u, null) : word(u.how === 'hunger' ? 'diedHunger' : 'diedCombat');
+      if (u.died === undefined) placeIcon(where, u);
       const levels = document.createElement('span');
       levels.className = 'skills';
       levels.append(...skills.map(([skill, short]) => {
@@ -854,6 +899,7 @@ export async function startGame(net, me) {
       const where = document.createElement('span');
       where.className = 'where';
       where.textContent = extra ? `${whereIs(u, target)} · ${skillName(extra)} ${u.skills[extra]}` : whereIs(u, target);
+      placeIcon(where, u);
       const label = document.createElement('label');
       label.append(box, portrait(u), name, stats, where);
       const li = document.createElement('li');
@@ -1369,6 +1415,22 @@ export async function startGame(net, me) {
     if (!outcome.ok) flash(`Can't start: ${outcome.reason}.`);
   });
 
+  // Ending the game asks first, saying who would win: the one other team
+  // still standing, if just one is (the Dark Lord, in cooperation), or nobody.
+  endButton.addEventListener('click', async () => {
+    const seat = net.seat();
+    if (!view || seat === null) return;
+    const players = view.players;
+    const team = endWinner(view, seat);
+    const winners = players.filter((p) => p.team === team);
+    const ask = team === undefined ? word('askEndNobody')
+      : winners.some((p) => sideOf(view, p.id)?.npc) ? word('askEndLord')
+        : word('askEndSide', { side: winners.map((p) => sideName({ players }, p.id)).join(', ') });
+    if (!confirm(ask)) return;
+    const outcome = await net.endGame();
+    if (!outcome.ok) flash(`Can't end the game: ${outcome.reason}.`);
+  });
+
   document.getElementById('toggle-coords')?.addEventListener('click', (e) => {
     showCoords = !showCoords;
     renderer.showCoords = showCoords;
@@ -1456,6 +1518,12 @@ export async function startGame(net, me) {
     updateHud();
   });
   net.onSeat(() => {
+    // Someone took or freed a seat (or this viewer did): their names again.
+    const holders = JSON.stringify(net.seats());
+    if (holders !== seatHolders) {
+      seatHolders = holders;
+      loadSeatNames();
+    }
     // The first time this viewer has a castle, look at it.
     if (!homed && net.seat() !== null) recenter();
     refreshHighlights();

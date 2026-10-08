@@ -392,7 +392,21 @@ async function finished(browser, url) {
   Object.assign(state.players[0].tally, { kills: 120, damage: 43210, castles: 1, born: 9, stone: 30, food: 25, built: 3, upgrades: 2, won: 1 });
   Object.assign(state.players[1].tally, { kills: 5, damage: 800 });
   assert.deepEqual(checkState(board, state), []);
-  games.storage.createGame({ id: 'finished-game', seed, state, seats: [playerId(/** @type {string} */ (token))] });
+  const seats = [playerId(/** @type {string} */ (token))];
+  games.storage.createGame({ id: 'finished-game', seed, state, seats });
+  // Its scores kept, as the room keeps them when a game ends.
+  games.storage.recordScores({ ...state, id: 'finished-game', seats });
+
+  // High scores start folded away, below Recently finished; open, Fay's
+  // 13516 leads them, rounded, and Scores opens its game.
+  assert.equal(await page.locator('#lobby-best-section[open]').count(), 0);
+  await page.click('#lobby-best-section summary');
+  const best = page.locator('#lobby-best li').first();
+  await best.waitFor({ timeout: 10000 });
+  assert.match(await best.textContent() ?? '', /^1\. Fay ★.*14kScores$/);
+  assert.equal(await best.locator('.points').getAttribute('title'), '13516');
+  await page.locator('#lobby-best-section').screenshot({ path: join(OUT, 'high-scores.png') });
+  await page.click('#lobby-best-section summary');
 
   // Recently finished starts folded away.
   assert.equal(await page.locator('#lobby-done-section[open]').count(), 0);
@@ -638,6 +652,11 @@ async function threeBrowsers(browser, url, { full, label }) {
   await waitText(a, '#game-name', rename);
   assert.equal(await a.title(), `${rename} · Vigame`);
 
+  // Before Bēla comes, Ann selects the other castle: its seat is free.
+  const crimsonHome = await castleOf(a, 1);
+  await selectBuilding(a, crimsonHome);
+  await waitSelection(a, /^Castle \(grade 1\) · free seat \|/);
+
   // Bēla logs in and finds the game in the lobby by its name, waiting for her.
   const b = await newPlayer(browser, url, `${label}-b`, 'Bēla');
   await inLobby(b);
@@ -645,6 +664,10 @@ async function threeBrowsers(browser, url, { full, label }) {
   if (full) await b.screenshot({ path: join(OUT, 'lobby-games.png') });
   await openFromLobby(b, 'open', 'Ann & —');
   await waitText(b, '#seat', 'Bēla · Crimson');
+  // Now the castle Ann has selected says it is Bēla's.
+  await waitSelection(a, /^Castle \(grade 1\) · Bēla \|/);
+  if (full) await a.locator('#selection').screenshot({ path: join(OUT, 'castle-owner.png') });
+  await a.keyboard.press('Escape');
   await waitMatch(a, '#time', /^0:0[1-9]$/);
   assert.equal(await a.locator('#start-button').isVisible(), false, 'nobody missing, nothing to start');
   assert.equal(await b.locator('#start-button').isVisible(), false, 'Start is the creator\'s');
@@ -984,8 +1007,8 @@ async function threeBrowsers(browser, url, { full, label }) {
       img.src = url;
     });
   }))), [256, 256], 'both sheets of faces load');
-  // Each level takes three places, "Lv  8" to "Lv100", so the skills line up.
-  const skillLine = new RegExp(`^${['Att', 'Mel', 'Bld', 'Frm', 'Brd', 'Run'].map((s) => `${s} Lv[ \\d]{2}\\d`).join('')}$`);
+  // Each level takes three places, "  8" to "100", so the skills line up.
+  const skillLine = new RegExp(`^${['Att', 'Mel', 'Bld', 'Frm', 'Brd', 'Run'].map((s) => `${s} [ \\d]{2}\\d`).join('')}$`);
   for (const { skills } of listed) assert.match(skills, skillLine);
   await a.screenshot({ path: join(OUT, 'heroes.png') });
   // A hero the page saw die goes below the living, as last seen: how long
@@ -1092,12 +1115,25 @@ async function threeBrowsers(browser, url, { full, label }) {
   const redrawn = await a.evaluate(() => /** @type {any} */ (window).__vigame.draws) - stillFrom;
   assert.ok(redrawn <= 1, `a paused board was redrawn ${redrawn} times in half a second`);
 
-  // Bēla comes back: same seat, same game, no login. Then she goes to the
-  // lobby, finds the game among hers, and opens it again.
+  // Ann started the game, so she has Go on: the game goes on without Bēla,
+  // who is away, and her clock runs again.
+  await waitText(a, '#start-button', 'Go on');
+  await a.screenshot({ path: join(OUT, 'go-on.png') });
+  const pausedAt = await a.evaluate(() => /** @type {any} */ (window).__vigame.view.tick);
+  await a.click('#start-button');
+  await waitText(a, '#players', '1/2, 1 away');
+  await a.waitForFunction((t) => /** @type {any} */ (window).__vigame.view.tick > t + 5, pausedAt);
+  assert.doesNotMatch(await text(a, '#time') ?? '', /paused/);
+  assert.equal(await a.locator('#start-button').isVisible(), false, 'nobody left to go on without');
+  assert.equal(await a.locator('#build-tower').isDisabled(), false, 'Ann plays on');
+
+  // Bēla comes back: same seat, same game, no login, and no longer away.
+  // Then she goes to the lobby, finds the game among hers, and opens it again.
   await b.goto(gameUrl);
   await inGame(b);
   assert.equal(await b.locator('#login').isHidden(), true);
   await waitText(b, '#seat', 'Bēla · Crimson');
+  await waitText(a, '#players', '2/2');
   await b.click('#to-lobby');
   await inLobby(b);
   await openFromLobby(b, 'mine', 'Ann & Bēla');
@@ -1251,6 +1287,22 @@ async function sixteen(browser, url) {
   assert.equal(await page.evaluate(() => /** @type {any} */ (window).__vigame.camera.zoom), 2.5, 'not at the closest zoom');
   await frames(page);
   await page.screenshot({ path: join(OUT, 'ground.png') });
+
+  // Its creator may end it for everyone at any time, the other player only
+  // after an hour. She ends it, after saying yes to who would win: her team
+  // gives up, the Dark Lord wins, and the points table opens for both.
+  await page.click('#zoom-out');
+  assert.equal(await other.locator('#end-button').isVisible(), false, 'only the creator, in the first hour');
+  await page.locator('#status').screenshot({ path: join(OUT, 'end-button.png') });
+  const asked = new Promise((res) => page.once('dialog', (d) => { res(d.message()); d.accept(); }));
+  await page.click('#end-button');
+  assert.equal(await asked, 'End the game for everyone now? Your team gives up, and the Dark Lord wins. The points are counted as they stand.');
+  for (const p of [page, other]) {
+    await p.waitForSelector('#scores[open]');
+    await waitMatch(p, '#time', /over: you lost$/);
+  }
+  assert.equal(await page.locator('#end-button').isVisible(), false, 'nothing left to end');
+  await page.screenshot({ path: join(OUT, 'ended.png') });
   for (const p of [page, other]) await p.context().close();
 }
 
@@ -1408,7 +1460,7 @@ async function phone(browser, url) {
   await waitText(other, '#seat', 'Oli · Багровые');
   const crimson = await castleOf(other, 1);
   await selectBuilding(other, crimson);
-  await waitSelection(other, /^Замок \(ур\. 1\) \| \d+\/40 дома · новый юнит\s+\d+% \| Прочность \d+\/\d+$/);
+  await waitSelection(other, /^Замок \(ур\. 1\) · Oli \| \d+\/40 дома · новый юнит\s+\d+% \| Прочность \d+\/\d+$/);
   await other.click('#heroes-button');
   await other.waitForSelector('#heroes[open]');
   assert.equal(await text(other, '#heroes-title'), 'Герои');

@@ -143,7 +143,7 @@ import {
  *   | { type: 'abort', building: string }
  *   | { type: 'move', building: string, q: number, r: number }
  *   | { type: 'rename', name: string }
- *   | { type: 'away' } | { type: 'back' }} Command
+ *   | { type: 'away' } | { type: 'back' } | { type: 'end' }} Command
  * @typedef {{ ok: true } | { ok: false, reason: string }} Outcome
  */
 
@@ -160,7 +160,7 @@ import {
  * The commands only the game server gives, for a side whose player went
  * away or came back (see `Player.away`); a player's own are refused.
  */
-export const ROOM_COMMANDS = Object.freeze(['away', 'back']);
+export const ROOM_COMMANDS = Object.freeze(['away', 'back', 'end']);
 
 /** Bump when GameState changes shape, and teach `checkState` the new one. */
 export const STATE_VERSION = 12;
@@ -904,9 +904,11 @@ function commandCell(cmd) {
 export function applyCommand(board, state, player, command) {
   if (!state.players.some((p) => p.id === player)) return refuse('not a player');
   if (state.over !== undefined) return refuse('the game is over');
-  if (state.players[player].lost !== undefined) return refuse('your castle has fallen');
   if (!command || typeof command !== 'object') return refuse('not a command');
   const cmd = /** @type {Record<string, unknown>} */ (command);
+  // A player may end the game whether or not their castle stands.
+  if (cmd.type === 'end') return endGame(state, player);
+  if (state.players[player].lost !== undefined) return refuse('your castle has fallen');
   const occ = occupancy(state);
   switch (cmd.type) {
     case 'build': return build(board, state, occ, player, cmd);
@@ -939,6 +941,40 @@ function goAway(state, player) {
     delete b.target;
     stopAfterStep(b);
   }
+  return { ok: true };
+}
+
+/**
+ * Who wins if a player ends the game now: their team gives up, so the one
+ * other team with a castle or lair standing, if just one has (the Dark Lord,
+ * in cooperation), or nobody. Raiders don't count.
+ * @param {Pick<GameState, 'players'>} state
+ * @param {number} player
+ * @returns {number | undefined} The winning team.
+ */
+export function endWinner(state, player) {
+  const team = state.players[player]?.team;
+  const others = new Set(state.players
+    .filter((p) => !SIDES[p.side]?.wild && p.team !== team && p.lost === undefined)
+    .map((p) => p.team));
+  return others.size === 1 ? [...others][0] : undefined;
+}
+
+/**
+ * A player ends the game for everyone (the room says who may): the clock
+ * stops and the points are counted, as when one team is left (`settle`),
+ * with `endWinner` the winner.
+ * @param {GameState} state
+ * @param {number} player
+ * @returns {Outcome}
+ */
+function endGame(state, player) {
+  if (SIDES[state.players[player].side]?.npc) return refuse('not a seat');
+  const winner = endWinner(state, player);
+  state.over = state.tick;
+  if (winner === undefined) return { ok: true };
+  state.winner = winner;
+  for (const p of state.players) if (!SIDES[p.side]?.wild && p.team === winner) p.tally.won = 1;
   return { ok: true };
 }
 

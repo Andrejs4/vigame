@@ -48,11 +48,15 @@ Run `npm start` and open http://127.0.0.1:2567.
   (Att, Mel, Bld…, explained in its top line) are in English for now.
 - **The lobby** lists your games under way, games with a free seat, other
   people's under way with every seat taken (**Watch** opens one as an
-  observer), and the finished ones (anyone's; **Scores** opens one at its
-  table of points). Under the lists, **How to play** sums up the game, and
+  observer), the finished ones (anyone's; **Scores** opens one at its
+  table of points), and the **High scores**: the ten best totals any player
+  made, kept when each game ended, counted as its table counts them
+  (quick-win bonus included), each with its player in their side's
+  colour, a ★ for a win, the game and its mode, and its Scores while the
+  game is kept. Ties go to the earlier. They stay when games are cleared. Under the lists, **How to play** sums up the game, and
   **About** links the source code on GitHub and names the licences and
   credits. Each section folds away; the lists of others' games under way
-  and finished, How to play and About start folded, and the browser keeps
+  and finished, the high scores, How to play and About start folded, and the browser keeps
   them as you leave them. **New game**
   starts one for 1 to 16 players (1 by default, against the Dark Lord), on a map that grows with
   them (29 × 20 cells for two, 59 × 39 for eight, 83 × 55 for sixteen),
@@ -125,7 +129,9 @@ Run `npm start` and open http://127.0.0.1:2567.
   itself (two in Very Easy Lord), even while damaged or upgraded. It has room for 40 units, and 10
   more with each upgrade (40, 50, 60); it takes in all its units, however
   many, but stops breeding while it holds its room or more. Then its count
-  on the board shows its room too, as 40/40 or 65/60.
+  on the board shows its room too, as 40/40 or 65/60. Selected, any castle
+  names the player who holds its seat, or says the seat is free, before
+  the game starts too (Castle (grade 1) · Bēla).
 - **Units** each have a medieval name, a level from 1 to 100, and six
   skills: breeding, ranged attack, close combat, building (which covers
   repairing and digging), farming and running. Work trains the skill it
@@ -144,10 +150,11 @@ Run `npm start` and open http://127.0.0.1:2567.
   shows a hero's face and its age in gold (the rest have a silhouette).
   Select your castle and press **Heroes…**
   (in Crew's place, as the castle has no crew) for yours alive now, highest
-  level first, each with its face, where it is and
-  every skill's level, as "Att Lv 15"
+  level first, each with its face, where it is (after a small picture of
+  its building, as in the crew chooser) and
+  every skill's level, as "Att 15"
   (ranged attack; then close combat, building, farming, breeding and
-  running), each level padded to line up ("Lv  8", "Lv100"). Below them
+  running), each level padded to line up ("Att   8", "Att 100"). Below them
   come those that died while the page was open, in the order they died, as
   they last were: how long each lived, in silver, and how it died. The page
   keeps them only while it is open: a reload forgets them, and it misses
@@ -160,7 +167,9 @@ Run `npm start` and open http://127.0.0.1:2567.
   chance of a unit's strikes.
 - **Crews**: units walk only when they're given to a building's crew or sent
   home. Select one of your buildings and press **Crew…** for a list of your
-  units, each with its level, skill and age in minutes ("12m"): tick up to
+  units, each with its level, skill and age in minutes ("12m"), and where
+  it is, after a small picture of the building it is in (none while it
+  walks): tick up to
   what it holds (with a mouse, drag down the list to tick or untick a run
   of them). The skill shown is the one the building wants: building for
   a pit, farming for a farm, and ranged attack for a tower, wagon or band,
@@ -303,6 +312,13 @@ Run `npm start` and open http://127.0.0.1:2567.
   a castle (or lair) standing, it has won and the game is over: the clock
   stops, commands are refused, the page says who won, and the lobby lists
   the game as finished.
+- **Ending a game early**: **End**, beside the time, ends the game for
+  everyone, after asking. The player who started it may at any time; any
+  other seated player (castle standing or not) after an hour of game time.
+  Their team gives up: if just one other team still has a castle or lair
+  standing, it wins (the Dark Lord, in cooperation, or the last rival in a
+  duel); otherwise nobody does (free for all with more left). Then it is
+  over as when one team is left, with the points as they stand.
 - **Raiders** turn up in every game: wandering hostile wagons, against
   everyone, with 500 hit points, that strike whatever comes within 2
   cells (20 a strike, level 20). Every minute and a half one may appear
@@ -524,6 +540,7 @@ http://127.0.0.1:2567;` with the same headers.
   - `{ type: 'target', building, target }`: an enemy building or band to go for (`''` clears it);
   - `{ type: 'rename', name }`: the game's name (the room takes this one while the game is paused too);
   - `{ type: 'away' }` and `{ type: 'back' }`: the side's player has gone, and the game goes on without them, or is back. Only the room gives these (`ROOM_COMMANDS`), and logs them like the rest, so replays agree.
+  - `{ type: 'end' }`: the side's player ends the game for everyone (see Ending a game early). Only the room gives it, for the game's creator or, after an hour, any seated player, and saves the game at once.
 - `advance(board, state)` runs one tick: every second a round of fighting,
   collapses, every minute food and a meal, empty bands breaking up, mending,
   raising and upgrading, work in castles, pits and farms, wagons and bands,
@@ -580,16 +597,21 @@ HTTP API:
 | `POST /api/games/:id/delete` | `{ token }`: deletes a game under way that the player started and nobody else holds a seat in, closing its room if open; `403` if they didn't start it, `409` if someone else plays it or it is over. |
 | `POST /api/games/:id/leave` | `{ token }`: gives up the player's seat in a game under way, through its room if open; `409` if they hold none or it is over. |
 | `GET /api/games` | The 50 most recently active games, for the lobby, with their name, mode, who holds each seat (`{ pid, name }` or `null`) and `fallen`, the seats whose castles have fallen, which nobody can take. |
+| `GET /api/scores` | The lobby's high scores: the ten best scores kept (`scores`), highest first, each `{ name, seat, points, won, game: { id, name, mode }, at, open, details }`; `open` whether the game is still kept. |
 | `GET /api/games/:id` | One game: its seed, latest snapshot and seats. |
 | `GET /api/games/:id/commands` | Its command log, with each command's tick. |
 | `GET /api/games/:id/seats` | Who holds each seat: `{ pid, name }`, or `null` for a free one. |
 
-The database has three tables: `games` (each game's seed, seats, who
+The database has four tables: `games` (each game's seed, seats, who
 started it and when (neither shown to players), and a snapshot of its
-state, saved every ten seconds and when its room closes),
-`commands` (every accepted command with its tick, in order, never changed)
-and `players` (each signed-in player's public id, name and language; never
-the token).
+state, saved every ten seconds, when it ends and when its room closes),
+`commands` (every accepted command with its tick, in order, never changed),
+`players` (each signed-in player's public id, name and language; never
+the token) and `scores` (when a game ends, each seated player's total, as
+its table of points counts it, with their name then, the game's name and
+mode, and the details: their side, the quick-win bonus, when it ended and
+their whole tally, such as the units born). Games may be cleared when the
+rules or the format change; the scores stay.
 A room reopening a game loads its snapshot and replays the commands logged
 after it; if the snapshot is unreadable, it replays the whole log from the
 opening position.

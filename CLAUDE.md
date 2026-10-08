@@ -186,7 +186,9 @@ drawing during play). Read it before art or graphics work.
   and a player who is here again is back. Who is away reaches the core
   (the Dark Lord leaves them alone) only as `away` and `back` commands that
   the room gives and logs (`ROOM_COMMANDS`), so replays agree; the room
-  refuses them from players. While it is
+  refuses them from players. So is `end`: the room checks who may end the
+  game (`endGame`: its creator, or anyone seated after an hour), then logs
+  it and saves a snapshot at once. While it is
   paused the room refuses commands, except `rename`, which needs no clock;
   after a rename it saves a snapshot at once, since the lobby reads a game's
   name from its snapshot and a paused game takes none.
@@ -206,6 +208,12 @@ drawing during play). Read it before art or graphics work.
   on); Colyseus logs other errors as server faults.
 - The database schema version is `SCHEMA_VERSION` in `server/storage.js`.
   Change tables only by adding a step to `migrate()`.
+- The author doesn't want old games kept playable across changes: when the
+  rules or the state's shape change in a way saved games can't follow,
+  add a `migrate()` step that deletes games and commands (as version 23
+  did), rather than code that carries old games along. The high scores
+  live apart (`scores`, written once by `finish` in the room when a game
+  ends) and stay; players stay too.
 
 ## The old claude.ai version
 

@@ -1,7 +1,8 @@
 /**
  * The lobby: the player's own games under way, games waiting for a player,
  * other people's under way (to watch), the finished ones (to see their
- * points again), and starting a new one. Opening a game goes to
+ * points again), the ten best totals ever (high scores), and starting a
+ * new one. Opening a game goes to
  * `?game=<id>`, the same address an invitation link has.
  *
  * It shows in the player's language: the one in their settings, or for
@@ -12,7 +13,7 @@ import { hasLord } from '../core/game.js';
 import { MODES, SEAT_SIDES, SIDES, TICKS_PER_SECOND } from '../core/rules.js';
 import { getJson, post, reason } from './api.js';
 import { autoLanguage, browserLanguages, chosenLanguage } from './language.js';
-import { WORDS, isWord, say, translate } from './words.js';
+import { WORDS, isWord, say, shortPoints, translate } from './words.js';
 
 /** @typedef {import('./language.js').PageLanguage} PageLanguage */
 /** @typedef {import('./words.js').Word} Word */
@@ -109,6 +110,49 @@ function fillList(name, games, action, language) {
 }
 
 /**
+ * Fill the high scores: each player's name in their side's colour, a star
+ * for a win, the game and its mode, and the total, rounded from 10000 on
+ * (the exact points in its tooltip), with the game's Scores while the game
+ * is kept.
+ * @param {import('./api.js').HighScore[]} best
+ * @param {PageLanguage} language
+ */
+function fillBest(best, language) {
+  const list = /** @type {HTMLElement} */ (document.getElementById('lobby-best'));
+  list.replaceChildren(...best.map((s, i) => {
+    const li = document.createElement('li');
+    const who = document.createElement('span');
+    who.className = 'who';
+    const title = document.createElement('span');
+    title.className = 'title';
+    const name = document.createElement('span');
+    name.textContent = s.name || '?';
+    name.style.color = SIDES[SEAT_SIDES[s.seat]]?.accent ?? '';
+    title.append(`${i + 1}. `, name, s.won ? ' ★' : '');
+    const when = document.createElement('span');
+    when.className = 'when';
+    const mode = Object.hasOwn(MODES, s.game.mode) && isWord(s.game.mode) ? say(language, { word: s.game.mode }) : '';
+    when.textContent = [s.game.name ?? say(language, { word: 'aGame' }), mode].filter(Boolean).join(' · ');
+    who.append(title, when);
+    const points = document.createElement('span');
+    points.className = 'points';
+    points.textContent = shortPoints(s.points);
+    points.title = String(s.points);
+    const open = document.createElement('a');
+    open.className = 'button';
+    open.href = gameHref(s.game.id);
+    open.textContent = say(language, { word: 'scores' });
+    const actions = document.createElement('span');
+    actions.className = 'actions';
+    // A game cleared since (as when the rules change) keeps its scores, not its table.
+    actions.append(points, ...(s.open ? [open] : []));
+    li.append(who, actions);
+    return li;
+  }));
+  /** @type {HTMLElement} */ (document.getElementById('lobby-best-empty')).hidden = best.length > 0;
+}
+
+/**
  * Show the lobby. It stays up until the player opens a game, which loads
  * that game's address.
  * @param {string} token
@@ -176,11 +220,22 @@ export function showLobby(token, me, { notice } = {}) {
     fillList('done', games.filter((g) => g.over !== null), 'scores', language);
   }
 
+  // The high scores, fetched only while their list is open.
+  const best = /** @type {HTMLDetailsElement} */ (document.getElementById('lobby-best-section'));
+  async function refreshBest() {
+    if (!best.open) return;
+    try {
+      fillBest(await getJson('api/scores'), language);
+    } catch { /* the lists above say so */ }
+  }
+  best.addEventListener('toggle', refreshBest);
+
   nameOut.textContent = me.name;
   tell(notice);
   page.hidden = false;
   refresh();
-  setInterval(refresh, REFRESH_MS);
+  refreshBest();
+  setInterval(() => { refresh(); refreshBest(); }, REFRESH_MS);
 
   const limit = /** @type {HTMLElement} */ (document.getElementById('lobby-limit'));
   limit.hidden = true;
