@@ -21,8 +21,10 @@
 
 import Database from 'better-sqlite3';
 
+import { HIGH_SCORES, scoreRows } from './scores.js';
+
 /** Bump when the tables change, and add the upgrade step to `migrate`. */
-const SCHEMA_VERSION = 23;
+const SCHEMA_VERSION = 24;
 
 /**
  * @typedef {{ id: string, seed: number, state: unknown, seq: number, seats: Array<string | null>,
@@ -67,12 +69,10 @@ export function openStorage(file = ':memory:') {
     json_extract(state, '$.over') AS over, json_extract(state, '$.winner') AS winner,
     (SELECT json_group_array(key) FROM json_each(state, '$.players') WHERE json_extract(value, '$.lost') IS NOT NULL) AS fallen`;
   const selectRecent = db.prepare(`SELECT ${SUMMARY} FROM games ORDER BY updated_at DESC, id LIMIT ?`);
-  // Finished games, with only what their points need: not the whole state.
-  const selectFinished = db.prepare(`
-    SELECT id, seats, updated_at, json_extract(state, '$.name') AS name, json_extract(state, '$.mode') AS mode,
-      json_extract(state, '$.over') AS over, json_extract(state, '$.winner') AS winner,
-      json_extract(state, '$.players') AS players
-    FROM games WHERE json_extract(state, '$.over') IS NOT NULL`);
+  const selectBest = db.prepare(`
+    SELECT s.*, EXISTS (SELECT 1 FROM games g WHERE g.id = s.game_id) AS open FROM scores s
+    WHERE points > 0 ORDER BY points DESC, ended_at, game_id, seat LIMIT ?`);
+  const selectGameScores = db.prepare('SELECT * FROM scores WHERE game_id = ? ORDER BY seat');
   const selectGoingOf = db.prepare(`
     SELECT ${SUMMARY} FROM games
     WHERE json_extract(state, '$.over') IS NULL
@@ -175,21 +175,30 @@ export function openStorage(file = ':memory:') {
     },
 
     /**
-     * Every finished game, with its sides' records (their tallies and
-     * teams), for the high scores.
-     * @returns {import('./scores.js').FinishedGame[]}
+     * Keep the scores of a game that has ended, once: a second call for the
+     * same game changes nothing.
+     * @param {import('./scores.js').EndedGame} game
+     * @param {number} [now]
      */
-    finishedGames() {
-      return selectFinished.all().map((/** @type {any} */ row) => ({
-        id: row.id,
-        name: row.name ?? null,
-        mode: row.mode,
-        over: row.over,
-        winner: row.winner ?? null,
-        seats: parseSeats(row.seats),
-        players: parse(row.players) ?? [],
-        updatedAt: row.updated_at,
-      }));
+    recordScores(game, now = Date.now()) {
+      saveScores(db, game, now);
+    },
+
+    /**
+     * The best scores ever, highest first; of two the same, the one made
+     * first. Totals of nothing don't count.
+     * @param {number} [limit]
+     */
+    bestScores(limit = HIGH_SCORES) {
+      return selectBest.all(limit).map((/** @type {any} */ row) => ({ ...scoreFrom(row), open: Boolean(row.open) }));
+    },
+
+    /**
+     * A game's scores, by seat, kept when it ended.
+     * @param {string} gameId
+     */
+    scoresOf(gameId) {
+      return selectGameScores.all(gameId).map(scoreFrom);
     },
 
     /**
@@ -475,6 +484,68 @@ function migrate(db) {
       PRAGMA user_version = 23;
     `))();
   }
+  if (version < 24) {
+    // The high scores, in a table of their own: written once when a game
+    // ends, and kept when games are cleared. Games already over are counted in.
+    db.transaction(() => {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS scores (
+          game_id    TEXT NOT NULL,              -- no reference: the game may go, its scores stay
+          seat       INTEGER NOT NULL,
+          pid        TEXT NOT NULL,
+          name       TEXT NOT NULL,              -- the player's name when the game ended
+          points     INTEGER NOT NULL,
+          won        INTEGER NOT NULL,
+          game_name  TEXT,
+          mode       TEXT NOT NULL,
+          ended_at   INTEGER NOT NULL,
+          details    TEXT NOT NULL,              -- JSON: side, quick-win times, the tick it ended, the tally
+          PRIMARY KEY (game_id, seat)
+        );
+        CREATE INDEX IF NOT EXISTS scores_by_points ON scores (points DESC);
+      `);
+      const finished = db.prepare(`SELECT id, seats, updated_at, state FROM games WHERE json_extract(state, '$.over') IS NOT NULL`);
+      for (const row of /** @type {any[]} */ (finished.all())) {
+        const state = parse(row.state);
+        if (!state) continue;
+        saveScores(db, { ...state, id: row.id, seats: parseSeats(row.seats) }, row.updated_at);
+      }
+      db.exec('PRAGMA user_version = 24;');
+    })();
+  }
+}
+
+/**
+ * Write a game's scores, each with the name its player has now.
+ * @param {import('better-sqlite3').Database} db
+ * @param {import('./scores.js').EndedGame} game
+ * @param {number} now
+ */
+function saveScores(db, game, now) {
+  const nameOf = db.prepare('SELECT name FROM players WHERE pid = ?');
+  const insert = db.prepare(`
+    INSERT OR IGNORE INTO scores (game_id, seat, pid, name, points, won, game_name, mode, ended_at, details)
+    VALUES (@gameId, @seat, @pid, @name, @points, @won, @gameName, @mode, @endedAt, @details)`);
+  for (const s of scoreRows(game)) {
+    insert.run({
+      gameId: game.id, seat: s.seat, pid: s.pid, name: /** @type {any} */ (nameOf.get(s.pid))?.name ?? '',
+      points: s.points, won: s.won ? 1 : 0, gameName: game.name ?? null, mode: game.mode, endedAt: now,
+      details: JSON.stringify(s.details),
+    });
+  }
+}
+
+/**
+ * A score as the lobby shows it, from a row of the scores table.
+ * @param {any} row
+ * @returns {import('../src/client/api.js').HighScore}
+ */
+function scoreFrom(row) {
+  return {
+    name: row.name, seat: row.seat, points: row.points, won: Boolean(row.won),
+    game: { id: row.game_id, name: row.game_name ?? null, mode: row.mode }, at: row.ended_at,
+    details: parse(row.details) ?? {},
+  };
 }
 
 /** @param {string} text */

@@ -320,7 +320,7 @@ export class GameRoom extends Room {
   /**
    * A seated player ends the game for everyone, as a command the room logs:
    * its creator at any time, anyone else after an hour of play
-   * (END_ANYONE_TICKS). It is saved at once, so the lobby lists it finished.
+   * (END_ANYONE_TICKS). Then it is over (`finish`).
    * @param {string} pid Who asks.
    * @returns {string | null} Why not, or null once done.
    */
@@ -333,8 +333,23 @@ export class GameRoom extends Room {
     const outcome = this.commit(seat, { type: 'end' });
     if (!outcome.ok) return outcome.reason;
     this.state.running = false;
-    this.snapshot();
+    this.finish();
     return null;
+  }
+
+  /**
+   * The game is over: save it at once, so the lobby lists it finished, and
+   * keep each player's score in the high scores (once; a failed write is
+   * logged, and the game is over all the same).
+   */
+  finish() {
+    this.snapshot();
+    if (this.deleted) return;
+    try {
+      this.storage.recordScores({ ...this.game, id: this.gameId, seats: this.seats });
+    } catch (e) {
+      logger.error(`game ${this.gameId}: keeping its scores failed`, e);
+    }
   }
 
   /**
@@ -360,7 +375,8 @@ export class GameRoom extends Room {
     if (this.state.running !== running) this.state.running = running;
     if (!running) return;
     advance(this.board, this.game);
-    if (this.game.tick - this.snapshotAt >= SNAPSHOT_TICKS) this.snapshot();
+    if (this.game.over !== undefined) this.finish();
+    else if (this.game.tick - this.snapshotAt >= SNAPSHOT_TICKS) this.snapshot();
     syncGame(this.state, publicView(this.game));
   }
 

@@ -50,9 +50,10 @@ Run `npm start` and open http://127.0.0.1:2567.
   people's under way with every seat taken (**Watch** opens one as an
   observer), the finished ones (anyone's; **Scores** opens one at its
   table of points), and the **High scores**: the ten best totals any player
-  made in a finished game, counted as its table counts them (quick-win
-  bonus included), each with its player in their side's colour, a ★ for a
-  win, the game and its mode, and its Scores. Ties go to the earlier. Under the lists, **How to play** sums up the game, and
+  made, kept when each game ended, counted as its table counts them
+  (quick-win bonus included), each with its player in their side's
+  colour, a ★ for a win, the game and its mode, and its Scores while the
+  game is kept. Ties go to the earlier. They stay when games are cleared. Under the lists, **How to play** sums up the game, and
   **About** links the source code on GitHub and names the licences and
   credits. Each section folds away; the lists of others' games under way
   and finished, the high scores, How to play and About start folded, and the browser keeps
@@ -591,17 +592,21 @@ HTTP API:
 | `POST /api/games/:id/delete` | `{ token }`: deletes a game under way that the player started and nobody else holds a seat in, closing its room if open; `403` if they didn't start it, `409` if someone else plays it or it is over. |
 | `POST /api/games/:id/leave` | `{ token }`: gives up the player's seat in a game under way, through its room if open; `409` if they hold none or it is over. |
 | `GET /api/games` | The 50 most recently active games, for the lobby, with their name, mode, who holds each seat (`{ pid, name }` or `null`) and `fallen`, the seats whose castles have fallen, which nobody can take. |
-| `GET /api/scores` | The lobby's high scores: the ten best totals of seated players in finished games, highest first, each `{ name, seat, points, won, game: { id, name, mode }, at }`. |
+| `GET /api/scores` | The lobby's high scores: the ten best scores kept (`scores`), highest first, each `{ name, seat, points, won, game: { id, name, mode }, at, open, details }`; `open` whether the game is still kept. |
 | `GET /api/games/:id` | One game: its seed, latest snapshot and seats. |
 | `GET /api/games/:id/commands` | Its command log, with each command's tick. |
 | `GET /api/games/:id/seats` | Who holds each seat: `{ pid, name }`, or `null` for a free one. |
 
-The database has three tables: `games` (each game's seed, seats, who
+The database has four tables: `games` (each game's seed, seats, who
 started it and when (neither shown to players), and a snapshot of its
-state, saved every ten seconds and when its room closes),
-`commands` (every accepted command with its tick, in order, never changed)
-and `players` (each signed-in player's public id, name and language; never
-the token).
+state, saved every ten seconds, when it ends and when its room closes),
+`commands` (every accepted command with its tick, in order, never changed),
+`players` (each signed-in player's public id, name and language; never
+the token) and `scores` (when a game ends, each seated player's total, as
+its table of points counts it, with their name then, the game's name and
+mode, and the details: their side, the quick-win bonus, when it ended and
+their whole tally, such as the units born). Games may be cleared when the
+rules or the format change; the scores stay.
 A room reopening a game loads its snapshot and replays the commands logged
 after it; if the snapshot is unreadable, it replays the whole log from the
 opening position.

@@ -112,7 +112,8 @@ function fillList(name, games, action, language) {
 /**
  * Fill the high scores: each player's name in their side's colour, a star
  * for a win, the game and its mode, and the total, rounded from 10000 on
- * (the exact points in its tooltip), with the game's Scores.
+ * (the exact points in its tooltip), with the game's Scores while the game
+ * is kept.
  * @param {import('./api.js').HighScore[]} best
  * @param {PageLanguage} language
  */
@@ -143,7 +144,8 @@ function fillBest(best, language) {
     open.textContent = say(language, { word: 'scores' });
     const actions = document.createElement('span');
     actions.className = 'actions';
-    actions.append(points, open);
+    // A game cleared since (as when the rules change) keeps its scores, not its table.
+    actions.append(points, ...(s.open ? [open] : []));
     li.append(who, actions);
     return li;
   }));

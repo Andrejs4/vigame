@@ -500,7 +500,7 @@ test('the game\'s creator may have it go on without the players missing, until t
   await leaveAll(a, b);
 });
 
-test('a game ends for everyone when its creator ends it, or anyone seated after an hour; saved at once', async () => {
+test('a game ends for everyone when its creator ends it, or anyone seated after an hour; saved, and its scores kept', async () => {
   const res = await post('/api/games', { token: TOKENS.a, players: 2 });
   const id = /** @type {string} */ ((await res.json()).id);
   const a = await join(id, TOKENS.a);
@@ -514,6 +514,8 @@ test('a game ends for everyone when its creator ends it, or anyone seated after 
   // An hour on, Crimson may; against the Dark Lord, he wins.
   const room = matchMaker.getLocalRoomById(a.roomId);
   room.game.tick = END_ANYONE_TICKS;
+  room.game.players[0].tally.kills = 77;
+  room.game.players[1].tally.born = 3;
   assert.equal(await b.request('endGame'), true);
   await until(() => seen(a).over !== undefined);
   const lord = seen(a).players.find((/** @type {any} */ p) => p.side === 8);
@@ -522,22 +524,13 @@ test('a game ends for everyone when its creator ends it, or anyone seated after 
   assert.deepEqual(server.storage.listCommands(id).map((x) => [x.player, x.command]), [[1, { type: 'end' }]], 'logged');
   assert.ok(server.storage.loadGame(id)?.state.over !== undefined, 'saved finished at once');
   assert.equal(await refusal(a.request('endGame')), 'the game is over');
-  await leaveAll(a, b, c);
-});
 
-test('the high scores list the best totals of finished games, by player name', async () => {
-  const board = createBoard({ ...BOARD_OPTIONS, seed: 9, players: 2 });
-  const state = newGame(board, { mode: 'ffa' });
-  Object.assign(state, { tick: 50 * 60 * TICKS_PER_SECOND, over: 50 * 60 * TICKS_PER_SECOND });
-  state.players[0].tally.kills = 77;
-  state.players[1].tally.kills = 76;
-  server.storage.createGame({ id: 'high-scores', seed: 9, state, seats: [playerId(TOKENS.a), playerId(TOKENS.b)] });
-  const res = await fetch(`${base}/api/scores`);
-  assert.equal(res.headers.get('cache-control'), 'no-store');
-  const best = await res.json();
-  const ours = best.filter((/** @type {any} */ s) => s.game.id === 'high-scores');
-  assert.deepEqual(ours.map((/** @type {any} */ s) => [s.name, s.points, s.won]), [[NAMES.a, 770, false], [NAMES.b, 760, false]]);
-  assert.ok(best.length <= 10);
+  // Each player's score went to the high scores, by name, the details with it.
+  const best = await (await fetch(`${base}/api/scores`)).json();
+  const ours = best.filter((/** @type {any} */ x) => x.game.id === id);
+  assert.deepEqual(ours.map((/** @type {any} */ x) => [x.name, x.points, x.won, x.open]), [[NAMES.a, 770, false, true], [NAMES.b, 15, false, true]]);
+  assert.equal(ours[1].details.tally.born, 3);
+  await leaveAll(a, b, c);
 });
 
 test('a player whose castle fell may take a free base; the game waits for no fallen side', async () => {

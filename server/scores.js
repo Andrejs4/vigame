@@ -1,7 +1,9 @@
 /**
- * The lobby's high scores: the best totals any player has made in a
- * finished game, by the same count as the game's own table of points
- * (`scoreOf`), quick-win bonus included.
+ * The high scores: when a game ends, each seated player's total, counted
+ * as the game's own table of points counts it (`scoreOf`, quick-win bonus
+ * included), goes into a table of its own (`scores`, in storage.js), with
+ * the details behind it. Games may be cleared when the rules change; the
+ * scores stay.
  */
 
 import { scoreOf } from '../src/core/game.js';
@@ -10,37 +12,28 @@ import { scoreOf } from '../src/core/game.js';
 export const HIGH_SCORES = 10;
 
 /**
- * @typedef {{ id: string, name: string | null, mode: string, over: number, winner: number | null,
- *   seats: Array<string | null>, players: any[], updatedAt: number }} FinishedGame
- * @typedef {{ name: string, seat: number, points: number, won: boolean,
- *   game: { id: string, name: string | null, mode: string }, at: number }} HighScore
+ * @typedef {{ id: string, name: string | null, mode: string, over: number, winner?: number | null,
+ *   seats: Array<string | null>, players: any[] }} EndedGame
+ * @typedef {{ seat: number, pid: string, points: number, won: boolean,
+ *   details: { side: number, times: number, over: number, tally: Record<string, number> } }} ScoreRow
  */
 
 /**
- * The best totals of the players who held a seat when each game ended,
- * highest first; of two the same, the one made first. Seats nobody held,
- * and totals of nothing, don't count.
- * @param {FinishedGame[]} games
- * @param {(pid: string) => string} nameOf
- * @param {number} [limit]
- * @returns {HighScore[]}
+ * Each seated player's score in a game that has ended; seats nobody held
+ * have none.
+ * @param {EndedGame} game
+ * @returns {ScoreRow[]}
  */
-export function highScores(games, nameOf, limit = HIGH_SCORES) {
-  /** @type {HighScore[]} */
-  const all = [];
-  for (const g of games) {
-    const state = { players: g.players, over: g.over, ...(g.winner === null ? {} : { winner: g.winner }) };
-    g.seats.forEach((pid, seat) => {
-      const p = g.players[seat];
-      if (!pid || !p?.tally) return;
-      const points = scoreOf(state, seat).total;
-      if (points <= 0) return;
-      all.push({
-        name: nameOf(pid), seat, points, won: g.winner !== null && p.team === g.winner,
-        game: { id: g.id, name: g.name, mode: g.mode }, at: g.updatedAt,
-      });
-    });
-  }
-  return all.sort((a, b) => b.points - a.points || a.at - b.at || a.game.id.localeCompare(b.game.id) || a.seat - b.seat)
-    .slice(0, limit);
+export function scoreRows(game) {
+  const winner = game.winner ?? undefined;
+  const state = { players: game.players, over: game.over, ...(winner === undefined ? {} : { winner }) };
+  return game.seats.flatMap((pid, seat) => {
+    const p = game.players[seat];
+    if (!pid || !p?.tally) return [];
+    const { total, times } = scoreOf(state, seat);
+    return [{
+      seat, pid, points: total, won: winner !== undefined && p.team === winner,
+      details: { side: p.side, times, over: game.over, tally: { ...p.tally } },
+    }];
+  });
 }

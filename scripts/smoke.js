@@ -392,7 +392,10 @@ async function finished(browser, url) {
   Object.assign(state.players[0].tally, { kills: 120, damage: 43210, castles: 1, born: 9, stone: 30, food: 25, built: 3, upgrades: 2, won: 1 });
   Object.assign(state.players[1].tally, { kills: 5, damage: 800 });
   assert.deepEqual(checkState(board, state), []);
-  games.storage.createGame({ id: 'finished-game', seed, state, seats: [playerId(/** @type {string} */ (token))] });
+  const seats = [playerId(/** @type {string} */ (token))];
+  games.storage.createGame({ id: 'finished-game', seed, state, seats });
+  // Its scores kept, as the room keeps them when a game ends.
+  games.storage.recordScores({ ...state, id: 'finished-game', seats });
 
   // High scores start folded away, below Recently finished; open, Fay's
   // 13516 leads them, rounded, and Scores opens its game.

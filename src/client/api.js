@@ -32,10 +32,14 @@
  * @typedef {object} HighScore One of the lobby's high scores.
  * @property {string} name The player who held the seat.
  * @property {number} seat Which, for its colour.
- * @property {number} points Their total, as the game's table of points counts it.
+ * @property {number} points Their total, as the game's table of points counted it.
  * @property {boolean} won
  * @property {{ id: string, name: string | null, mode: string }} game
- * @property {number} at When the game was last played.
+ * @property {number} at When the game ended.
+ * @property {boolean} open Whether the game is still kept, to open at its table.
+ * @property {{ side?: number, times?: number, over?: number, tally?: Record<string, number> }} details
+ *   What the total came from: the side's palette, the quick-win bonus, the
+ *   tick it ended and the side's tally (units born, kills, stone and so on).
  */
 
 const TOKEN_KEY = 'vigame.token';
