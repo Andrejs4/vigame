@@ -65,7 +65,7 @@ const HOME_ZOOM = COUNT_ZOOM + 0.15;
  * `score…` and `score…What` (words.js).
  * @type {Array<keyof typeof POINTS>}
  */
-const SCORE_LINES = ['won', 'castles', 'felled', 'kills', 'damage', 'upgrades', 'built', 'born', 'stone', 'food'];
+const SCORE_LINES = ['castles', 'felled', 'kills', 'damage', 'upgrades', 'built', 'born', 'stone', 'food'];
 
 /** Where this browser keeps which panels are folded away: the status panel, the minimap. */
 const FOLDED_KEY = 'vigame.folded';
@@ -427,6 +427,10 @@ export async function startGame(net, me) {
     // From 10000 a "k", with the exact points in its tooltip.
     const points = (/** @type {number} */ n, className = '') => Object.assign(
       cell('td', shortPoints(n), shortPoints(n) === String(n) ? '' : String(n)), className ? { className } : {});
+    // A line's own count (stone dug, hit points taken off…), from 10000 a
+    // "k"; the points it gave in its tooltip.
+    const count = (/** @type {number} */ n, /** @type {number} */ worthPoints) => cell('td', shortPoints(n),
+      [shortPoints(n) === String(n) ? '' : String(n), word('pointsWorth', { n: worthPoints })].filter(Boolean).join(' · '));
     const rows = players
       .filter((p) => p.tally && !sideOf(view, p.id).wild)
       .map((p) => ({ p, side: sideOf(view, p.id), score: scoreOf(view, p.id), won: p.team === winner }))
@@ -440,7 +444,7 @@ export async function startGame(net, me) {
     };
     /** @type {HTMLElement} */ (document.getElementById('scores-head')).replaceChildren(
       cell('th', word('scoresSide')),
-      Object.assign(cell('th', word('scoresTotal')), { className: 'total' }),
+      Object.assign(cell('th', word('scoresTotal'), word('scoresTotalTitle', { won: POINTS.won })), { className: 'total' }),
       ...(bonus ? [cell('th', word('scoresBonus'), word('scoresBonusTitle', { ranges }))] : []),
       ...SCORE_LINES.map(heading),
     );
@@ -452,7 +456,7 @@ export async function startGame(net, me) {
       who.style.color = side.accent;
       tr.append(who, points(score.total, 'total'),
         ...(bonus ? [Object.assign(cell('td', score.times > 1 ? `×${number.format(score.times)}` : ''), { className: 'bonus' })] : []),
-        ...SCORE_LINES.map((line) => points(score.lines[line])));
+        ...SCORE_LINES.map((line) => count(p.tally?.[line] ?? 0, score.lines[line])));
       return tr;
     }));
   }

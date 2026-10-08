@@ -420,13 +420,18 @@ async function finished(browser, url) {
   assert.equal(await text(page, '#scores-outcome'), '15:00 · Blue won · quick win: points ×2');
   // The side, its total and bonus first, then the lines, the weightiest first.
   assert.deepEqual(await page.$$eval('#scores-head th', (ths) => ths.map((th) => th.textContent)),
-    ['Side', 'Total', 'Bonus', 'Win', 'Castles', 'Felled', 'Kills', 'Damage', 'Upgrades', 'Built', 'Born', 'Stone', 'Food']);
+    ['Side', 'Total', 'Bonus', 'Castles', 'Felled', 'Kills', 'Damage', 'Upgrades', 'Built', 'Born', 'Stone', 'Food']);
   // Fay: (1200 + 4321 + 500 + 45 + 30 + 2 + 60 + 100 + 500) × 2 = 13516, shown as 14k with the
-  // exact points in its tooltip; the Dark Lord: 50 + 80, no bonus.
+  // exact points in its tooltip; the Dark Lord: 50 + 80, no bonus. The lines
+  // are counts, each with the points it gave in its tooltip: 43210 hit points
+  // of damage, 43k, gave 4321.
   await page.waitForFunction(() => document.querySelector('#scores-body tr td')?.textContent === 'Fay · Blue');
   const rows = await page.$$eval('#scores-body tr', (trs) => trs.map((tr) => [...tr.cells].slice(0, 4).map((td) => td.textContent)));
-  assert.deepEqual(rows, [['Fay · Blue', '14k', '×2', '500'], ['Dark Lord', '130', '', '0']]);
+  assert.deepEqual(rows, [['Fay · Blue', '14k', '×2', '1'], ['Dark Lord', '130', '', '0']]);
   assert.equal(await page.getAttribute('#scores-body tr td.total', 'title'), '13516');
+  const fay = await page.$$eval('#scores-body tr:first-child td', (tds) => tds.slice(3).map((td) => [td.textContent, td.title]));
+  assert.deepEqual(fay, [['1', '500 points'], ['0', '0 points'], ['120', '1200 points'], ['43k', '43210 · 4321 points'], ['2', '100 points'],
+    ['3', '60 points'], ['9', '45 points'], ['30', '30 points'], ['25', '2 points']]);
   // Every column in view on a desktop, and Keep watching has the focus.
   const fitsTable = (/** @type {import('playwright').Page} */ p) => p.$eval('#scores .scores-wrap', (w) => w.scrollWidth <= w.clientWidth);
   assert.ok(await fitsTable(page), 'the table of points scrolls on a desktop');
@@ -442,7 +447,7 @@ async function finished(browser, url) {
   assert.equal(await text(ru, '#scores-title'), 'Игра окончена');
   assert.equal(await text(ru, '#scores-outcome'), '15:00 · победили Синие · быстрая победа: очки ×2');
   await ru.waitForFunction(() => document.querySelector('#scores-body tr td')?.textContent === 'Fay · Синие');
-  assert.deepEqual(await ru.$$eval('#scores-head th', (ths) => ths.slice(0, 4).map((th) => th.textContent)), ['Сторона', 'Всего', 'Бонус', 'Победа']);
+  assert.deepEqual(await ru.$$eval('#scores-head th', (ths) => ths.slice(0, 4).map((th) => th.textContent)), ['Сторона', 'Всего', 'Бонус', 'Замки']);
   assert.equal(await text(ru, '#scores-leave'), 'Покинуть матч');
   assert.ok(await fitsTable(ru), 'the Russian table of points scrolls on a desktop');
   await ru.screenshot({ path: join(OUT, 'scores-ru.png') });
