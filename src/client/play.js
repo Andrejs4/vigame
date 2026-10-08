@@ -733,6 +733,21 @@ export async function startGame(net, me) {
   }
 
   /**
+   * Put a small picture of the building a unit is in before where it is,
+   * in the crew chooser and the heroes list; none while it walks.
+   * @param {HTMLElement} where
+   * @param {{ in?: string }} u
+   */
+  function placeIcon(where, u) {
+    const inside = u.in !== undefined ? view?.buildings[u.in] : null;
+    if (!inside || !PICTURES.includes(inside.type)) return;
+    const place = document.createElement('span');
+    place.className = 'place';
+    place.style.setProperty('--icon', `url(art/${inside.type}.svg)`);
+    where.prepend(place);
+  }
+
+  /**
    * A unit's portrait, for a list: a hero's face, cut from its sheet by the
    * hero's name, or for the rest a silhouette.
    * @param {{ name: string, hero?: true }} u
@@ -792,6 +807,7 @@ export async function startGame(net, me) {
       const where = document.createElement('span');
       where.className = 'where';
       where.textContent = u.died === undefined ? whereIs(u, null) : word(u.how === 'hunger' ? 'diedHunger' : 'diedCombat');
+      if (u.died === undefined) placeIcon(where, u);
       const levels = document.createElement('span');
       levels.className = 'skills';
       levels.append(...skills.map(([skill, short]) => {
@@ -883,14 +899,7 @@ export async function startGame(net, me) {
       const where = document.createElement('span');
       where.className = 'where';
       where.textContent = extra ? `${whereIs(u, target)} · ${skillName(extra)} ${u.skills[extra]}` : whereIs(u, target);
-      // A small picture of the building it is in; none while it walks.
-      const inside = u.in !== undefined ? view?.buildings[u.in] : null;
-      if (inside && PICTURES.includes(inside.type)) {
-        const place = document.createElement('span');
-        place.className = 'place';
-        place.style.setProperty('--icon', `url(art/${inside.type}.svg)`);
-        where.prepend(place);
-      }
+      placeIcon(where, u);
       const label = document.createElement('label');
       label.append(box, portrait(u), name, stats, where);
       const li = document.createElement('li');

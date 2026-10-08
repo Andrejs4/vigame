@@ -150,7 +150,8 @@ Run `npm start` and open http://127.0.0.1:2567.
   shows a hero's face and its age in gold (the rest have a silhouette).
   Select your castle and press **Heroes…**
   (in Crew's place, as the castle has no crew) for yours alive now, highest
-  level first, each with its face, where it is and
+  level first, each with its face, where it is (after a small picture of
+  its building, as in the crew chooser) and
   every skill's level, as "Att 15"
   (ranged attack; then close combat, building, farming, breeding and
   running), each level padded to line up ("Att   8", "Att 100"). Below them
