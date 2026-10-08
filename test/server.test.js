@@ -525,6 +525,21 @@ test('a game ends for everyone when its creator ends it, or anyone seated after 
   await leaveAll(a, b, c);
 });
 
+test('the high scores list the best totals of finished games, by player name', async () => {
+  const board = createBoard({ ...BOARD_OPTIONS, seed: 9, players: 2 });
+  const state = newGame(board, { mode: 'ffa' });
+  Object.assign(state, { tick: 50 * 60 * TICKS_PER_SECOND, over: 50 * 60 * TICKS_PER_SECOND });
+  state.players[0].tally.kills = 77;
+  state.players[1].tally.kills = 76;
+  server.storage.createGame({ id: 'high-scores', seed: 9, state, seats: [playerId(TOKENS.a), playerId(TOKENS.b)] });
+  const res = await fetch(`${base}/api/scores`);
+  assert.equal(res.headers.get('cache-control'), 'no-store');
+  const best = await res.json();
+  const ours = best.filter((/** @type {any} */ s) => s.game.id === 'high-scores');
+  assert.deepEqual(ours.map((/** @type {any} */ s) => [s.name, s.points, s.won]), [[NAMES.a, 770, false], [NAMES.b, 760, false]]);
+  assert.ok(best.length <= 10);
+});
+
 test('a player whose castle fell may take a free base; the game waits for no fallen side', async () => {
   const res = await post('/api/games', { token: TOKENS.a, players: 4 });
   const id = /** @type {string} */ ((await res.json()).id);

@@ -67,6 +67,12 @@ export function openStorage(file = ':memory:') {
     json_extract(state, '$.over') AS over, json_extract(state, '$.winner') AS winner,
     (SELECT json_group_array(key) FROM json_each(state, '$.players') WHERE json_extract(value, '$.lost') IS NOT NULL) AS fallen`;
   const selectRecent = db.prepare(`SELECT ${SUMMARY} FROM games ORDER BY updated_at DESC, id LIMIT ?`);
+  // Finished games, with only what their points need: not the whole state.
+  const selectFinished = db.prepare(`
+    SELECT id, seats, updated_at, json_extract(state, '$.name') AS name, json_extract(state, '$.mode') AS mode,
+      json_extract(state, '$.over') AS over, json_extract(state, '$.winner') AS winner,
+      json_extract(state, '$.players') AS players
+    FROM games WHERE json_extract(state, '$.over') IS NOT NULL`);
   const selectGoingOf = db.prepare(`
     SELECT ${SUMMARY} FROM games
     WHERE json_extract(state, '$.over') IS NULL
@@ -166,6 +172,24 @@ export function openStorage(file = ':memory:') {
      */
     listGames({ limit = 50 } = {}) {
       return selectRecent.all(limit).map(summary);
+    },
+
+    /**
+     * Every finished game, with its sides' records (their tallies and
+     * teams), for the high scores.
+     * @returns {import('./scores.js').FinishedGame[]}
+     */
+    finishedGames() {
+      return selectFinished.all().map((/** @type {any} */ row) => ({
+        id: row.id,
+        name: row.name ?? null,
+        mode: row.mode,
+        over: row.over,
+        winner: row.winner ?? null,
+        seats: parseSeats(row.seats),
+        players: parse(row.players) ?? [],
+        updatedAt: row.updated_at,
+      }));
     },
 
     /**

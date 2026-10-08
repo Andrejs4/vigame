@@ -10,6 +10,7 @@
  *   POST /api/settings          change name or language: { token, name?, language? } -> { pid, name, language }
  *   POST /api/games             start a game: { token } -> 201 { id }, or 409 { error, waiting, seated, games } with too many on the go
  *   GET  /api/games             recently active games, with who holds each seat (the lobby)
+ *   GET  /api/scores            the ten best totals in finished games (the lobby's high scores)
  *   GET  /api/games/:id         one game's snapshot and seats
  *   GET  /api/games/:id/commands  its command log (history, replays)
  *   POST /api/games/:id/delete  delete a game you started that nobody else plays: { token }
@@ -36,6 +37,7 @@ import { cleanLanguage, cleanPlayerName } from '../src/core/player.js';
 import { DEFAULT_MODE, DEFAULT_PLAYERS, MAX_PLAYERS, MIN_PLAYERS, MODES, TICKS_PER_SECOND } from '../src/core/rules.js';
 import { createChallenges } from './challenge.js';
 import { gameRoom, isToken, liveRoom, playerId, signedIn } from './room.js';
+import { highScores } from './scores.js';
 import { openStorage } from './storage.js';
 
 /**
@@ -254,6 +256,14 @@ export async function startGameServer({
       };
       app.get('/api/games', (_req, res) => {
         res.set('cache-control', 'no-store').json(seatNames(storage.listGames()));
+      });
+      app.get('/api/scores', (_req, res) => {
+        const names = new Map();
+        const nameOf = (/** @type {string} */ pid) => {
+          if (!names.has(pid)) names.set(pid, storage.loadPlayer(pid)?.name ?? '');
+          return names.get(pid);
+        };
+        res.set('cache-control', 'no-store').json(highScores(storage.finishedGames(), nameOf));
       });
       app.get('/api/games/:id', (req, res) => {
         const saved = GAME_ID.test(req.params.id) ? storage.loadGame(req.params.id) : null;

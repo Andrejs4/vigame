@@ -142,6 +142,8 @@ button[aria-pressed="true"] { background: rgba(255, 216, 77, 0.18); border-color
 .games .when { color: var(--ink-dim); font: 12px var(--mono); margin-left: 6px; }
 .games .button { flex: none; }
 .games .actions { display: flex; gap: 8px; flex: none; }
+/* The high scores: each total big, beside its game's Scores. */
+.games .points { font: 600 16px var(--mono); align-self: center; }
 
 /* --- the game ------------------------------------------------------------- */
 

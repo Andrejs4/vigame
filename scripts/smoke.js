@@ -394,6 +394,17 @@ async function finished(browser, url) {
   assert.deepEqual(checkState(board, state), []);
   games.storage.createGame({ id: 'finished-game', seed, state, seats: [playerId(/** @type {string} */ (token))] });
 
+  // High scores start folded away, below Recently finished; open, Fay's
+  // 13516 leads them, rounded, and Scores opens its game.
+  assert.equal(await page.locator('#lobby-best-section[open]').count(), 0);
+  await page.click('#lobby-best-section summary');
+  const best = page.locator('#lobby-best li').first();
+  await best.waitFor({ timeout: 10000 });
+  assert.match(await best.textContent() ?? '', /^1\. Fay ★.*14kScores$/);
+  assert.equal(await best.locator('.points').getAttribute('title'), '13516');
+  await page.locator('#lobby-best-section').screenshot({ path: join(OUT, 'high-scores.png') });
+  await page.click('#lobby-best-section summary');
+
   // Recently finished starts folded away.
   assert.equal(await page.locator('#lobby-done-section[open]').count(), 0);
   await page.click('#lobby-done-section summary');

@@ -48,11 +48,14 @@ Run `npm start` and open http://127.0.0.1:2567.
   (Att, Mel, Bld…, explained in its top line) are in English for now.
 - **The lobby** lists your games under way, games with a free seat, other
   people's under way with every seat taken (**Watch** opens one as an
-  observer), and the finished ones (anyone's; **Scores** opens one at its
-  table of points). Under the lists, **How to play** sums up the game, and
+  observer), the finished ones (anyone's; **Scores** opens one at its
+  table of points), and the **High scores**: the ten best totals any player
+  made in a finished game, counted as its table counts them (quick-win
+  bonus included), each with its player in their side's colour, a ★ for a
+  win, the game and its mode, and its Scores. Ties go to the earlier. Under the lists, **How to play** sums up the game, and
   **About** links the source code on GitHub and names the licences and
   credits. Each section folds away; the lists of others' games under way
-  and finished, How to play and About start folded, and the browser keeps
+  and finished, the high scores, How to play and About start folded, and the browser keeps
   them as you leave them. **New game**
   starts one for 1 to 16 players (1 by default, against the Dark Lord), on a map that grows with
   them (29 × 20 cells for two, 59 × 39 for eight, 83 × 55 for sixteen),
@@ -588,6 +591,7 @@ HTTP API:
 | `POST /api/games/:id/delete` | `{ token }`: deletes a game under way that the player started and nobody else holds a seat in, closing its room if open; `403` if they didn't start it, `409` if someone else plays it or it is over. |
 | `POST /api/games/:id/leave` | `{ token }`: gives up the player's seat in a game under way, through its room if open; `409` if they hold none or it is over. |
 | `GET /api/games` | The 50 most recently active games, for the lobby, with their name, mode, who holds each seat (`{ pid, name }` or `null`) and `fallen`, the seats whose castles have fallen, which nobody can take. |
+| `GET /api/scores` | The lobby's high scores: the ten best totals of seated players in finished games, highest first, each `{ name, seat, points, won, game: { id, name, mode }, at }`. |
 | `GET /api/games/:id` | One game: its seed, latest snapshot and seats. |
 | `GET /api/games/:id/commands` | Its command log, with each command's tick. |
 | `GET /api/games/:id/seats` | Who holds each seat: `{ pid, name }`, or `null` for a free one. |

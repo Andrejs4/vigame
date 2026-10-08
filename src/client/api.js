@@ -28,6 +28,16 @@
  * @property {number} updatedAt
  */
 
+/**
+ * @typedef {object} HighScore One of the lobby's high scores.
+ * @property {string} name The player who held the seat.
+ * @property {number} seat Which, for its colour.
+ * @property {number} points Their total, as the game's table of points counts it.
+ * @property {boolean} won
+ * @property {{ id: string, name: string | null, mode: string }} game
+ * @property {number} at When the game was last played.
+ */
+
 const TOKEN_KEY = 'vigame.token';
 const NAME_KEY = 'vigame.name';
 
