@@ -24,6 +24,7 @@
  *   claimSeat(seat) take a free seat, the one given if it is free
  *   releaseSeat()
  *   isCreator()     whether this viewer started the game
+ *   createdAt()     when the game was created, in ms since 1970
  *   startNow()      as its creator, have the game go on without the players
  *                   missing; resolves to { ok } or { ok: false, reason }
  *   endGame()       end the game for everyone (its creator at any time, any
@@ -110,6 +111,8 @@ export async function createServerNet({ client, gameId, token, now = () => perfo
   let mySeat = null;
   /** @type {Array<string | null>} */
   let seatList = [];
+  /** When the game was created (ms since 1970), 0 if not known. */
+  let createdAt = 0;
   let amCreator = false;
   let seatKey = '';
   /** @type {NetPeer[]} */
@@ -196,6 +199,7 @@ export async function createServerNet({ client, gameId, token, now = () => perfo
     const me = viewers.find(([session]) => session === room.sessionId)?.[1];
     const seat = me && isSide(me.seat) ? me.seat : null;
     const holders = seats.map((s) => (typeof s === 'string' && s ? s : null));
+    createdAt = typeof raw.createdAt === 'number' ? raw.createdAt : 0;
     const creator = typeof me?.pid === 'string' && me.pid !== '' && raw.creator === me.pid;
     const key = JSON.stringify([seat, holders, creator]);
     if (key !== seatKey) {
@@ -293,6 +297,7 @@ export async function createServerNet({ client, gameId, token, now = () => perfo
     claimSeat: (seat) => room.request('claimSeat', seat === undefined ? undefined : { seat }).then(() => {}, () => {}),
     releaseSeat: () => room.request('releaseSeat').then(() => {}, () => {}),
     isCreator: () => amCreator,
+    createdAt: () => createdAt,
     /** @returns {Promise<{ ok: boolean, reason?: string }>} */
     startNow: () => room.request('startNow').then(
       () => ({ ok: true }),

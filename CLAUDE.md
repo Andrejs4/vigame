@@ -187,7 +187,9 @@ drawing during play). Read it before art or graphics work.
   (the Dark Lord leaves them alone) only as `away` and `back` commands that
   the room gives and logs (`ROOM_COMMANDS`), so replays agree; the room
   refuses them from players. So is `end`: the room checks who may end the
-  game (`endGame`: its creator, or anyone seated after an hour), then logs
+  game (`endGame`: its creator, or anyone seated after an hour, or anyone
+  viewing a day-old game none of its other players is in, from its
+  `createdAt`, the room's only reading of the clock for a rule), then logs
   it and saves a snapshot at once. While it is
   paused the room refuses commands, except `rename`, which needs no clock;
   after a rename it saves a snapshot at once, since the lobby reads a game's

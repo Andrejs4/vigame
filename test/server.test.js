@@ -18,7 +18,7 @@ import { advance, castleOf, checkState, nearStanding, newGame, occupancy, public
 import { key } from '../src/core/hex.js';
 import { GAME_NAMES } from '../src/core/names.js';
 import { createServerNet } from '../src/client/net.js';
-import { BUILDING_TYPES, END_ANYONE_TICKS, TICKS_PER_SECOND } from '../src/core/rules.js';
+import { BUILDING_TYPES, END_ANYONE_TICKS, END_IDLE_MS, TICKS_PER_SECOND } from '../src/core/rules.js';
 
 /** @type {Awaited<ReturnType<typeof startGameServer>>} */
 let server;
@@ -508,7 +508,7 @@ test('a game ends for everyone when its creator ends it, or anyone seated after 
   const c = await join(id, TOKENS.c);
   await until(() => seen(a).tick >= 5);
   assert.equal(await refusal(b.request('endGame')), 'only its creator may end it in its first hour');
-  assert.equal(await refusal(c.request('endGame')), 'not seated', 'a spectator may not');
+  assert.equal(await refusal(c.request('endGame')), 'only its players may end it, until it is a day old with none of them here', 'a spectator may not');
   assert.equal(await refusal(give(a, { type: 'end' })), 'unknown command', 'only the room ends it');
 
   // An hour on, Crimson may; against the Dark Lord, he wins.
@@ -531,6 +531,27 @@ test('a game ends for everyone when its creator ends it, or anyone seated after 
   assert.deepEqual(ours.map((/** @type {any} */ x) => [x.name, x.points, x.won, x.open]), [[NAMES.a, 770, false, true], [NAMES.b, 15, false, true]]);
   assert.equal(ours[1].details.tally.born, 3);
   await leaveAll(a, b, c);
+});
+
+test('a day old, with none of its players here, an abandoned game may be ended by anyone viewing it', async () => {
+  const res = await post('/api/games', { token: TOKENS.a, players: 2 });
+  const id = /** @type {string} */ ((await res.json()).id);
+  const a = await join(id, TOKENS.a);
+  const c = await join(id, TOKENS.b);
+  await until(() => c.state.toJSON().seats.length === 2);
+  await c.request('releaseSeat');
+  await until(() => c.state.toJSON().viewers[c.sessionId]?.seat === -1);
+  const room = matchMaker.getLocalRoomById(a.roomId);
+  room.createdAt = Date.now() - END_IDLE_MS - 1;
+  assert.equal(await refusal(c.request('endGame')), 'only its players may end it, until it is a day old with none of them here', 'Ann is here');
+  await leaveAll(a);
+  await until(() => [...room.state.viewers.values()].length === 1);
+  assert.equal(await c.request('endGame'), true);
+  await until(() => seen(c).over !== undefined);
+  const lord = seen(c).players.find((/** @type {any} */ p) => p.side === 8);
+  assert.equal(seen(c).winner, lord.team, 'its players gave up');
+  assert.deepEqual(server.storage.listCommands(id).at(-1)?.command, { type: 'end', idle: 1 });
+  await leaveAll(c);
 });
 
 test('a player whose castle fell may take a free base; the game waits for no fallen side', async () => {

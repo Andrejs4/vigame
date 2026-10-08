@@ -144,7 +144,7 @@ import {
  *   | { type: 'abort', building: string }
  *   | { type: 'move', building: string, q: number, r: number }
  *   | { type: 'rename', name: string }
- *   | { type: 'away' } | { type: 'back' } | { type: 'end' }} Command
+ *   | { type: 'away' } | { type: 'back' } | { type: 'end', idle?: 1 }} Command
  * @typedef {{ ok: true } | { ok: false, reason: string }} Outcome
  */
 
@@ -908,7 +908,7 @@ export function applyCommand(board, state, player, command) {
   if (!command || typeof command !== 'object') return refuse('not a command');
   const cmd = /** @type {Record<string, unknown>} */ (command);
   // A player may end the game whether or not their castle stands.
-  if (cmd.type === 'end') return endGame(state, player);
+  if (cmd.type === 'end') return endGame(state, player, cmd);
   if (state.players[player].lost !== undefined) return refuse('your castle has fallen');
   const occ = occupancy(state);
   switch (cmd.type) {
@@ -947,32 +947,37 @@ function goAway(state, player) {
 }
 
 /**
- * Who wins if a player ends the game now: their team gives up, so the one
- * other team with a castle or lair standing, if just one has (the Dark Lord,
- * in cooperation), or nobody. Raiders don't count.
+ * Who wins if a player ends the game now: their team gives up (or, ended
+ * as abandoned, every team with a seat), so the one other team with a
+ * castle or lair standing, if just one has (the Dark Lord, in cooperation),
+ * or nobody. Raiders don't count.
  * @param {Pick<GameState, 'players'>} state
  * @param {number} player
+ * @param {boolean} [abandoned] Every seat's team gives up.
  * @returns {number | undefined} The winning team.
  */
-export function endWinner(state, player) {
-  const team = state.players[player]?.team;
+export function endWinner(state, player, abandoned = false) {
+  const giving = new Set(abandoned
+    ? state.players.filter((p) => !SIDES[p.side]?.npc).map((p) => p.team)
+    : [state.players[player]?.team]);
   const others = new Set(state.players
-    .filter((p) => !SIDES[p.side]?.wild && p.team !== team && p.lost === undefined)
+    .filter((p) => !SIDES[p.side]?.wild && !giving.has(p.team) && p.lost === undefined)
     .map((p) => p.team));
   return others.size === 1 ? [...others][0] : undefined;
 }
 
 /**
- * A player ends the game for everyone (the room says who may): the clock
- * stops and the points are counted, as when one team is left (`settle`),
- * with `endWinner` the winner.
+ * A player ends the game for everyone (the room says who may), or the
+ * room ends it as abandoned (`idle: 1`): the clock stops and the points are
+ * counted, as when one team is left (`settle`), with `endWinner` the winner.
  * @param {GameState} state
  * @param {number} player
+ * @param {Record<string, unknown>} cmd
  * @returns {Outcome}
  */
-function endGame(state, player) {
+function endGame(state, player, cmd) {
   if (SIDES[state.players[player].side]?.npc) return refuse('not a seat');
-  const winner = endWinner(state, player);
+  const winner = endWinner(state, player, cmd.idle === 1);
   state.over = state.tick;
   if (winner === undefined) return { ok: true };
   state.winner = winner;

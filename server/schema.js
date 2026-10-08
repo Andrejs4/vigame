@@ -43,6 +43,8 @@ export const GameState = schema({
   seats: t.array('string'),
   /** The player id of whoever started the game, '' if nobody did. */
   creator: t.string().default(''),
+  /** When the game was created (ms since 1970), for ending abandoned games. */
+  createdAt: t.float64().default(0),
   /** Keyed by session id. */
   viewers: t.map(ViewerState),
 }, 'GameState');

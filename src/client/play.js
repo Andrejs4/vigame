@@ -12,7 +12,7 @@ import {
 } from '../core/game.js';
 import { GAME_NAME_MAX, cleanGameName } from '../core/player.js';
 import { PORTRAIT_SIDE, portraitOf } from '../core/names.js';
-import { BUILDING_TYPES, END_ANYONE_TICKS, POINTS, QUICK_WIN, RANGED_RANGE, SKILL_SHORT, TICKS_PER_SECOND, UNIT_LIMIT } from '../core/rules.js';
+import { BUILDING_TYPES, END_ANYONE_TICKS, END_IDLE_MS, POINTS, QUICK_WIN, RANGED_RANGE, SKILL_SHORT, TICKS_PER_SECOND, UNIT_LIMIT } from '../core/rules.js';
 import { getJson, serverBase } from './api.js';
 import { Camera } from './camera.js';
 import { Effects, fallenHeroes, fallenHeroesNote } from './effects.js';
@@ -516,12 +516,25 @@ export async function startGame(net, me) {
   }
 
   /**
-   * Whether this viewer may end the game for everyone: a seated player, its
-   * creator at any time, anyone else after an hour of play (the room checks).
+   * Whether this game is abandoned: a day old, and none of its players but
+   * this viewer is here.
+   */
+  function abandoned() {
+    const me = peers.find((p) => p.isMe)?.uid;
+    const here = new Set(peers.filter((p) => !p.isMe).map((p) => p.uid));
+    return net.createdAt() > 0 && Date.now() - net.createdAt() >= END_IDLE_MS
+      && !net.seats().some((holder) => holder !== null && holder !== me && here.has(holder));
+  }
+
+  /**
+   * Whether this viewer may end the game for everyone (the room checks): a
+   * seated player, its creator at any time, anyone else after an hour of
+   * play; and anyone viewing an abandoned game.
    */
   function canEndGame() {
-    if (net.seat() === null || !view || view.over !== undefined) return false;
-    return net.isCreator() || view.tick >= END_ANYONE_TICKS;
+    if (!view || view.over !== undefined) return false;
+    if (net.seat() !== null && (net.isCreator() || view.tick >= END_ANYONE_TICKS)) return true;
+    return abandoned();
   }
 
   /** Whether this viewer may rename the game: a player still in it, paused or not. */
@@ -1448,11 +1461,13 @@ export async function startGame(net, me) {
   // still standing, if just one is (the Dark Lord, in cooperation), or nobody.
   endButton.addEventListener('click', async () => {
     const seat = net.seat();
-    if (!view || seat === null) return;
+    if (!view) return;
     const players = view.players;
-    const team = endWinner(view, seat);
+    // A spectator ends an abandoned game for every seat at once.
+    const team = seat === null ? endWinner(view, 0, true) : endWinner(view, seat);
     const winners = players.filter((p) => p.team === team);
-    const ask = team === undefined ? word('askEndNobody')
+    const ask = seat === null ? word(team === undefined ? 'askEndIdle' : 'askEndIdleLord')
+      : team === undefined ? word('askEndNobody')
       : winners.some((p) => sideOf(view, p.id)?.npc) ? word('askEndLord')
         : word('askEndSide', { side: winners.map((p) => sideName({ players }, p.id)).join(', ') });
     if (!confirm(ask)) return;

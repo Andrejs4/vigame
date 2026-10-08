@@ -1028,6 +1028,10 @@ test('a player may end the game: against the Dark Lord he wins; in free for all 
   const duel = ended('ffa', 2);
   assert.equal(duel.winner, duel.players[1].team, 'the other one of two wins');
   assert.equal(duel.players[1].tally.won, 1);
+  // Ended as abandoned, every seat gives up: the Dark Lord wins, or in free for all nobody.
+  const lordGame = newGame(createBoard({ ...BOARD_OPTIONS, seed: 7, players: 2 }), { mode: 'coop' });
+  assert.equal(endWinner(lordGame, 0, true), lordGame.players.find((p) => p.side === DARK_LORD)?.team);
+  assert.equal(endWinner(newGame(createBoard({ ...BOARD_OPTIONS, seed: 7, players: 2 }), { mode: 'ffa' }), 0, true), undefined);
   // A player whose castle has fallen may still end it; the raiders never win.
   const fallen = ended('ffa', 3, (s) => { s.players[0].lost = 0; s.players[2].lost = 0; });
   assert.equal(fallen.winner, fallen.players[1].team);

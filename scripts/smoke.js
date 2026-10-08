@@ -1167,6 +1167,7 @@ async function threeBrowsers(browser, url, { full, label }) {
   await waitText(a, '#players', '2/2');
   assert.equal(await a.locator('#players.waiting').count(), 0, 'Players still blinks with everyone here');
   assert.equal(await c.locator('#build-tower').isDisabled(), true);
+  assert.equal(await c.locator('#end-button').isVisible(), false, 'a spectator may end only a day-old game none of its players is in');
 
   // A link to a game that doesn't exist lands in the lobby, which says so.
   // (Chromium logs the refused join request itself as a console error, and

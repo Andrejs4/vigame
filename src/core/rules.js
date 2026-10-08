@@ -294,6 +294,14 @@ export const QUICK_WIN = Object.freeze([
 export const END_ANYONE_TICKS = 60 * 60 * TICKS_PER_SECOND;
 
 /**
+ * Real time after a game's creation from which, while none of its players
+ * is online, anyone viewing it may end it, so abandoned games can be closed:
+ * a day, in milliseconds. (The room and the page read the clock; the core
+ * never does.)
+ */
+export const END_IDLE_MS = 24 * 60 * 60 * 1000;
+
+/**
  * Bringing down a building bought with dark metal (a wagon) yields the
  * striker's side this share of its price.
  */
