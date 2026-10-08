@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { BOARD_OPTIONS, createBoard } from '../src/core/board.js';
 import {
   advance, applyCommand, capacityOf, checkState, crewOf, footprint, levelXp, newGame, occupancy, publicView, random,
-  breedRate, depthOf, endWinner, fullMeal, sharesStock, isRising, killChance, maxHp, pointsOf, quickWin, scoreOf, seatsOf, starveChance, ROOM_COMMANDS,
+  breedRate, depthOf, endWinner, lordScale, fullMeal, sharesStock, isRising, killChance, maxHp, pointsOf, quickWin, scoreOf, seatsOf, starveChance, ROOM_COMMANDS,
 } from '../src/core/game.js';
 import {
   BUILDING_TYPES, COMBAT_PERIOD, DARK_LORD, TICKS_PER_SECOND, HORDE_PERIOD, HORDE_START, RAIDERS, RAID_PERIOD, RAID_PER_PLAYER, SALVAGE, SIDES, FOOD_PER_UNIT, FOOD_PERIOD, KILL_XP, LEVEL_RATE, RANGED_DAMAGE, LEVEL_XP, MAX_HUNGER, MAX_LEVEL, SKILL_RATE, SKILL_XP, START_UNITS, UNIT_LIMIT, WAGON_PATIENCE,
@@ -690,6 +690,18 @@ test('the Dark Lord grows with the players: four times the hit points and twice 
   run(board, game, HORDE_START);
   const horde = Object.values(game.buildings).filter((b) => BUILDING_TYPES[b.type].hunts);
   assert.deepEqual(horde.map((b) => [b.type, b.hp]), [['ghoul', 4 * BUILDING_TYPES.ghoul.hp], ['ghoul', 4 * BUILDING_TYPES.ghoul.hp]]);
+});
+
+test('in Very Easy Lord the Dark Lord grows less: 2.25 times the hit points and 1.5 times the waves at most', () => {
+  const lordAt = (/** @type {number} */ players, /** @type {string} */ mode) => {
+    const game = newGame(createBoard({ ...BOARD_OPTIONS, seed: 3, players }), { mode });
+    return [lordScale(game), Object.values(game.buildings).find((b) => b.type === 'lair')?.hp];
+  };
+  const half = BUILDING_TYPES.lair.hp / 2;
+  assert.deepEqual([2, 4, 5, 8, 16].map((n) => lordAt(n, 'veryEasy')),
+    [[1, half], [2, 2 * half], [2.25, 2.25 * half], [2.25, 2.25 * half], [2.25, 2.25 * half]]);
+  assert.equal(Math.sqrt(lordAt(8, 'veryEasy')[0] ?? 0), 1.5, 'his waves');
+  assert.deepEqual(lordAt(8, 'shared'), [4, 4 * half], 'Shared Easy Lord grows as before');
 });
 
 test('in Easy Lord the Dark Lord\'s lair and horde have half the hit points, and his waves are as big', () => {

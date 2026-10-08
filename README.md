@@ -109,7 +109,10 @@ Run `npm start` and open http://127.0.0.1:2567.
     their castles. The HUD calls it Team stone, Team metal and Team food.
     Each player's points still count what their own units did.
   - **Very Easy Lord**: Shared Easy Lord where castles raise units twice as
-    fast, with units at home or none (the units learn breeding no faster).
+    fast, with units at home or none (the units learn breeding no faster),
+    and the Dark Lord grows less with the players: his hit points at most
+    2.25 times and his waves 1.5 times, reached at five players (instead of
+    four times and twice at eight).
   - **Free for all** (two players or more): each against the others; the
     middle of the map is left empty.
 - **The game clock** runs only while every player is here. (`npm run dev`

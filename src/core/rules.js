@@ -92,6 +92,14 @@ export const BREED_RATE = { veryEasy: 2 };
 export const LORD_PLAYERS_MAX = 8;
 
 /**
+ * In these modes the Dark Lord grows no more than this with the players
+ * (`lordScale` in game.js): in Very Easy Lord his hit points at most 2.25
+ * times, so his waves 1.5 times (its square root), from five players on.
+ * @type {Record<string, number>}
+ */
+export const LORD_SCALE_MAX = { veryEasy: 2.25 };
+
+/**
  * The modes whose teams share one stock: stone, dark metal and food, and so
  * hunger, kept on the team's first side. A team starts with what each of its
  * sides would have had, together.
