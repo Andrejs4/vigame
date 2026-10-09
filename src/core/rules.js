@@ -60,12 +60,15 @@ export const DEFAULT_PLAYERS = 1;
 /**
  * Game modes. In cooperation the players are one team against the Dark
  * Lord; Easy Lord is the same against a weaker one; Shared Easy Lord is
- * Easy Lord with one stock for the whole team (SHARED_STOCK); in free for
- * all, each against the others (two players at least). How fast units are
+ * Easy Lord with one stock for the whole team (SHARED_STOCK); in two teams,
+ * the first half of the seats (round the ring from the left, clockwise)
+ * against the rest, which get the odd one (`teamOfSeat` in game.js); in
+ * free for all, each against the others. The last two need two players
+ * at least. How fast units are
  * raised is chosen apart, for any mode (BREEDING).
  */
 export const MODES = {
-  coop: 'Cooperation', easy: 'Easy Lord', shared: 'Shared Easy Lord', ffa: 'Free for all',
+  coop: 'Cooperation', easy: 'Easy Lord', shared: 'Shared Easy Lord', teams: 'Two teams', ffa: 'Free for all',
 };
 export const DEFAULT_MODE = 'coop';
 

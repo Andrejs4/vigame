@@ -777,6 +777,27 @@ test('releasing a seat lets a spectator take it', async () => {
   await leaveAll(a, b, c);
 });
 
+test('in two teams, players fill the first team\'s seats, then the second\'s; a freed seat comes round again only after the rest', async () => {
+  const res = await post('/api/games', { token: TOKENS.a, mode: 'teams', players: 3 });
+  assert.equal(res.status, 201);
+  const id = (await res.json()).id;
+  assert.deepEqual((await (await fetch(`${base}/api/games/${id}`)).json()).state.players.map((/** @type {any} */ p) => p.team), [0, 1, 1, -1],
+    'one against two, then the raiders');
+  assert.equal((await post('/api/games', { token: TOKENS.a, mode: 'teams', players: 1 })).status, 400, 'two teams need two players');
+  const seatOf = (/** @type {any} */ room, /** @type {any} */ who) => room.state.toJSON().viewers[who.sessionId]?.seat;
+  const a = await join(id, TOKENS.a);
+  const b = await join(id, TOKENS.b);
+  await until(() => seatOf(a, b) === 1);
+  assert.equal(seatOf(a, a), 0);
+  await b.request('releaseSeat');
+  await until(() => seatOf(a, b) === -1);
+  // Seat 1 is free again, but the next player goes on round the ring.
+  const c = await join(id, TOKENS.c);
+  await until(() => seatOf(a, c) === 2);
+  assert.equal(await b.request('claimSeat'), 1, 'and then it is the free one');
+  await leaveAll(a, b, c);
+});
+
 test('selections are shared, but only for hexes on the board', async () => {
   const id = await startGame();
   const a = await join(id, TOKENS.a);

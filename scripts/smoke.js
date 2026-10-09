@@ -396,6 +396,15 @@ async function finished(browser, url) {
   games.storage.createGame({ id: 'finished-game', seed, state, seats });
   // Its scores kept, as the room keeps them when a game ends.
   games.storage.recordScores({ ...state, id: 'finished-game', seats });
+  // And a game of two teams, with fast units, that the second team won.
+  const teamBoard = createBoard({ ...BOARD_OPTIONS, seed, players: 4 });
+  const teamState = newGame(teamBoard, { mode: 'teams', breeding: 'fast' });
+  Object.assign(teamState, { tick: 12000, over: 12000, winner: 1 });
+  teamState.players[0].lost = 11000;
+  teamState.players[1].lost = 12000;
+  assert.deepEqual(checkState(teamBoard, teamState), []);
+  for (const [pid, name] of [['smoke-gus', 'Gus'], ['smoke-hal', 'Hal'], ['smoke-ivy', 'Ivy']]) games.storage.savePlayer(pid, name);
+  games.storage.createGame({ id: 'teams-game', seed, state: teamState, seats: [seats[0], 'smoke-gus', 'smoke-hal', 'smoke-ivy'] });
 
   // High scores start folded away, below Recently finished; open, Fay's
   // 13516 leads them, rounded, and Scores opens its game.
@@ -411,7 +420,13 @@ async function finished(browser, url) {
   // Recently finished starts folded away.
   assert.equal(await page.locator('#lobby-done-section[open]').count(), 0);
   await page.click('#lobby-done-section summary');
-  const row = page.locator('#lobby-done li', { hasText: 'Fay' });
+  // Teammates with "&", the teams with "vs", and the winners by colour.
+  const teamRow = page.locator('#lobby-done li', { hasText: 'Gus' });
+  await teamRow.waitFor({ timeout: 10000 });
+  assert.match(await teamRow.locator('.who').innerText(), /Fay & Gus vs Hal & Ivy/);
+  assert.equal(await teamRow.locator('.when').innerText(), 'Two teams · Fast units · 20:00 · Green & Gold won');
+  await page.locator('#lobby-done-section').screenshot({ path: join(OUT, 'lobby-teams.png') });
+  const row = page.locator('#lobby-done li', { hasText: 'Fay' }).filter({ hasNotText: 'Gus' });
   await row.waitFor({ timeout: 10000 });
   await row.locator('a').click();
   await inGame(page);
@@ -512,6 +527,7 @@ async function settings(a, { full }) {
   await waitText(a, '#lobby-mine-section h2 [data-word]', 'Ваши игры');
   await waitText(a, '#lobby-mode option[value="ffa"]', 'Все против всех: каждый сам за себя');
   await waitText(a, '#lobby-breeding option[value="slow"]', 'Медленный (0,5×)');
+  await waitText(a, '#lobby-mode option[value="teams"]', 'Две команды: половина мест против другой половины');
   await waitText(a, 'label[for="lobby-breeding"]', 'Прирост юнитов');
   await a.click('#lobby-how-section summary');
   await a.click('#lobby-about-section summary');

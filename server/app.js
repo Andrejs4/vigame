@@ -238,7 +238,7 @@ export async function startGameServer({
         if (!Number.isInteger(players) || players < MIN_PLAYERS || players > MAX_PLAYERS) {
           return void res.status(400).json({ error: `players must be ${MIN_PLAYERS} to ${MAX_PLAYERS}` });
         }
-        if (mode === 'ffa' && players < 2) return void res.status(400).json({ error: 'free for all needs two players' });
+        if ((mode === 'ffa' || mode === 'teams') && players < 2) return void res.status(400).json({ error: `${MODES[mode].toLowerCase()} needs two players` });
         const creator = playerId(req.body.token);
         const crowded = tooManyGames(storage.gamesUnderWayOf(creator), creator, gamesPerPlayer, Date.now());
         if (crowded) {

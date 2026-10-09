@@ -65,8 +65,11 @@ Run `npm start` and open http://127.0.0.1:2567.
   each other. A game's address (`?game=…`) is also the link to send
   someone. Players who join take the seats in order (Blue, Crimson, Green,
   Gold, Teal, Orange, Rose, Silver, then Azure, Lime, Indigo, Cherry,
-  Olive, Coral, White, Mint); once they are full, visitors watch.
-  **Release** frees a seat for a spectator to take.
+  Olive, Coral, White, Mint), round the ring of castles clockwise from
+  the left; once they are full, visitors watch. **Release** frees a seat
+  for a spectator to take. A newcomer gets the next free seat after the
+  last one anyone has held, so a freed seat comes round again only after
+  the rest. Clicking a free castle still takes that one.
 - **Too many games**: New game is refused while three games you started
   wait for a player, or while you hold a seat in three games under way;
   finished games, and games nobody has touched for three days, don't
@@ -110,6 +113,12 @@ Run `npm start` and open http://127.0.0.1:2567.
     every player's stone together (400 for two), and keeps food for all
     their castles. The HUD calls it Team stone, Team metal and Team food.
     Each player's points still count what their own units did.
+  - **Two teams** (two players or more): the first half of the seats
+    against the rest, which get the odd seat (two against three for five);
+    each team holds one half of the ring, and the first fills before the
+    second. No Dark Lord, and each player keeps their own stock. The lobby
+    shows teammates with "&" and the teams with "vs" (Fay & Gus vs Hal &
+    Ivy), and the winners by colour (Green & Gold won).
   - **Free for all** (two players or more): each against the others; the
     middle of the map is left empty.
 - **Unit production**, chosen with the game beside its mode, in any mode:
@@ -616,7 +625,7 @@ HTTP API:
 | `GET /api/challenge` | A sum to answer when signing in: `{ id, question }`. Each one answers once and lasts 10 minutes. |
 | `POST /api/players` | Signs in: `{ token, name, language, challenge, answer }` gives `{ pid, name, language }`. `400` for a bad token, name or language, `403` for a wrong answer. The login page always sends a language (`auto` at least), so a sign-in without one fails as a wrong answer does, using its sum up: a small check that it came from the page. |
 | `POST /api/settings` | Changes a signed-in player's settings: `{ token, name?, language? }` gives `{ pid, name, language }`; what isn't given stays. `401` if not signed in, `400` for a bad name or language. |
-| `POST /api/games` | Starts a game with a random map: `{ token, mode?, breeding?, players? }` of a signed-in player (`mode` `coop`, `easy`, `shared` or `ffa`, `breeding` `normal`, `fast` or `slow`, `players` 1 to 16; by default a cooperation game for one, units at the normal pace) gives `201 { id }`; `401` if not signed in, `400` for a bad mode, pace or number; `409 { error, waiting, seated, games }` while the player has too many games on the go (three of theirs waiting for a player, or seats in three under way): why in English, how many of each (0 for one that isn't why, so the page can say it in its own words), and those games as `GET /api/games` lists them, each with `clear`: `'delete'`, `'leave'` or `null`. |
+| `POST /api/games` | Starts a game with a random map: `{ token, mode?, breeding?, players? }` of a signed-in player (`mode` `coop`, `easy`, `shared`, `teams` or `ffa`, `breeding` `normal`, `fast` or `slow`, `players` 1 to 16; by default a cooperation game for one, units at the normal pace) gives `201 { id }`; `401` if not signed in, `400` for a bad mode, pace or number; `409 { error, waiting, seated, games }` while the player has too many games on the go (three of theirs waiting for a player, or seats in three under way): why in English, how many of each (0 for one that isn't why, so the page can say it in its own words), and those games as `GET /api/games` lists them, each with `clear`: `'delete'`, `'leave'` or `null`. |
 | `POST /api/games/:id/delete` | `{ token }`: deletes a game under way that the player started and nobody else holds a seat in, closing its room if open; `403` if they didn't start it, `409` if someone else plays it or it is over. |
 | `POST /api/games/:id/leave` | `{ token }`: gives up the player's seat in a game under way, through its room if open; `409` if they hold none or it is over. |
 | `GET /api/games` | The 50 most recently active games, for the lobby, with their name, mode, `breeding`, who holds each seat (`{ pid, name }` or `null`) and `fallen`, the seats whose castles have fallen, which nobody can take. |

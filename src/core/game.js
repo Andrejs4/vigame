@@ -196,7 +196,7 @@ export function levelXp(level, hero = false) {
 /**
  * The opening position: a castle per player, on the board's start sites,
  * each with its first units; in cooperation, the players on one team and
- * the Dark Lord's lair in the middle.
+ * the Dark Lord's lair in the middle; in two teams, two halves of the ring.
  * @param {Board} board Made for as many players (`createBoard`'s `players`).
  * @param {{ mode?: string, breeding?: string }} [options]
  * @returns {GameState}
@@ -223,7 +223,7 @@ export function newGame(board, { mode = DEFAULT_MODE, breeding = DEFAULT_BREEDIN
     const npc = owner === players;
     const side = npc ? DARK_LORD : SEAT_SIDES[owner];
     state.players.push({
-      id: owner, side, team: coop ? Number(npc) : owner, stone: npc ? 0 : START_STONE, metal: START_METAL, food: 0, hunger: 0,
+      id: owner, side, team: coop ? Number(npc) : teamOfSeat(mode, owner, players), stone: npc ? 0 : START_STONE, metal: START_METAL, food: 0, hunger: 0,
       tally: newTally(),
     });
     const id = newId(state, 'b');
@@ -493,6 +493,18 @@ export function workFor(state, type) {
   const { work, yields } = BUILDING_TYPES[type];
   if (work === undefined || yields !== 'unit') return work;
   return work / (Object.hasOwn(BREEDING, state.breeding) ? BREEDING[state.breeding] : 1);
+}
+
+/**
+ * A seat's team in a game without the Dark Lord: in two teams, 0 for the
+ * first half of the seats and 1 for the rest, which get the odd one (two
+ * against three for five); otherwise each seat is a team of its own.
+ * @param {string} mode
+ * @param {number} seat
+ * @param {number} seats How many the game has.
+ */
+export function teamOfSeat(mode, seat, seats) {
+  return mode === 'teams' ? Number(seat >= Math.floor(seats / 2)) : seat;
 }
 
 /**

@@ -9,7 +9,7 @@
  * Auto, the one their name and browser suggest (`autoLanguage`).
  */
 
-import { hasLord } from '../core/game.js';
+import { hasLord, teamOfSeat } from '../core/game.js';
 import { MODES, SEAT_SIDES, SIDES, TICKS_PER_SECOND } from '../core/rules.js';
 import { getJson, post, reason } from './api.js';
 import { autoLanguage, browserLanguages, chosenLanguage } from './language.js';
@@ -49,8 +49,11 @@ function gameTime(tick) {
 function result(game, language) {
   if (game.winner === null) return say(language, { word: 'nobodyWon' });
   if (hasLord(game.mode)) return say(language, { word: game.winner === 0 ? 'won' : 'lordWon' });
-  const side = SIDES[SEAT_SIDES[game.winner]]?.name.toLowerCase();
-  return isWord(side) ? say(language, { word: 'sideWon', values: { side: say(language, { word: side }) } }) : '?';
+  // The winning team's sides ("Blue & Crimson won"), or the one side.
+  const sides = game.seats.map((_, i) => i).filter((i) => teamOfSeat(game.mode, i, game.seats.length) === game.winner)
+    .map((i) => SIDES[SEAT_SIDES[i]]?.name.toLowerCase());
+  if (!sides.length || !sides.every(isWord)) return '?';
+  return say(language, { word: 'sideWon', values: { side: sides.map((side) => say(language, { word: /** @type {Word} */ (side) })).join(' & ') } });
 }
 
 /**
@@ -69,9 +72,9 @@ function row(game, action, language) {
   title.textContent = game.name ?? say(language, { word: 'aGame' });
   who.append(title);
   // Teammates with "&", rivals with "vs".
-  const between = hasLord(game.mode) ? ' & ' : ' vs ';
+  const team = (/** @type {number} */ i) => (hasLord(game.mode) ? 0 : teamOfSeat(game.mode, i, game.seats.length));
   game.seats.forEach((seated, i) => {
-    if (i) who.append(between);
+    if (i) who.append(team(i) === team(i - 1) ? ' & ' : ' vs ');
     // A seat its player left for another base, or that the game ended
     // without, still names who played it; one left open stays open.
     const holder = seated ?? (game.over !== null || game.fallen?.includes(i) ? game.former?.[i] ?? null : null);

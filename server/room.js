@@ -460,20 +460,29 @@ export class GameRoom extends Room {
   }
 
   /**
-   * A free seat whose castle stands: the one wanted if it is, else the first.
+   * A free seat whose castle stands: the one wanted if it is, else the next
+   * after the last seat anyone has held (or holds), round the ring of
+   * castles, clockwise from the left. So seats fill in order (in two teams,
+   * the first team's, then the second's), and one let go of comes round
+   * again only after the others.
    * @param {number | null} [wanted]
    * @returns {number | null}
    */
   freeSeat(wanted = null) {
     const free = (/** @type {number} */ i) => this.seats[i] === null && this.standing(i);
     if (wanted !== null && Number.isInteger(wanted) && free(wanted)) return wanted;
-    const first = this.seats.findIndex((_, i) => free(i));
-    return first < 0 ? null : first;
+    const last = this.storage.namedSeats(this.gameId).findLastIndex((pid) => pid !== null);
+    const count = this.seats.length;
+    for (let k = 1; k <= count; k++) {
+      const seat = (last + k) % count;
+      if (free(seat)) return seat;
+    }
+    return null;
   }
 
   /**
-   * Give the player the first free seat whose castle stands, unless they
-   * already have a seat.
+   * Give the player the next free seat whose castle stands (`freeSeat`),
+   * unless they already have a seat.
    * @param {string} pid
    * @returns {number | null} Their seat, or null when no seat is free.
    */
@@ -554,8 +563,8 @@ export class GameRoom extends Room {
   }
 
   /**
-   * Players who join take the free seats in order, those whose castles
-   * stand; one the game went on without is back.
+   * Players who join take the free seats in turn round the ring, those
+   * whose castles stand; one the game went on without is back.
    * @param {import('@colyseus/core').Client} client
    */
   onJoin(client) {

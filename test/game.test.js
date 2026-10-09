@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { BOARD_OPTIONS, createBoard } from '../src/core/board.js';
 import {
   advance, applyCommand, capacityOf, checkState, crewOf, footprint, levelXp, newGame, occupancy, publicView, random,
-  depthOf, endWinner, fullMeal, sharesStock, isRising, killChance, maxHp, pointsOf, quickWin, scoreOf, seatsOf, starveChance, ROOM_COMMANDS, workFor,
+  depthOf, endWinner, fullMeal, sharesStock, isRising, killChance, maxHp, pointsOf, quickWin, scoreOf, seatsOf, starveChance, ROOM_COMMANDS, teamOfSeat, workFor,
 } from '../src/core/game.js';
 import {
   BUILDING_TYPES, COMBAT_PERIOD, DARK_LORD, TICKS_PER_SECOND, HORDE_PERIOD, HORDE_START, RAIDERS, RAID_PERIOD, RAID_PER_PLAYER, SALVAGE, SIDES, FOOD_PER_UNIT, FOOD_PERIOD, KILL_XP, LEVEL_RATE, RANGED_DAMAGE, LEVEL_XP, MAX_HUNGER, MAX_LEVEL, SKILL_RATE, SKILL_XP, START_UNITS, UNIT_LIMIT, WAGON_PATIENCE,
@@ -52,7 +52,7 @@ test('games seat 1 to 16 players, on maps that grow with them', () => {
   for (const players of [1, 8, 9, 16]) {
     const board = createBoard({ ...BOARD_OPTIONS, seed: 9, players });
     assert.equal(board.starts.length, players + 1, 'a site per player, and the lair\'s');
-    for (const mode of players > 1 ? ['coop', 'easy', 'shared', 'ffa'] : ['coop', 'easy', 'shared']) {
+    for (const mode of players > 1 ? ['coop', 'easy', 'shared', 'teams', 'ffa'] : ['coop', 'easy', 'shared']) {
       const state = newGame(board, { mode });
       assert.deepEqual(checkState(board, state), [], `${players} players, ${mode}`);
       assert.equal(seatsOf(state), players);
@@ -781,6 +781,22 @@ test('castles raise units at the pace chosen with the game, in any mode: normal,
   assert.deepEqual(checkState(board, slow), []);
 });
 
+test('in two teams, the first half of the ring plays the second, which gets the odd seat; no Dark Lord', () => {
+  for (const [players, teams] of /** @type {Array<[number, number[]]>} */ ([[2, [0, 1]], [4, [0, 0, 1, 1]], [5, [0, 0, 1, 1, 1]], [16, [...Array(8).fill(0), ...Array(8).fill(1)]]])) {
+    const board = createBoard({ ...BOARD_OPTIONS, seed: 5, players });
+    const game = newGame(board, { mode: 'teams' });
+    assert.deepEqual(checkState(board, game), []);
+    assert.deepEqual(game.players.map((p) => p.team), [...teams, -1], `${players} players, then the raiders`);
+    assert.deepEqual(teams, teams.map((_, seat) => teamOfSeat('teams', seat, players)));
+    assert.ok(!Object.values(game.buildings).some((b) => b.type === 'lair'), 'no lair');
+    assert.deepEqual(game.players.map((p) => p.stone).slice(0, players), Array(players).fill(game.players[0].stone), 'a stock each');
+    // Giving up hands the win to the other team.
+    assert.equal(endWinner(game, 0), 1);
+    assert.equal(endWinner(game, players - 1), 0);
+  }
+  assert.equal(teamOfSeat('ffa', 3, 4), 3, 'in free for all, each seat a team of its own');
+});
+
 test('in Shared Easy Lord the team lives off one stock, kept by its first side, against an easy Lord', () => {
   const map = createBoard({ ...BOARD_OPTIONS, seed: 3 });
   const game = newGame(map, { mode: 'shared' });
@@ -1279,6 +1295,7 @@ test('the same commands at the same ticks give the same game, saved and reloaded
   assert.deepEqual(randomGame(11, 1000, () => {}, 'coop').state, randomGame(11, 1000, undefined, 'coop').state);
   assert.deepEqual(randomGame(11, 1000, () => {}, 'easy').state, randomGame(11, 1000, undefined, 'easy').state);
   assert.deepEqual(randomGame(11, 1000, () => {}, 'shared').state, randomGame(11, 1000, undefined, 'shared').state);
+  assert.deepEqual(randomGame(11, 1000, () => {}, 'teams').state, randomGame(11, 1000, undefined, 'teams').state);
   assert.deepEqual(reloaded.state, straight.state);
   assert.notDeepEqual(randomGame(12, 1000).state, straight.state);
 });
