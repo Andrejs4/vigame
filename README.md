@@ -599,7 +599,7 @@ only when it changes. The page sends commands, never state:
 | Message | Payload | Answer |
 | --- | --- | --- |
 | `command` | a core command, such as `{ type: 'crew', building, units: ['u3', 'u9'] }` | the command's number, or the core's refusal, `not seated`, `the game is paused`, or `unknown command` for `away` and `back`, which only the room gives |
-| `claimSeat` | none, or `{ seat }` for the one wanted | the seat: a free one whose castle stands, or, for a player whose castle fell, one in place of theirs; or `no free seat` |
+| `claimSeat` | none, or `{ seat }` for the one wanted | the seat: the one wanted if free, else the next free one round the ring whose castle stands, or, for a player whose castle fell, one in place of theirs; or `no free seat` |
 | `releaseSeat` | none | |
 | `startNow` | none | `true` once the game goes on without the players missing; refused unless you started the game, someone it waits for is here and someone is missing |
 | `select` | `{ q, r }` or `null` | none; shows your picked hex to everyone |
