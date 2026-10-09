@@ -34,11 +34,12 @@ Run `npm start` and open http://127.0.0.1:2567.
   the lobby (How to play and About too), and in a game the buttons, the
   status panel, the stock and selection panel, the crew chooser, the
   heroes list and the table of points are in each of them; the login and settings pages turn at once when another is
-  chosen. On the login page, Auto goes by the first of the browser's
-  languages that the game has, else picks Russian for a name typed in
-  Cyrillic letters, else English. Once signed in (settings, lobby, game),
-  Auto picks Russian for a name in Cyrillic letters first, then goes by
-  the browser, else English. The buttons' words were chosen short enough
+  chosen. Auto goes by the name first, on the login page as it is typed
+  and once signed in (settings, lobby, game): the last letter in it that
+  only one of the languages has picks it (Cyrillic for Russian; ā č ē ģ ī
+  ķ ļ ņ š ū ž for Latvian; ä ö å for Finnish), so "Jānis Ёлкин" is Russian
+  and "Ёлкин Jānis" Latvian. Without such a letter it goes by the first of
+  the browser's languages that the game has, else English. The buttons' words were chosen short enough
   that a phone's rows of buttons stay as in English: Башня, Воз, Яма,
   Ферма, Отряд, Апгрейд, Бригада…, Герои…, Вернуть, Бросить, Атака…,
   Отпусти; Tornis, Rati, Bedre, Ferma, Bars, Uzlabot, Komanda…, Varoņi…,
@@ -599,7 +600,7 @@ HTTP API:
 | --- | --- |
 | `POST /api/me` | Who a token belongs to: `{ token }` gives `{ pid, name, language }`, or `null` if it hasn't signed in. |
 | `GET /api/challenge` | A sum to answer when signing in: `{ id, question }`. Each one answers once and lasts 10 minutes. |
-| `POST /api/players` | Signs in: `{ token, name, language?, challenge, answer }` gives `{ pid, name, language }` (`language` `auto` by default). `400` for a bad token, name or language, `403` for a wrong answer. |
+| `POST /api/players` | Signs in: `{ token, name, language, challenge, answer }` gives `{ pid, name, language }`. `400` for a bad token, name or language, `403` for a wrong answer. The login page always sends a language (`auto` at least), so a sign-in without one fails as a wrong answer does, using its sum up: a small check that it came from the page. |
 | `POST /api/settings` | Changes a signed-in player's settings: `{ token, name?, language? }` gives `{ pid, name, language }`; what isn't given stays. `401` if not signed in, `400` for a bad name or language. |
 | `POST /api/games` | Starts a game with a random map: `{ token, mode?, players? }` of a signed-in player (`mode` `coop`, `easy`, `shared`, `veryEasy` or `ffa`, `players` 1 to 16; by default a cooperation game for one) gives `201 { id }`; `401` if not signed in, `400` for a bad mode or number; `409 { error, waiting, seated, games }` while the player has too many games on the go (three of theirs waiting for a player, or seats in three under way): why in English, how many of each (0 for one that isn't why, so the page can say it in its own words), and those games as `GET /api/games` lists them, each with `clear`: `'delete'`, `'leave'` or `null`. |
 | `POST /api/games/:id/delete` | `{ token }`: deletes a game under way that the player started and nobody else holds a seat in, closing its room if open; `403` if they didn't start it, `409` if someone else plays it or it is over. |

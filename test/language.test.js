@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
-import { LANGUAGE_NAMES, RUSSIAN_KEYS, autoLanguage, chosenLanguage, keyCandidates, loginLanguage } from '../src/client/language.js';
+import { LANGUAGE_NAMES, RUSSIAN_KEYS, autoLanguage, chosenLanguage, keyCandidates } from '../src/client/language.js';
 import { WORDS, fill, say, shortPoints } from '../src/client/words.js';
 import { TERRAIN } from '../src/core/board.js';
 import { LANGUAGES } from '../src/core/player.js';
@@ -13,36 +13,33 @@ test('the page offers each language a player may choose, by its own name', () =>
   assert.deepEqual(LANGUAGE_NAMES, { en: 'English', ru: 'Русский', lv: 'Latviešu', fi: 'Suomi' });
 });
 
-test('Auto, once signed in: Russian for a name in Cyrillic letters, whatever the browser says', () => {
+test('Auto: the language of the last letter in the name only it has, whatever the browser says', () => {
   assert.equal(autoLanguage(['en-US', 'en'], 'Анна'), 'ru');
-  assert.equal(autoLanguage([], 'Jānis Ёлкин'), 'ru', 'one Cyrillic letter is enough');
-  assert.equal(autoLanguage(['de'], 'Иван 2'), 'ru');
+  assert.equal(autoLanguage(['en-US', 'en'], 'Jānis'), 'lv');
+  assert.equal(autoLanguage(['ru-RU'], 'Ģirts'), 'lv', 'a capital too');
+  assert.equal(autoLanguage(['en'], 'Äijä'), 'fi');
+  assert.equal(autoLanguage(['lv'], 'Åke'), 'fi');
+  // Letters of several: the last that only one language has decides.
+  assert.equal(autoLanguage([], 'Jānis Ёлкин'), 'ru');
+  assert.equal(autoLanguage([], 'Ёлкин Jānis'), 'lv');
+  assert.equal(autoLanguage([], 'Pēteris Mäki'), 'fi');
+  assert.equal(autoLanguage(['de'], 'Иван 2'), 'ru', 'digits and spaces tell nothing');
 });
 
-test('Auto, once signed in: else the first of the browser\'s languages the page has', () => {
+test('Auto: else the first of the browser\'s languages the page has', () => {
   assert.equal(autoLanguage(['ru-RU', 'ru', 'en-US', 'en']), 'ru');
   assert.equal(autoLanguage(['de', 'ru', 'en'], ''), 'ru');
-  assert.equal(autoLanguage(['de', 'en-GB', 'ru'], 'Jānis'), 'en');
-  assert.equal(autoLanguage(['lv', 'ru', 'en'], 'Jānis'), 'lv');
+  assert.equal(autoLanguage(['de', 'en-GB', 'ru'], 'Janis'), 'en');
+  assert.equal(autoLanguage(['lv', 'ru', 'en'], 'Janis'), 'lv');
   assert.equal(autoLanguage(['fi-FI', 'sv'], 'Aino'), 'fi');
   assert.equal(autoLanguage(['RU'], 'Ann'), 'ru', 'tags in any case');
 });
 
-test('Auto, once signed in: else English', () => {
+test('Auto: else English', () => {
   assert.equal(autoLanguage([]), 'en');
   assert.equal(autoLanguage(['de-DE', 'fr'], 'Ann'), 'en');
   assert.equal(autoLanguage([''], '李小龍'), 'en');
   assert.equal(autoLanguage(['uk'], 'Ann'), 'en');
-});
-
-test('Auto on the login page: the browser first, then the name typed, then English', () => {
-  assert.equal(loginLanguage(['en-US', 'en'], 'Анна'), 'en');
-  assert.equal(loginLanguage(['ru-RU'], 'Ann'), 'ru');
-  assert.equal(loginLanguage(['de', 'ru', 'en'], ''), 'ru');
-  assert.equal(loginLanguage(['lv', 'ru', 'en'], 'Анна'), 'lv');
-  assert.equal(loginLanguage(['de'], 'Анна'), 'ru');
-  assert.equal(loginLanguage(['de'], 'Ann'), 'en');
-  assert.equal(loginLanguage([]), 'en');
 });
 
 test('the page is in the language chosen, or for Auto, what Auto stands for there', () => {

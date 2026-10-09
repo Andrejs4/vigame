@@ -22,18 +22,35 @@ function fromBrowser(browser) {
 }
 
 /**
- * Russian for a name with Cyrillic letters.
+ * Letters only one of the page's languages has, and that language: Cyrillic
+ * for Russian, the Latvian long vowels and soft consonants, the Finnish
+ * ä, ö and å.
+ */
+const NAME_LETTERS = /** @type {Array<[RegExp, PageLanguage]>} */ ([
+  [/\p{Script=Cyrillic}/u, 'ru'],
+  [/[āčēģīķļņšūž]/iu, 'lv'],
+  [/[äöå]/iu, 'fi'],
+]);
+
+/**
+ * The language a name's letters suggest: that of the last letter in it
+ * only one language has (in "Jānis Ёлкин" Russian, in "Ёлкин Jānis"
+ * Latvian), or none.
  * @param {string} name
  * @returns {PageLanguage | null}
  */
 function fromName(name) {
-  return /\p{Script=Cyrillic}/u.test(name) ? 'ru' : null;
+  for (const letter of [...name].reverse()) {
+    const found = NAME_LETTERS.find(([letters]) => letters.test(letter));
+    if (found) return found[1];
+  }
+  return null;
 }
 
 /**
- * The language Auto stands for once the player has signed in: Russian for a
- * name in Cyrillic letters; else the first of the browser's languages that
- * the page has; else English.
+ * The language Auto stands for, on the login page as the name is typed and
+ * once signed in: the one the name's letters suggest (`fromName`); else the
+ * first of the browser's languages that the page has; else English.
  * @param {readonly string[]} browser The browser's languages, most wanted
  *   first, as tags such as 'ru-RU' (`navigator.languages`).
  * @param {string} [name] The player's name.
@@ -41,17 +58,6 @@ function fromName(name) {
  */
 export function autoLanguage(browser, name = '') {
   return fromName(name) ?? fromBrowser(browser) ?? 'en';
-}
-
-/**
- * The language Auto stands for on the login page: the browser comes first,
- * then the name being typed, then English.
- * @param {readonly string[]} browser As for `autoLanguage`.
- * @param {string} [name]
- * @returns {PageLanguage}
- */
-export function loginLanguage(browser, name = '') {
-  return fromBrowser(browser) ?? fromName(name) ?? 'en';
 }
 
 /** This browser's languages, most wanted first. */

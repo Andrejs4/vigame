@@ -562,14 +562,19 @@ async function threeBrowsers(browser, url, { full, label }) {
   await a.waitForFunction(() => [...document.querySelectorAll('#login .banner')].every((b) => /** @type {HTMLImageElement} */ (b).complete));
   if (full) await a.screenshot({ path: join(OUT, 'login.png') });
   // The name field says what it is for. The language is Auto at first,
-  // which says what it stands for: on the login page the browser comes
-  // first, so English here, even for a name in Cyrillic letters.
+  // which says what it stands for: the browser's English here, until the
+  // name typed has a letter only one language has, the last such letter
+  // deciding: Russian, Latvian, Finnish, and English again without one.
   assert.equal(await a.getAttribute('#login-name', 'placeholder'), 'Visible name (15)');
   assert.equal(await a.inputValue('#login-language'), 'auto');
   await waitText(a, '#login-language option[value="auto"]', 'Auto (English)');
-  await a.fill('#login-name', 'Анна');
-  await waitText(a, '#login-language option[value="auto"]', 'Auto (English)');
-  await waitText(a, '#login-submit', 'Play');
+  for (const [name, auto, play] of [['Анна', 'Авто (Русский)', 'Играть'], ['Анна Jānis', 'Auto (Latviešu)', 'Spēlēt'],
+    ['Äijä', 'Auto (Suomi)', 'Pelaa'], ['Ann', 'Auto (English)', 'Play']]) {
+    await a.fill('#login-name', name);
+    await waitText(a, '#login-language option[value="auto"]', auto);
+    await waitText(a, '#login-submit', play);
+  }
+  await a.fill('#login-name', '');
   // Choosing Russian turns the page Russian at once, and Auto turns it back.
   await a.selectOption('#login-language', 'ru');
   await waitText(a, '#login-submit', 'Играть');
@@ -625,7 +630,7 @@ async function threeBrowsers(browser, url, { full, label }) {
   // Alone of two, and the Players line blinks while the game waits.
   await waitText(a, '#players', '1/2');
   assert.equal(await a.locator('#players.waiting').count(), 1, 'Players does not blink while waiting');
-  // She started it, so she could start it without Bēla; she waits.
+  // She started it, so she could start it without Bella; she waits.
   await waitText(a, '#start-button', 'Start');
   // Recenter looks at her own castle, close enough to read unit counts.
   const home = await a.evaluate(() => {
@@ -657,27 +662,27 @@ async function threeBrowsers(browser, url, { full, label }) {
   await waitText(a, '#game-name', rename);
   assert.equal(await a.title(), `${rename} · Vigame`);
 
-  // Before Bēla comes, Ann selects the other castle: its seat is free.
+  // Before Bella comes, Ann selects the other castle: its seat is free.
   const crimsonHome = await castleOf(a, 1);
   await selectBuilding(a, crimsonHome);
   await waitSelection(a, /^Castle \(grade 1\) · free seat \|/);
 
-  // Bēla logs in and finds the game in the lobby by its name, waiting for her.
-  const b = await newPlayer(browser, url, `${label}-b`, 'Bēla');
+  // Bella logs in and finds the game in the lobby by its name, waiting for her.
+  const b = await newPlayer(browser, url, `${label}-b`, 'Bella');
   await inLobby(b);
   await b.locator('#lobby-open li', { hasText: rename }).first().waitFor({ timeout: 10000 });
   if (full) await b.screenshot({ path: join(OUT, 'lobby-games.png') });
   await openFromLobby(b, 'open', 'Ann & —');
-  await waitText(b, '#seat', 'Bēla · Crimson');
-  // Now the castle Ann has selected says it is Bēla's.
-  await waitSelection(a, /^Castle \(grade 1\) · Bēla \|/);
+  await waitText(b, '#seat', 'Bella · Crimson');
+  // Now the castle Ann has selected says it is Bella's.
+  await waitSelection(a, /^Castle \(grade 1\) · Bella \|/);
   if (full) await a.locator('#selection').screenshot({ path: join(OUT, 'castle-owner.png') });
   await a.keyboard.press('Escape');
   await waitMatch(a, '#time', /^0:0[1-9]$/);
   assert.equal(await a.locator('#start-button').isVisible(), false, 'nobody missing, nothing to start');
   assert.equal(await b.locator('#start-button').isVisible(), false, 'Start is the creator\'s');
 
-  // Ann builds a tower with a crew of six, who go to raise it; Bēla sees
+  // Ann builds a tower with a crew of six, who go to raise it; Bella sees
   // them march, and Ann's pick. The rest stay home, for the pit below.
   const blue = await castleOf(a, 0);
   const tower = await buildWith(a, 'tower', blue, { crew: 6 });
@@ -784,7 +789,7 @@ async function threeBrowsers(browser, url, { full, label }) {
   assert.ok(paints >= 1 && paints <= seconds * 2 + 1, `the minimap repainted ${paints} times in ${seconds.toFixed(1)} s`);
   await a.click('#recenter');
 
-  // Once her tower stands, Ann looks at its crew and upgrades it; Bēla sees it.
+  // Once her tower stands, Ann looks at its crew and upgrades it; Bella sees it.
   await a.keyboard.press('Escape');
   await selectBuilding(a, tower);
   // What is selected shows its type's picture, and its lines: what it is,
@@ -1063,7 +1068,7 @@ async function threeBrowsers(browser, url, { full, label }) {
   await a.evaluate(() => /** @type {any} */ (window).__vigame.fallen.pop());
   await a.keyboard.press('Escape');
 
-  // Bēla forms a band next to her castle (who goes is chosen as it forms),
+  // Bella forms a band next to her castle (who goes is chosen as it forms),
   // then leads it; its members go along inside.
   const before = (await buildings(b)).length;
   await b.click('#build-band');
@@ -1122,7 +1127,7 @@ async function threeBrowsers(browser, url, { full, label }) {
   assert.equal(await a.getAttribute('#build-band', 'title'),
     'Band (B). Up to 80 units moving together, with no cover: every strike reaches them. Cost: free.');
 
-  // Bēla steps away, so the game pauses with her band still on its way:
+  // Bella steps away, so the game pauses with her band still on its way:
   // Ann's board then stands still, and is not redrawn frame after frame.
   const gameUrl = b.url();
   await b.goto('about:blank');
@@ -1133,7 +1138,7 @@ async function threeBrowsers(browser, url, { full, label }) {
   const redrawn = await a.evaluate(() => /** @type {any} */ (window).__vigame.draws) - stillFrom;
   assert.ok(redrawn <= 1, `a paused board was redrawn ${redrawn} times in half a second`);
 
-  // Ann started the game, so she has Go on: the game goes on without Bēla,
+  // Ann started the game, so she has Go on: the game goes on without Bella,
   // who is away, and her clock runs again.
   await waitText(a, '#start-button', 'Go on');
   await a.screenshot({ path: join(OUT, 'go-on.png') });
@@ -1145,17 +1150,17 @@ async function threeBrowsers(browser, url, { full, label }) {
   assert.equal(await a.locator('#start-button').isVisible(), false, 'nobody left to go on without');
   assert.equal(await a.locator('#build-tower').isDisabled(), false, 'Ann plays on');
 
-  // Bēla comes back: same seat, same game, no login, and no longer away.
+  // Bella comes back: same seat, same game, no login, and no longer away.
   // Then she goes to the lobby, finds the game among hers, and opens it again.
   await b.goto(gameUrl);
   await inGame(b);
   assert.equal(await b.locator('#login').isHidden(), true);
-  await waitText(b, '#seat', 'Bēla · Crimson');
+  await waitText(b, '#seat', 'Bella · Crimson');
   await waitText(a, '#players', '2/2');
   await b.click('#to-lobby');
   await inLobby(b);
-  await openFromLobby(b, 'mine', 'Ann & Bēla');
-  await waitText(b, '#seat', 'Bēla · Crimson');
+  await openFromLobby(b, 'mine', 'Ann & Bella');
+  await waitText(b, '#seat', 'Bella · Crimson');
 
   // Cai follows the invitation link, logs in, and watches.
   const c = await openPage(browser, `${label}-c`);
@@ -1199,11 +1204,11 @@ async function threeBrowsers(browser, url, { full, label }) {
   await waitMatch(lost, '#lobby-notice', /^Deleted “.+”\.$/);
   assert.equal(await lost.locator('#lobby-limit').isHidden(), true);
   assert.equal(new URL(lost.url()).search, '', 'still in the lobby');
-  // Lou finds Ann and Bēla's game among those under way, folded away until
+  // Lou finds Ann and Bella's game among those under way, folded away until
   // opened, and watches it from there.
   assert.equal(await lost.locator('#lobby-playing-section[open]').count(), 0);
   await lost.click('#lobby-playing-section summary');
-  await openFromLobby(lost, 'playing', 'Ann & Bēla');
+  await openFromLobby(lost, 'playing', 'Ann & Bella');
   await waitText(lost, '#seat', 'Lou · Spectator');
 
   for (const p of [a, b, c, lost]) await p.context().close();

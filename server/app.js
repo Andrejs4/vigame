@@ -5,7 +5,7 @@
  *   GET  /client/…, /core/…     the page's modules, as they are in src/
  *   GET  /vendor/colyseus.js    the Colyseus browser client the page uses
  *   GET  /api/challenge         a sum to answer when signing in -> { id, question }
- *   POST /api/players           sign in: { token, name, language?, challenge, answer } -> { pid, name, language }
+ *   POST /api/players           sign in: { token, name, language, challenge, answer } -> { pid, name, language }
  *   POST /api/me                who a token belongs to: { token } -> { pid, name, language }, or null
  *   POST /api/settings          change name or language: { token, name?, language? } -> { pid, name, language }
  *   POST /api/games             start a game: { token } -> 201 { id }, or 409 { error, waiting, seated, games } with too many on the go
@@ -187,12 +187,19 @@ export async function startGameServer({
       };
       // Signing in answers a sum.
       app.post('/api/players', (req, res) => {
-        const { token, name, language = 'auto', challenge, answer } = req.body ?? {};
+        const { token, name, language, challenge, answer } = req.body ?? {};
         if (!isToken(token)) return void res.status(400).json({ error: 'bad token' });
         const clean = cleanPlayerName(name);
         const lang = cleanLanguage(language);
         // Checked before the sum, so a bad name doesn't use up the challenge.
         if (!clean) return void res.status(400).json({ error: 'bad name' });
+        // The login page always sends the language its script filled in (Auto
+        // at least): a sign-in without one didn't come from the page, and
+        // fails as a wrong answer does, using its sum up.
+        if (language === undefined) {
+          challenges.check(challenge, undefined);
+          return void res.status(403).json({ error: 'wrong answer' });
+        }
         if (!lang) return void res.status(400).json({ error: 'bad language' });
         if (!challenges.check(challenge, answer)) return void res.status(403).json({ error: 'wrong answer' });
         const pid = playerId(token);
