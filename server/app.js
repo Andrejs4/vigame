@@ -247,8 +247,9 @@ export async function startGameServer({
         res.status(201).json({ id: startGame(storage, { mode, players, creator }) });
       });
       /**
-       * Games as the lobby lists them, with each seat's holder by name.
-       * @template {{ seats: Array<string | null> }} G
+       * Games as the lobby lists them, with each seat's holder by name, and
+       * its former holder's (who last left it), if any.
+       * @template {{ seats: Array<string | null>, former?: Array<string | null> }} G
        * @param {G[]} games
        */
       const seatNames = (games) => {
@@ -258,7 +259,8 @@ export async function startGameServer({
           if (!names.has(pid)) names.set(pid, storage.loadPlayer(pid)?.name ?? '');
           return names.get(pid);
         };
-        return games.map((g) => ({ ...g, seats: g.seats.map((pid) => (pid ? { pid, name: nameOf(pid) } : null)) }));
+        const named = (/** @type {string | null | undefined} */ pid) => (pid ? { pid, name: nameOf(pid) } : null);
+        return games.map((g) => ({ ...g, seats: g.seats.map(named), former: (g.former ?? []).map(named) }));
       };
       app.get('/api/games', (_req, res) => {
         res.set('cache-control', 'no-store').json(seatNames(storage.listGames()));
@@ -309,11 +311,13 @@ export async function startGameServer({
         res.json({ ok: true });
       });
       // Who holds each seat, by name: for the table at a game's end, which
-      // names players who have left as well as those still here.
+      // names players who have left as well as those still here, and those
+      // who moved to another base on the side they left.
       app.get('/api/games/:id/seats', (req, res) => {
         const saved = GAME_ID.test(req.params.id) ? storage.loadGame(req.params.id) : null;
         if (!saved) return void res.status(404).json({ error: 'no such game' });
-        res.set('cache-control', 'no-store').json(saved.seats.map((pid) => (pid ? { pid, name: storage.loadPlayer(pid)?.name ?? '' } : null)));
+        // The holder, else whoever last held the seat (a player who moved to another base).
+        res.set('cache-control', 'no-store').json(storage.namedSeats(saved.id).map((pid) => (pid ? { pid, name: storage.loadPlayer(pid)?.name ?? '' } : null)));
       });
       app.get('/api/games/:id/commands', (req, res) => {
         const saved = GAME_ID.test(req.params.id) ? storage.loadGame(req.params.id) : null;

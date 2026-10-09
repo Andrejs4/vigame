@@ -588,6 +588,18 @@ test('a player whose castle fell may take a free base; the game waits for no fal
   const c = await join(id, TOKENS.c);
   assert.equal(c.state.toJSON().viewers[c.sessionId]?.seat, 2);
   assert.equal(await refusal(b.request('claimSeat')), null, 'asking again, with a standing seat, is harmless');
+
+  // Crimson is still named on the side they played first, in the lobby and
+  // at the end; and when the game ends, both of their sides' scores are theirs.
+  const seats = await (await fetch(`${base}/api/games/${id}/seats`)).json();
+  assert.deepEqual(seats.map((/** @type {any} */ x) => x?.name ?? null), [NAMES.a, NAMES.b, NAMES.c, NAMES.b]);
+  const listed = (await (await fetch(`${base}/api/games`)).json()).find((/** @type {any} */ g) => g.id === id);
+  assert.deepEqual(listed.former.map((/** @type {any} */ x) => x?.name ?? null), [null, NAMES.b, null, null]);
+  room.game.players[1].tally.kills = 9;
+  room.game.players[3].tally.kills = 4;
+  assert.equal(await a.request('endGame'), true);
+  await until(() => server.storage.scoresOf(id).length > 0);
+  assert.deepEqual(server.storage.scoresOf(id).map((x) => [x.seat, x.name]), [[0, NAMES.a], [1, NAMES.b], [2, NAMES.c], [3, NAMES.b]]);
   await leaveAll(a, b, c);
 });
 

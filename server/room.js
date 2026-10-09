@@ -357,7 +357,8 @@ export class GameRoom extends Room {
     this.snapshot();
     if (this.deleted) return;
     try {
-      this.storage.recordScores({ ...this.game, id: this.gameId, seats: this.seats });
+      // A side's score goes to its holder, else to whoever last held it.
+      this.storage.recordScores({ ...this.game, id: this.gameId, seats: this.storage.namedSeats(this.gameId) });
     } catch (e) {
       logger.error(`game ${this.gameId}: keeping its scores failed`, e);
     }

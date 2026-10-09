@@ -24,7 +24,7 @@ import Database from 'better-sqlite3';
 import { HIGH_SCORES, scoreRows } from './scores.js';
 
 /** Bump when the tables change, and add the upgrade step to `migrate`. */
-const SCHEMA_VERSION = 24;
+const SCHEMA_VERSION = 25;
 
 /**
  * @typedef {{ id: string, seed: number, state: unknown, seq: number, seats: Array<string | null>,
@@ -54,7 +54,8 @@ export function openStorage(file = ':memory:') {
     VALUES (@id, @seed, @state, 0, @seats, @creator, @now, @now)`);
   const selectGame = db.prepare('SELECT * FROM games WHERE id = ?');
   const updateSnapshot = db.prepare('UPDATE games SET state = ?, seq = ?, updated_at = ? WHERE id = ?');
-  const updateSeats = db.prepare('UPDATE games SET seats = ?, updated_at = ? WHERE id = ?');
+  const updateSeats = db.prepare('UPDATE games SET seats = ?, former = ?, updated_at = ? WHERE id = ?');
+  const selectSeats = db.prepare('SELECT seats, former FROM games WHERE id = ?');
   const touchGame = db.prepare('UPDATE games SET updated_at = ? WHERE id = ?');
   const deleteCommands = db.prepare('DELETE FROM commands WHERE game_id = ?');
   const deleteGameRow = db.prepare('DELETE FROM games WHERE id = ?');
@@ -64,7 +65,7 @@ export function openStorage(file = ':memory:') {
     RETURNING seq`);
   const selectCommands = db.prepare(`
     SELECT seq, tick, player, command, at FROM commands WHERE game_id = ? AND seq > ? ORDER BY seq`);
-  const SUMMARY = `id, seats, creator, created_at, updated_at, json_extract(state, '$.tick') AS tick,
+  const SUMMARY = `id, seats, former, creator, created_at, updated_at, json_extract(state, '$.tick') AS tick,
     json_extract(state, '$.mode') AS mode, json_extract(state, '$.name') AS name,
     json_extract(state, '$.over') AS over, json_extract(state, '$.winner') AS winner,
     (SELECT json_group_array(key) FROM json_each(state, '$.players') WHERE json_extract(value, '$.lost') IS NOT NULL) AS fallen`;
@@ -151,7 +152,26 @@ export function openStorage(file = ':memory:') {
      * @param {Array<string | null>} seats Player id per seat, null when free.
      */
     saveSeats(id, seats) {
-      if (updateSeats.run(JSON.stringify(seats), Date.now(), id).changes !== 1) throw new Error(`no game "${id}"`);
+      // A seat its player leaves (a move to another base, a release) keeps
+      // their id as its former holder, for names and scores at the end.
+      const row = /** @type {any} */ (selectSeats.get(id));
+      if (!row) throw new Error(`no game "${id}"`);
+      const before = parseSeats(row.seats);
+      const former = parseSeats(row.former);
+      const kept = seats.map((holder, i) => (before[i] && before[i] !== holder ? before[i] : former[i] ?? null));
+      updateSeats.run(JSON.stringify(seats), JSON.stringify(kept), Date.now(), id);
+    },
+
+    /**
+     * Who to name for each seat: its holder, else its former one, if any.
+     * @param {string} id
+     * @returns {Array<string | null>}
+     */
+    namedSeats(id) {
+      const row = /** @type {any} */ (selectSeats.get(id));
+      if (!row) return [];
+      const former = parseSeats(row.former);
+      return parseSeats(row.seats).map((holder, i) => holder ?? former[i] ?? null);
     },
 
     /**
@@ -513,6 +533,15 @@ function migrate(db) {
       db.exec('PRAGMA user_version = 24;');
     })();
   }
+  if (version < 25) {
+    // Each seat's former holder: whoever last left it, so a player who moved
+    // to another base is still named on the side they played first.
+    db.transaction(() => {
+      const columns = /** @type {Array<{ name: string }>} */ (db.prepare('PRAGMA table_info(games)').all());
+      if (!columns.some((c) => c.name === 'former')) db.exec(`ALTER TABLE games ADD COLUMN former TEXT NOT NULL DEFAULT '[]'`);
+      db.exec('PRAGMA user_version = 25;');
+    })();
+  }
 }
 
 /**
@@ -566,6 +595,7 @@ function summary(row) {
     winner: row.winner ?? null,
     tick: row.tick,
     seats: parseSeats(row.seats),
+    former: parseSeats(row.former),
     fallen: parseFallen(row.fallen),
     createdAt: row.created_at,
     updatedAt: row.updated_at,

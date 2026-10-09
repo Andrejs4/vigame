@@ -312,7 +312,11 @@ Run `npm start` and open http://127.0.0.1:2567.
   no more commands; its units stay and still fight. While a seat is free
   whose castle stands (nobody took it, or its player released it), the
   player who lost has **New base** in place of Release: it moves them to
-  that seat, to the selected castle's if it is free, and frees theirs. Once only one team has
+  that seat, to the selected castle's if it is free, and frees theirs. A
+  seat its player left (for another base, or by releasing it) still names
+  them: in the lobby once its castle has fallen or the game is over, in
+  the table of points, and in the high scores, where each side they
+  played counts for them. Once only one team has
   a castle (or lair) standing, it has won and the game is over: the clock
   stops, commands are refused, the page says who won, and the lobby lists
   the game as finished.
@@ -611,7 +615,8 @@ HTTP API:
 | `GET /api/games/:id/commands` | Its command log, with each command's tick. |
 | `GET /api/games/:id/seats` | Who holds each seat: `{ pid, name }`, or `null` for a free one. |
 
-The database has four tables: `games` (each game's seed, seats, who
+The database has four tables: `games` (each game's seed, seats, each
+seat's former holder (whoever last left it), who
 started it and when (neither shown to players), and a snapshot of its
 state, saved every ten seconds, when it ends and when its room closes),
 `commands` (every accepted command with its tick, in order, never changed),

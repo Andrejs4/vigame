@@ -129,6 +129,21 @@ test('players are stored by public id with a language, Auto unless chosen, and s
   storage.close();
 });
 
+test('a seat its player leaves keeps them as its former holder, named until someone else leaves it', () => {
+  const storage = openStorage();
+  storage.createGame({ id: 'g1', seed: 1, state: STATE, seats: ['p1', 'p2', null] });
+  assert.deepEqual(storage.namedSeats('g1'), ['p1', 'p2', null]);
+  storage.saveSeats('g1', [null, 'p2', 'p1']); // p1 moves to another base
+  assert.deepEqual(storage.namedSeats('g1'), ['p1', 'p2', 'p1']);
+  assert.deepEqual(storage.listGames()[0].former, ['p1', null, null]);
+  storage.saveSeats('g1', ['p3', 'p2', 'p1']); // p3 takes the seat p1 left
+  assert.deepEqual(storage.namedSeats('g1'), ['p3', 'p2', 'p1']);
+  storage.saveSeats('g1', [null, 'p2', 'p1']); // and leaves it in turn
+  assert.deepEqual(storage.namedSeats('g1'), ['p3', 'p2', 'p1'], 'the last to leave is named');
+  assert.deepEqual(storage.namedSeats('nope'), []);
+  storage.close();
+});
+
 test('a version 21 database\'s players get the language Auto', () => {
   const dir = mkdtempSync(join(tmpdir(), 'vigame-'));
   try {
@@ -229,7 +244,7 @@ test('an older database is upgraded: turn-based games are dropped, players kept'
     storage.close();
 
     const check = new Database(file, { readonly: true });
-    assert.equal(check.pragma('user_version', { simple: true }), 24);
+    assert.equal(check.pragma('user_version', { simple: true }), 25);
     check.close();
   } finally {
     rmSync(dir, { recursive: true, force: true });
