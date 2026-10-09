@@ -25,8 +25,9 @@ import { createHash } from 'node:crypto';
 import { ErrorCode, Room, ServerError, logger } from '@colyseus/core';
 
 import { BOARD_OPTIONS, createBoard, tileAt } from '../src/core/board.js';
-import { ROOM_COMMANDS, advance, applyCommand, checkState, newGame, publicView } from '../src/core/game.js';
-import { BREEDING, BUILDING_TYPES, DEFAULT_BREEDING, DEFAULT_MODE, END_ANYONE_TICKS, END_IDLE_MS, MODES, TICKS_PER_SECOND } from '../src/core/rules.js';
+import { ROOM_COMMANDS, advance, applyCommand, checkState, fallenMayMove, newGame, publicView } from '../src/core/game.js';
+import { npcMemory, npcMove, npcRefused } from '../src/core/npc.js';
+import { BREEDING, BUILDING_TYPES, DEFAULT_BREEDING, DEFAULT_MODE, END_ANYONE_TICKS, END_IDLE_MS, MODES, NPC, TICKS_PER_SECOND } from '../src/core/rules.js';
 import { GameState, ViewerState, syncGame, syncSeats } from './schema.js';
 
 /** What a player token must look like: long, random, URL-safe. */
@@ -100,10 +101,11 @@ export function restoreGame(saved, commandsAfter) {
     const game = /** @type {import('../src/core/game.js').GameState} */ (saved.state);
     return { board, game, seq: replay(board, game, commandsAfter(saved.seq), saved.seq) };
   }
-  const { mode, breeding } = /** @type {any} */ (saved.state) ?? {};
+  const { mode, breeding, npcs } = /** @type {any} */ (saved.state) ?? {};
   const game = newGame(board, {
     mode: Object.hasOwn(MODES, mode) ? mode : DEFAULT_MODE,
     breeding: Object.hasOwn(BREEDING, breeding) ? breeding : DEFAULT_BREEDING,
+    npcs: npcs === true,
   });
   return { board, game, seq: replay(board, game, commandsAfter(0)) };
 }
@@ -237,6 +239,12 @@ export class GameRoom extends Room {
     this.creator = saved.creator ?? null;
     /** When the game was created: a day on, an abandoned game may be ended. */
     this.createdAt = saved.createdAt;
+    /**
+     * What each NPC remembers between moves, by seat: kept while the room is
+     * open; a new room starts each afresh.
+     * @type {Map<number, import('../src/core/npc.js').NpcMemory>}
+     */
+    this.npcMemory = new Map();
 
     const state = new GameState();
     state.creator = this.creator ?? '';
@@ -281,12 +289,22 @@ export class GameRoom extends Room {
   }
 
   /**
+   * Whether an NPC plays a seat: in a game with NPCs, one nobody holds
+   * whose castle stands.
+   * @param {number} seat
+   */
+  npcSeat(seat) {
+    return this.game.npcs === true && this.seats[seat] === null && this.standing(seat);
+  }
+
+  /**
    * The seats the game waits for: those still in the game, but for the ones
-   * it goes on without while their players are away (`away` in the core).
+   * NPCs play, and those it goes on without while their players are away
+   * (`away` in the core).
    * @returns {boolean[]}
    */
   awaited() {
-    return this.seats.map((_, i) => this.standing(i) && this.game.players[i]?.away === undefined);
+    return this.seats.map((_, i) => this.standing(i) && !this.npcSeat(i) && this.game.players[i]?.away === undefined);
   }
 
   /**
@@ -390,9 +408,39 @@ export class GameRoom extends Room {
     if (this.state.running !== running) this.state.running = running;
     if (!running) return;
     advance(this.board, this.game);
+    if (this.game.over === undefined) this.playNpcs();
     if (this.game.over !== undefined) this.finish();
     else if (this.game.tick - this.snapshotAt >= SNAPSHOT_TICKS) this.snapshot();
     syncGame(this.state, publicView(this.game));
+  }
+
+  /**
+   * Each NPC thinks every NPC.think ticks, the seats a few ticks apart, and
+   * gives up to NPC.perThink commands, logged as its seat's. One the game
+   * had gone on without, marked away, is back first. A refused command is
+   * noted, so it isn't tried again soon; a failed write is logged, and the
+   * NPC tries again next time.
+   */
+  playNpcs() {
+    this.seats.forEach((_, seat) => {
+      if (!this.npcSeat(seat) || (this.game.tick + seat * 3) % NPC.think !== 0) return;
+      let memory = this.npcMemory.get(seat);
+      if (!memory) this.npcMemory.set(seat, memory = npcMemory());
+      try {
+        if (this.game.players[seat]?.away !== undefined) this.commit(seat, { type: 'back' });
+        for (let i = 0; i < NPC.perThink; i++) {
+          const command = npcMove(this.board, this.game, seat, memory);
+          if (!command) break;
+          const outcome = this.commit(seat, /** @type {Record<string, string | number | string[]>} */ (command));
+          if (!outcome.ok) {
+            npcRefused(memory, command, this.game.tick);
+            break;
+          }
+        }
+      } catch (e) {
+        logger.error(`game ${this.gameId}: the NPC in seat ${seat} failed`, e);
+      }
+    });
   }
 
   /**
@@ -489,7 +537,19 @@ export class GameRoom extends Room {
   takeSeat(pid) {
     const held = this.seatOf(pid);
     if (held !== null) return held;
+    if (this.barred(pid)) return null;
     return this.moveTo(pid, this.freeSeat());
+  }
+
+  /**
+   * Whether a player may not take another seat: in a game of player
+   * against player with NPCs, one whose castle fell (holding its seat or
+   * the last to leave it) may only watch.
+   * @param {string} pid
+   */
+  barred(pid) {
+    if (fallenMayMove(this.game)) return false;
+    return this.storage.namedSeats(this.gameId).some((holder, seat) => holder === pid && !this.standing(seat));
   }
 
   /**
@@ -502,7 +562,7 @@ export class GameRoom extends Room {
   claimSeat(pid, wanted) {
     const held = this.seatOf(pid);
     if (held !== null && this.standing(held)) return held;
-    if (this.game.over !== undefined) return held;
+    if (this.game.over !== undefined || this.barred(pid)) return held;
     return this.moveTo(pid, this.freeSeat(wanted)) ?? held;
   }
 
@@ -514,6 +574,7 @@ export class GameRoom extends Room {
    */
   moveTo(pid, seat) {
     if (seat === null) return null;
+    this.npcMemory.delete(seat); // a player has it now; an NPC starts afresh if it gets it back
     this.saveSeats(this.seats.map((holder, i) => (i === seat ? pid : holder === pid ? null : holder)));
     this.welcomeBack();
     return seat;

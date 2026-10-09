@@ -200,6 +200,18 @@ drawing during play). Read it before art or graphics work.
   paused the room refuses commands, except `rename`, which needs no clock;
   after a rename it saves a snapshot at once, since the lobby reads a game's
   name from its snapshot and a paused game takes none.
+- NPCs (`src/core/npc.js`, the numbers in `NPC` in rules.js) play the
+  seats nobody holds in a game with `npcs` in its state. The room asks
+  `npcMove` for each NPC seat every `NPC.think` ticks (`playNpcs`) and
+  gives its commands through `commit` under that seat, logged like a
+  player's: replays never run NPC code, so NPCs may change freely without
+  touching saved games. An NPC reads the game but never changes it, and
+  never draws on `random(state)` (that would change the game); what it
+  remembers between moves (`NpcMemory`) lives in the room and is lost on
+  a restart. The clock doesn't wait for NPC seats (`awaited`); in a game
+  of player against player with NPCs a fallen player may not take another
+  seat (`fallenMayMove`, `barred`). test/npc.test.js plays games of NPCs
+  alone, which is also the way to try balance.
 - Commands are flat objects of short strings, numbers and short lists of
   short strings (such as a crew's unit ids); the room rejects
   anything else before the core sees it (`flatCommand`).

@@ -372,6 +372,36 @@ async function newPlayer(browser, url, label, name, options, expectedError) {
 // --- scenarios ---------------------------------------------------------------
 
 /**
+ * A game for two with NPCs: its clock runs at once, with an NPC in the
+ * free seat; the lobby names it; a newcomer takes its seat over.
+ * @param {import('playwright').Browser} browser
+ * @param {string} url
+ */
+async function npcs(browser, url) {
+  const page = await newPlayer(browser, url, 'npcs', 'Nora');
+  await inLobby(page);
+  await page.selectOption('#lobby-players', '2');
+  assert.equal(await page.locator('#lobby-npcs').isChecked(), false, 'not ticked at first');
+  await page.check('#lobby-npcs');
+  await page.locator('#lobby .card').screenshot({ path: join(OUT, 'lobby-npcs.png') });
+  await page.click('#lobby-new');
+  await inGame(page);
+  await waitText(page, '#seat', 'Nora · Blue');
+  // Nobody to wait for: the NPC plays Crimson.
+  await waitMatch(page, '#time', /^0:0[1-9]$/);
+  assert.equal(await page.locator('#start-button').isVisible(), false);
+  await selectBuilding(page, await castleOf(page, 1));
+  await waitSelection(page, /^Castle \(grade 1\) · NPC \|/);
+  await page.locator('#selection').screenshot({ path: join(OUT, 'castle-npc.png') });
+
+  const other = await newPlayer(browser, url, 'npcs-b', 'Olle');
+  await inLobby(other);
+  await openFromLobby(other, 'open', 'Nora & NPC');
+  await waitText(other, '#seat', 'Olle · Crimson');
+  await waitSelection(page, /^Castle \(grade 1\) · Olle \|/);
+}
+
+/**
  * A finished game, saved as it ended: the lobby lists it under Recently
  * finished, and opening it shows its table of points, with the name of the
  * player who held the seat; the table closes, comes back from Scores, and
@@ -1641,6 +1671,7 @@ const scenarios = /** @type {Array<[string, () => Promise<void>]>} */ ([
   ['Latvian on a phone, Finnish on a desktop', () => latvianFinnish(browser, games.url)],
   ['a finished game\'s points', () => finished(browser, games.url)],
   ['sixteen players, started without the missing', () => sixteen(browser, games.url)],
+  ['NPCs play the free seats', () => npcs(browser, games.url)],
 ]).filter(([name]) => name.includes(only));
 
 let failed = 0;

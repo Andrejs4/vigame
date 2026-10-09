@@ -476,81 +476,36 @@ PII libraries (libphonenumber-js, OpenRedaction…) are far bigger than the
 need. AI toxicity models are too big and don't know Latvian or Finnish;
 for slang and double meanings, an admin rename or clear is the tool.
 
-### NPC players
+### NPC players: built, to tune
 
-The author's wish (October 2026): a checkbox with a new game, "NPCs play
-free seats", that covers every seat nobody holds. In the modes with the
-Dark Lord, a newcomer, or a player whose castle fell, may take a seat from
-an NPC. On a team that shares its stock, NPCs spend and fill it like
-anyone ("what comes from this, that comes"). He will tune their timings
-and rules himself, so those live in one table.
+Built in October 2026 (`src/core/npc.js`, the table `NPC` in rules.js; how
+it fits is in CLAUDE.md and the README). The author's decisions: a lobby
+checkbox, off by default, puts NPCs in every seat nobody holds; newcomers
+may take an NPC's seat at any time; against the Dark Lord a player whose
+castle fell may too, but not against players; an NPC never plays for an
+away player; they are named "NPC". On top of the first guesses he asked
+that an NPC answer enemy towers that can reach its buildings, and that from
+twelve minutes in it build and upgrade wagons behind its castle with dark
+metal, send them once the metal is spent (at least `wagonsMin`), and ten
+seconds later go all in with everyone at home.
 
-How it would fit:
+What games of NPCs alone showed, at the first numbers (a scratch
+simulation, the same loop as `npcsPlay` in test/npc.test.js):
 
-- **The flag**: `npcs: true` in the state, from `newGame`'s options, the
-  lobby's checkbox and `POST /api/games`. An optional field, so saved
-  games still pass `checkState` and nothing need be deleted.
-- **Whose seat**: an NPC plays a seat while the flag is on, nobody holds
-  the seat, and its castle stands. A player taking it has it at once;
-  one releasing it hands it back. The room works this out; the core
-  needn't know.
-- **How it plays**: `src/core/npc.js`, a pure function from the game to
-  the commands an NPC gives now (`npcCommands(board, state, seat)`), with
-  no memory of its own, so a restarted room plays on the same. It must
-  not draw on `random(state)` (that would change the game); variety comes
-  from a hash of the tick and the seat. The room asks it for each NPC
-  seat every so often, staggered by seat so sixteen don't think in one
-  tick, and gives the commands through `commit` under that seat. They
-  are logged like a player's, so replays need no NPC code, and the NPCs
-  can change between versions without touching saved games.
-- **The clock** doesn't wait for NPC seats: with the box ticked, a game
-  starts as soon as its seated players are here, no Start needed. The
-  Dark Lord treats NPC sides as present, never away.
-- **The page**: an NPC seat is named "NPC" (a word in each language) in
-  the lobby, the castle panel and the table of points. NPC seats get no
-  high score; players on a winning team with NPCs win as usual.
-- **Player against player** (two teams, free for all): NPC seats may be
-  taken until the clock first runs, then stay the NPCs' (to settle).
+- Two in free for all build a dozen farms, a few pits and towers, and
+  bands now and then, and haven't finished after 30 minutes: their bands
+  of 15 to 30 don't take a castle with towers.
+- Four in cooperation lose to the Dark Lord's horde at about ten minutes,
+  as the earlier bots did; sixteen at about fourteen.
+- Dark metal comes only from loot, so wagons are few: in free for all,
+  one or two now and then from raiders.
+- Fifteen NPCs think in about 5 ms per game second, half a percent of the
+  server's time; the room's copy of the game for each command costs about
+  2 ms more.
 
-Timings and rules to tune (`NPC` in rules.js), first guesses:
-
-| Rule | First guess |
-|---|---|
-| Thinks every | 5 s, seats staggered |
-| First move after | 20 s |
-| Answers a band near its castle after | 10 s; "near" is 8 cells |
-| Keeps at home at least | 8 units, to breed |
-| Builds, in turn, while stone allows | pit, farm, tower, pit, tower, farm… |
-| Crews | pit 6, farm 4, tower 10 |
-| A farm more when | the next meal falls short |
-| Upgrades | the castle from 300 stone, then towers |
-| Forms a band when at home | 30 or more: half of them, 60 at most |
-| Sends bands at | with the Dark Lord, his horde and lair; else the nearest enemy castle |
-| Wagons, Attack on single buildings, retreating | later |
-| A difficulty level (slower thinking, fewer bands) | later |
-
-Steps: (1) the NPC in the core, tested by games of NPCs alone, in
-cooperation and free for all, that end within an hour, every command
-accepted and `checkState` clean after each tick; that is also the
-simulation harness "Further off" asks for, to try balance. (2) The flag
-through the lobby, the API and the room: clock, seat handover, thinking.
-(3) Server tests (an NPC seat gives logged commands; a player takes one
-over in cooperation, and is refused in free for all once it runs), a
-smoke check and a screenshot. (4) Measure a sixteen-seat game with
-fifteen NPCs: thinking per tick, and how fast the command log grows.
-
-A scratch load test (not in the repository) already had crude bots
-issuing pit, tower, band and farm commands every 20 s; the NPC starts
-from that.
-
-Open questions for the author:
-
-- Player against player: may a newcomer take an NPC seat before the
-  game starts only (the proposal), or never?
-- Should an NPC also play for a seated player who is away, once the
-  creator has gone on without them? (Proposal: not at first.)
-- Their name: "NPC", "Bot", or a name each?
-- The checkbox ticked or not by default? (Proposal: not.)
+Knobs to try first: `bandFrom` and `bandShare` (bigger, rarer bands),
+`order` (fewer farms, more towers), `keepHome`, and `hunt` against the
+Dark Lord.
 
 ### Game exports with a map version
 

@@ -475,7 +475,9 @@ export async function startGame(net, me) {
     /** @type {HTMLElement} */ (document.getElementById('scores-body')).replaceChildren(...rows.map(({ p, side, score, won }) => {
       const tr = document.createElement('tr');
       if (won) tr.className = 'won';
-      const name = seatNames[p.id] ? `${seatNames[p.id]} · ${sideName(view, p.id)}` : sideName(view, p.id);
+      // A side nobody played, in a game with NPCs, was an NPC's.
+      const holder = seatNames[p.id] || (view.npcs && !sideOf(view, p.id).npc ? word('npc') : '');
+      const name = holder ? `${holder} · ${sideName(view, p.id)}` : sideName(view, p.id);
       const who = cell('td', name);
       who.style.color = side.accent;
       tr.append(who, points(score.total, 'total'),
@@ -735,7 +737,7 @@ export async function startGame(net, me) {
     const graded = type.grades > 1 ? word('graded', { name: typeName(b.type), n: b.grade }) : typeName(b.type);
     // A castle says whose it is: its seat's player, or that the seat is free.
     const holder = b.type === 'castle' && net.seats()[b.owner] !== undefined
-      ? (net.seats()[b.owner] === null ? word('seatFree') : seatNames[b.owner] ?? '')
+      ? (net.seats()[b.owner] === null ? word(view?.npcs ? 'npc' : 'seatFree') : seatNames[b.owner] ?? '')
       : '';
     const name = holder ? `${graded} · ${holder}` : graded;
     /** @type {string[]} */

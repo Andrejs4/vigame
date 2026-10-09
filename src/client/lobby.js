@@ -78,8 +78,10 @@ function row(game, action, language) {
     // A seat its player left for another base, or that the game ended
     // without, still names who played it; one left open stays open.
     const holder = seated ?? (game.over !== null || game.fallen?.includes(i) ? game.former?.[i] ?? null : null);
+    // A seat nobody holds in a game with NPCs is an NPC's while its castle stands.
+    const npc = !holder && game.npcs && game.over === null && !game.fallen?.includes(i);
     const name = document.createElement('span');
-    name.textContent = holder ? holder.name || '?' : '—';
+    name.textContent = holder ? holder.name || '?' : npc ? say(language, { word: 'npc' }) : '—';
     name.style.color = holder ? SIDES[SEAT_SIDES[i]]?.accent ?? '' : '';
     who.append(name);
   });
@@ -189,6 +191,7 @@ export function showLobby(token, me, { notice } = {}) {
   const modeSelect = /** @type {HTMLSelectElement} */ (document.getElementById('lobby-mode'));
   const playersSelect = /** @type {HTMLSelectElement} */ (document.getElementById('lobby-players'));
   const breedingSelect = /** @type {HTMLSelectElement} */ (document.getElementById('lobby-breeding'));
+  const npcsBox = /** @type {HTMLInputElement} */ (document.getElementById('lobby-npcs'));
   const language = chosenLanguage(me.language, autoLanguage(browserLanguages(), me.name));
 
   // Every text in the player's language; How to play and About are written
@@ -294,7 +297,7 @@ export function showLobby(token, me, { notice } = {}) {
     newButton.disabled = true;
     limit.hidden = true;
     try {
-      const res = await post('api/games', { token, mode: modeSelect.value, breeding: breedingSelect.value, players: Number(playersSelect.value) });
+      const res = await post('api/games', { token, mode: modeSelect.value, breeding: breedingSelect.value, npcs: npcsBox.checked, players: Number(playersSelect.value) });
       // Too many games on the go: the server says how many and which, to go
       // back to.
       if (res.status === 409) {

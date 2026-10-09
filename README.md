@@ -126,6 +126,24 @@ Run `npm start` and open http://127.0.0.1:2567.
   units, with units at home or none (the units learn breeding no faster).
   The lobby names a fast or slow game's pace after its mode (Cooperation ·
   Fast units). Shared Easy Lord with Fast units is what Very Easy Lord was.
+- **NPCs play free seats**, a checkbox with a new game (off by default):
+  an NPC plays every seat nobody holds, while its castle stands, and the
+  clock doesn't wait for those seats, so a game starts as soon as its
+  seated players are here. A newcomer may take an NPC's seat at any time,
+  and against the Dark Lord so may a player whose castle fell (against
+  players, they watch). A seat its player releases goes back to an NPC;
+  an NPC never plays for an away player. NPCs share a shared stock like
+  anyone. They are named NPC in the lobby, the castle panel and the table
+  of points, and get no high scores. Every few seconds an NPC answers
+  threats it has seen a while (enemy bands, wagons, raiders and the horde
+  near its buildings, manned towers that reach one) with a band, builds a
+  farm when food runs short, fills its crews, upgrades its castle and
+  towers, builds pits, farms and towers in turn, and sends bands against
+  the nearest enemy (against the Dark Lord, his horde and raiders near
+  it). From twelve minutes in it builds and upgrades wagons behind its
+  castle with dark metal; once the metal is spent the wagons attack, and
+  ten seconds later everyone at home goes all in. Its timings and rules
+  are the table `NPC` in `src/core/rules.js`.
 - **The game clock** runs only while every player is here. (`npm run dev`
   runs it with one, for trying things alone.) While it waits, the player
   who started the game has **Start** beside the count of players (**Go on**
@@ -457,6 +475,7 @@ have one, install it with `npx playwright install chromium`.
 | `src/core/board.js` | Seeded terrain, with what each terrain allows, and the castle and lair sites; same seed and player count, same map everywhere. |
 | `src/core/rules.js` | The numbers: tick rate, sides and modes, skills and experience, food and hunger, fighting, raiders, the Dark Lord's horde, building types. |
 | `src/core/names.js` | Medieval names for units, and which face goes with a name (`portraitOf`). |
+| `src/core/npc.js` | NPC players: the next command for a seat an NPC plays, worked out from the game as it is. |
 | `src/core/game.js` | The game core: the state as plain JSON, `applyCommand`, `advance` (one tick), `occupancy`, `checkState`, `publicView`. Deterministic. |
 | `src/core/player.js` | Player-name rules and the languages a player may choose, checked on the page and on the server. |
 | `src/client/` | The page, served as it is. |
@@ -625,7 +644,7 @@ HTTP API:
 | `GET /api/challenge` | A sum to answer when signing in: `{ id, question }`. Each one answers once and lasts 10 minutes. |
 | `POST /api/players` | Signs in: `{ token, name, language, challenge, answer }` gives `{ pid, name, language }`. `400` for a bad token, name or language, `403` for a wrong answer. The login page always sends a language (`auto` at least), so a sign-in without one fails as a wrong answer does, using its sum up: a small check that it came from the page. |
 | `POST /api/settings` | Changes a signed-in player's settings: `{ token, name?, language? }` gives `{ pid, name, language }`; what isn't given stays. `401` if not signed in, `400` for a bad name or language. |
-| `POST /api/games` | Starts a game with a random map: `{ token, mode?, breeding?, players? }` of a signed-in player (`mode` `coop`, `easy`, `shared`, `teams` or `ffa`, `breeding` `normal`, `fast` or `slow`, `players` 1 to 16; by default a cooperation game for one, units at the normal pace) gives `201 { id }`; `401` if not signed in, `400` for a bad mode, pace or number; `409 { error, waiting, seated, games }` while the player has too many games on the go (three of theirs waiting for a player, or seats in three under way): why in English, how many of each (0 for one that isn't why, so the page can say it in its own words), and those games as `GET /api/games` lists them, each with `clear`: `'delete'`, `'leave'` or `null`. |
+| `POST /api/games` | Starts a game with a random map: `{ token, mode?, breeding?, players? }` of a signed-in player (`mode` `coop`, `easy`, `shared`, `teams` or `ffa`, `breeding` `normal`, `fast` or `slow`, `npcs` true for NPCs in the free seats, `players` 1 to 16; by default a cooperation game for one, units at the normal pace) gives `201 { id }`; `401` if not signed in, `400` for a bad mode, pace or number; `409 { error, waiting, seated, games }` while the player has too many games on the go (three of theirs waiting for a player, or seats in three under way): why in English, how many of each (0 for one that isn't why, so the page can say it in its own words), and those games as `GET /api/games` lists them, each with `clear`: `'delete'`, `'leave'` or `null`. |
 | `POST /api/games/:id/delete` | `{ token }`: deletes a game under way that the player started and nobody else holds a seat in, closing its room if open; `403` if they didn't start it, `409` if someone else plays it or it is over. |
 | `POST /api/games/:id/leave` | `{ token }`: gives up the player's seat in a game under way, through its room if open; `409` if they hold none or it is over. |
 | `GET /api/games` | The 50 most recently active games, for the lobby, with their name, mode, `breeding`, who holds each seat (`{ pid, name }` or `null`) and `fallen`, the seats whose castles have fallen, which nobody can take. |

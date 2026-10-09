@@ -102,6 +102,8 @@ import {
  * @property {number} version The shape of this object; see STATE_VERSION.
  * @property {string} mode A key of MODES.
  * @property {string} breeding How fast castles raise units: a key of BREEDING.
+ * @property {true} [npcs] NPCs play the seats nobody holds (npc.js; the game
+ *   server runs them, and logs their commands as a player's).
  * @property {string} name What the lobby calls it: one of GAME_NAMES (in
  *   names.js) at first, then whatever its players rename it (cleanGameName).
  * @property {number} [over] The tick the game ended: once only one team (or
@@ -198,15 +200,16 @@ export function levelXp(level, hero = false) {
  * each with its first units; in cooperation, the players on one team and
  * the Dark Lord's lair in the middle; in two teams, two halves of the ring.
  * @param {Board} board Made for as many players (`createBoard`'s `players`).
- * @param {{ mode?: string, breeding?: string }} [options]
+ * @param {{ mode?: string, breeding?: string, npcs?: boolean }} [options]
  * @returns {GameState}
  */
-export function newGame(board, { mode = DEFAULT_MODE, breeding = DEFAULT_BREEDING } = {}) {
+export function newGame(board, { mode = DEFAULT_MODE, breeding = DEFAULT_BREEDING, npcs = false } = {}) {
   /** @type {GameState} */
   const state = {
     version: STATE_VERSION,
     mode,
     breeding,
+    ...(npcs ? { npcs: true } : {}),
     name: gameName(board.seed),
     seed: board.seed,
     tick: 0,
@@ -505,6 +508,16 @@ export function workFor(state, type) {
  */
 export function teamOfSeat(mode, seat, seats) {
   return mode === 'teams' ? Number(seat >= Math.floor(seats / 2)) : seat;
+}
+
+/**
+ * Whether a player whose castle fell may take a free base: always, but in
+ * a game of player against player with NPCs, where they can't take one
+ * from an NPC.
+ * @param {Pick<GameState, 'mode' | 'npcs'>} state
+ */
+export function fallenMayMove(state) {
+  return !state.npcs || hasLord(state.mode);
 }
 
 /**
@@ -1714,7 +1727,7 @@ export function isDugOut(b) {
  * the building's own once it stands.
  * @param {Building} b
  */
-function crewReach(b) {
+export function crewReach(b) {
   return RANGED_RANGE + (isRising(b) ? 0 : BUILDING_TYPES[b.type].reach ?? 0);
 }
 
@@ -2083,6 +2096,7 @@ export function checkState(board, raw) {
   }
   if (!Object.hasOwn(MODES, state.mode)) fail('bad mode');
   if (!Object.hasOwn(BREEDING, state.breeding)) fail('bad breeding');
+  if (state.npcs !== undefined && state.npcs !== true) fail('bad npcs');
   if (state.over !== undefined && !isCount(state.over, Infinity)) fail('bad over');
   if (state.winner !== undefined && (state.over === undefined || !Number.isInteger(state.winner))) fail('bad winner');
   state.players.forEach((p, i) => {
@@ -2224,6 +2238,7 @@ export function publicView(state) {
     version: state.version,
     mode: state.mode,
     breeding: state.breeding,
+    ...(state.npcs ? { npcs: state.npcs } : {}),
     name: state.name,
     ...(state.over !== undefined ? { over: state.over } : {}),
     ...(state.winner !== undefined ? { winner: state.winner } : {}),

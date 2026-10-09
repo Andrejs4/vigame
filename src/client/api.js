@@ -18,6 +18,7 @@
  * @property {string} mode A key of MODES.
  * @property {string | null} breeding How fast castles raise units: a key
  *   of BREEDING (null for a game from before there was a choice).
+ * @property {boolean} [npcs] Whether NPCs play the seats nobody holds.
  * @property {string | null} name What its players call it (null only for a
  *   game saved before games had names).
  * @property {number | null} over The tick it ended, or null while it's on.

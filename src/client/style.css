@@ -101,6 +101,9 @@ button[aria-pressed="true"] { background: rgba(255, 216, 77, 0.18); border-color
   padding: 8px 10px;
 }
 .card input:focus-visible { outline: 2px solid var(--amber); outline-offset: 1px; }
+/* A checkbox before its words, on one line. */
+.card label.check { display: flex; align-items: center; gap: 8px; color: var(--ink); font-size: 14px; cursor: pointer; }
+.card label.check input { display: inline-block; width: auto; margin: 0; accent-color: var(--amber); }
 .card select {
   display: block; width: 100%; margin: 4px 0 12px; padding: 8px 10px;
   font: 14px var(--sans); color: var(--ink);

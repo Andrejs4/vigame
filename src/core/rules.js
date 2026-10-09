@@ -442,3 +442,46 @@ export const BUILDING_TYPES = {
     skill: 'ranged', extra: 'melee', speed: WALK_TICKS, band: true,
   },
 };
+
+/**
+ * How NPCs play the free seats of a game started with them (`npcMove` in
+ * npc.js). Times are in ticks, distances in cells. The author's to tune.
+ */
+export const NPC = Object.freeze({
+  /** Each NPC thinks this often, the seats a few ticks apart. */
+  think: 5 * TICKS_PER_SECOND,
+  /** Its first move, this long into the game. */
+  start: 20 * TICKS_PER_SECOND,
+  /** At most this many commands each time it thinks. */
+  perThink: 4,
+  /** It answers a threat once it has seen it this long. */
+  react: 10 * TICKS_PER_SECOND,
+  /** A band, wagon, raider or one of the horde this close to one of its buildings is a threat; so is a manned tower that can reach one. */
+  near: 8,
+  /** Units it keeps at home, to breed. */
+  keepHome: 8,
+  /** What it builds, in turn, while it has the stone and the units. */
+  order: Object.freeze(['pit', 'farm', 'tower', 'pit', 'tower', 'farm']),
+  /** Each building's crew; a wagon's raises it, and fills it before it rolls. */
+  crews: Object.freeze({ pit: 6, farm: 4, tower: 10, wagon: 6 }),
+  /** It upgrades its castle once it has this much stone, */
+  castleUpgradeAt: 300,
+  /** and a tower when the upgrade leaves it this much. */
+  stoneReserve: 60,
+  /** With this many at home it sends some out in a band: this share, at most bandMax. */
+  bandFrom: 30,
+  bandShare: 0.5,
+  bandMax: 60,
+  /** No band smaller than this. */
+  bandMin: 6,
+  /** Against the Dark Lord its bands go for his horde, and raiders, this close to its castle; for the lair only all in. */
+  hunt: 20,
+  /** From this far into the game it spends dark metal on wagons, behind its castle, and upgrades them; */
+  wagonsFrom: 12 * 60 * TICKS_PER_SECOND,
+  /** once the metal is spent the wagons attack, at least this many, */
+  wagonsMin: 2,
+  /** and this long after, everyone at home goes too. */
+  allInAfter: 10 * TICKS_PER_SECOND,
+  /** A command refused at a place is not tried there again for this long. */
+  retry: 60 * TICKS_PER_SECOND,
+});

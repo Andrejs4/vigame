@@ -18,7 +18,7 @@ import { advance, castleOf, checkState, nearStanding, newGame, occupancy, public
 import { key } from '../src/core/hex.js';
 import { GAME_NAMES } from '../src/core/names.js';
 import { createServerNet } from '../src/client/net.js';
-import { BUILDING_TYPES, END_ANYONE_TICKS, END_IDLE_MS, TICKS_PER_SECOND } from '../src/core/rules.js';
+import { BUILDING_TYPES, END_ANYONE_TICKS, END_IDLE_MS, NPC, TICKS_PER_SECOND } from '../src/core/rules.js';
 
 /** @type {Awaited<ReturnType<typeof startGameServer>>} */
 let server;
@@ -796,6 +796,34 @@ test('in two teams, players fill the first team\'s seats, then the second\'s; a 
   await until(() => seatOf(a, c) === 2);
   assert.equal(await b.request('claimSeat'), 1, 'and then it is the free one');
   await leaveAll(a, b, c);
+});
+
+test('with NPCs, the clock runs without waiting for free seats, whose NPCs play as their seats; a newcomer takes one over', async () => {
+  const res = await post('/api/games', { token: TOKENS.a, mode: 'coop', players: 2, npcs: true });
+  assert.equal(res.status, 201);
+  const id = (await res.json()).id;
+  assert.equal((await post('/api/games', { token: TOKENS.a, npcs: 'yes' })).status, 400);
+  const listed = (await (await fetch(`${base}/api/games`)).json()).find((/** @type {any} */ g) => g.id === id);
+  assert.equal(listed.npcs, true);
+  const a = await join(id, TOKENS.a);
+  await until(() => a.state.running === true);
+  const npcCommands = async () => (await (await fetch(`${base}/api/games/${id}/commands`)).json()).filter((/** @type {any} */ c) => c.player === 1);
+  // NPC.start is 20 game seconds: two here.
+  /** @type {any[]} */
+  let given = [];
+  for (let i = 0; i < 80 && !given.length; i++) {
+    given = await npcCommands();
+    await sleep(100);
+  }
+  assert.ok(given.length > 0, 'the NPC gave no command');
+  assert.ok(given.every((c) => c.tick >= NPC.start));
+  // Bēla comes along and takes the NPC's seat; it gives no more.
+  const b = await join(id, TOKENS.b);
+  await until(() => b.state.toJSON().viewers[b.sessionId]?.seat === 1);
+  const before = (await npcCommands()).length;
+  await sleep(NPC.think / TICK_RATE * 1000 * 3);
+  assert.equal((await npcCommands()).length, before, 'the NPC stopped');
+  await leaveAll(a, b);
 });
 
 test('selections are shared, but only for hexes on the board', async () => {

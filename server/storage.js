@@ -66,7 +66,8 @@ export function openStorage(file = ':memory:') {
   const selectCommands = db.prepare(`
     SELECT seq, tick, player, command, at FROM commands WHERE game_id = ? AND seq > ? ORDER BY seq`);
   const SUMMARY = `id, seats, former, creator, created_at, updated_at, json_extract(state, '$.tick') AS tick,
-    json_extract(state, '$.mode') AS mode, json_extract(state, '$.breeding') AS breeding, json_extract(state, '$.name') AS name,
+    json_extract(state, '$.mode') AS mode, json_extract(state, '$.breeding') AS breeding,
+    json_extract(state, '$.npcs') AS npcs, json_extract(state, '$.name') AS name,
     json_extract(state, '$.over') AS over, json_extract(state, '$.winner') AS winner,
     (SELECT json_group_array(key) FROM json_each(state, '$.players') WHERE json_extract(value, '$.lost') IS NOT NULL) AS fallen`;
   const selectRecent = db.prepare(`SELECT ${SUMMARY} FROM games ORDER BY updated_at DESC, id LIMIT ?`);
@@ -601,6 +602,7 @@ function summary(row) {
     id: row.id,
     mode: row.mode,
     breeding: row.breeding ?? null,
+    npcs: row.npcs === 1,
     name: row.name ?? null,
     over: row.over ?? null,
     winner: row.winner ?? null,
