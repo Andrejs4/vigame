@@ -437,6 +437,23 @@ same distance comes first (the targets' order in the list), or old games
 replay differently. Check it as the band fix was: a recorded big battle
 must end in the same state, tick for tick.
 
+### Security: two small gaps
+
+From a quick look at the open addresses (logins are checked by our own
+code, `onAuth` and each endpoint, not by a library; the read-only ones
+are open on purpose). Neither is urgent for a server among friends:
+
+- `GET /api/games/:id` and `/api/games/:id/commands` answer anyone, for
+  games under way too, with the raw saved state and every order given.
+  The room hides units' experience and sides' tallies until the end
+  (`publicView`); these don't, so in free for all a player could peek at a
+  rival's. Fix: answer them only for finished games, or pass the state
+  through `publicView`.
+- No request limits. A script asking for sums in a loop pushes real
+  players' sums out of the 10,000 kept (`challenge.js`), and sign-ups are
+  unlimited, each able to start a few games. Fix: a per-address rate limit
+  in nginx (`limit_req`) on `/api/`.
+
 ### Further off
 
 Units' dice in place of a single kill chance; bots and balance ("much
