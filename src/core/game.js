@@ -138,12 +138,13 @@ import {
 /**
  * @typedef {{ type: 'build', kind: string, q: number, r: number, units?: string[] }
  *   | { type: 'crew', building: string, units: string[] }
+ *   | { type: 'home', units: string[] }
  *   | { type: 'target', building: string, target: string }
  *   | { type: 'upgrade', building: string }
  *   | { type: 'abort', building: string }
  *   | { type: 'move', building: string, q: number, r: number }
  *   | { type: 'rename', name: string }
- *   | { type: 'away' } | { type: 'back' } | { type: 'end' }} Command
+ *   | { type: 'away' } | { type: 'back' } | { type: 'end', idle?: 1 }} Command
  * @typedef {{ ok: true } | { ok: false, reason: string }} Outcome
  */
 
@@ -907,12 +908,13 @@ export function applyCommand(board, state, player, command) {
   if (!command || typeof command !== 'object') return refuse('not a command');
   const cmd = /** @type {Record<string, unknown>} */ (command);
   // A player may end the game whether or not their castle stands.
-  if (cmd.type === 'end') return endGame(state, player);
+  if (cmd.type === 'end') return endGame(state, player, cmd);
   if (state.players[player].lost !== undefined) return refuse('your castle has fallen');
   const occ = occupancy(state);
   switch (cmd.type) {
     case 'build': return build(board, state, occ, player, cmd);
     case 'crew': return crew(board, state, occ, player, cmd);
+    case 'home': return callHome(board, state, occ, player, cmd);
     case 'target': return aim(state, player, cmd);
     case 'upgrade': return upgrade(state, player, cmd);
     case 'abort': return abort(board, state, occ, player, cmd);
@@ -945,32 +947,37 @@ function goAway(state, player) {
 }
 
 /**
- * Who wins if a player ends the game now: their team gives up, so the one
- * other team with a castle or lair standing, if just one has (the Dark Lord,
- * in cooperation), or nobody. Raiders don't count.
+ * Who wins if a player ends the game now: their team gives up (or, ended
+ * as abandoned, every team with a seat), so the one other team with a
+ * castle or lair standing, if just one has (the Dark Lord, in cooperation),
+ * or nobody. Raiders don't count.
  * @param {Pick<GameState, 'players'>} state
  * @param {number} player
+ * @param {boolean} [abandoned] Every seat's team gives up.
  * @returns {number | undefined} The winning team.
  */
-export function endWinner(state, player) {
-  const team = state.players[player]?.team;
+export function endWinner(state, player, abandoned = false) {
+  const giving = new Set(abandoned
+    ? state.players.filter((p) => !SIDES[p.side]?.npc).map((p) => p.team)
+    : [state.players[player]?.team]);
   const others = new Set(state.players
-    .filter((p) => !SIDES[p.side]?.wild && p.team !== team && p.lost === undefined)
+    .filter((p) => !SIDES[p.side]?.wild && !giving.has(p.team) && p.lost === undefined)
     .map((p) => p.team));
   return others.size === 1 ? [...others][0] : undefined;
 }
 
 /**
- * A player ends the game for everyone (the room says who may): the clock
- * stops and the points are counted, as when one team is left (`settle`),
- * with `endWinner` the winner.
+ * A player ends the game for everyone (the room says who may), or the
+ * room ends it as abandoned (`idle: 1`): the clock stops and the points are
+ * counted, as when one team is left (`settle`), with `endWinner` the winner.
  * @param {GameState} state
  * @param {number} player
+ * @param {Record<string, unknown>} cmd
  * @returns {Outcome}
  */
-function endGame(state, player) {
+function endGame(state, player, cmd) {
   if (SIDES[state.players[player].side]?.npc) return refuse('not a seat');
-  const winner = endWinner(state, player);
+  const winner = endWinner(state, player, cmd.idle === 1);
   state.over = state.tick;
   if (winner === undefined) return { ok: true };
   state.winner = winner;
@@ -1068,6 +1075,38 @@ function crew(board, state, occ, player, cmd) {
   const ids = unitList(state, player, cmd.units);
   if (typeof ids === 'string') return refuse(ids);
   return setCrew(board, state, occ, b, ids);
+}
+
+/**
+ * Call these units home to the castle from wherever they are: out of a
+ * building's crew or a band, or off the way to one. Those home already, or
+ * on their way home, stay as they are. The units that leave one building
+ * go out a tick apart, as a crew's do.
+ * @param {Board} board
+ * @param {GameState} state
+ * @param {Occupancy} occ
+ * @param {number} player
+ * @param {Record<string, unknown>} cmd
+ * @returns {Outcome}
+ */
+function callHome(board, state, occ, player, cmd) {
+  const home = castleOf(state, player);
+  if (!home) return refuse('no castle');
+  const ids = unitList(state, player, cmd.units);
+  if (typeof ids === 'string') return refuse(ids);
+  const away = ids.map((id) => state.units[id]).filter((u) => u.in !== home.id && u.to !== home.id);
+  if (!away.length) return refuse('they are all home');
+  const routes = away.map((u) => routeFor(board, state, occ, u, home));
+  if (routes.some((route) => !route)) return refuse('no way there');
+  /** @type {Map<string, number>} */
+  const leaving = new Map();
+  away.forEach((u, i) => {
+    const from = u.in ?? '';
+    const n = leaving.get(from) ?? 0;
+    leaving.set(from, n + 1);
+    dispatch(board, state, u, home, /** @type {Cell[]} */ (routes[i]), state.tick + n * DEPART_GAP);
+  });
+  return { ok: true };
 }
 
 /**

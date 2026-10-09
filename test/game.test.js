@@ -217,6 +217,26 @@ test('a new crew list sends those left off home, and an empty one sends them all
   runUntil(board, state, () => crewOf(state, 'b2').length === 0 && Object.values(state.units).every((u) => u.in === 'b1'));
 });
 
+test('units called home leave any building or way to one; those home already stay', () => {
+  const board = openBoard(4);
+  const state = stateWith([{ id: 'b1', type: 'castle' }, { id: 'b2', q: 3, r: 0 }, { id: 'b3', q: 0, r: 3 }], [
+    ...unitsIn('b1', 2, 10), ...unitsIn('b2', 3, 20),
+  ]);
+  // u11 sets off for b3, and is called back on the way with two of b2's crew.
+  assert.deepEqual(applyCommand(board, state, 0, { type: 'crew', building: 'b3', units: ['u11'] }), OK);
+  run(board, state, WALK_TICKS + 1);
+  const call = { type: 'home', units: ['u10', 'u11', 'u20', 'u21'] };
+  assert.deepEqual(applyCommand(board, state, 0, call), OK);
+  assert.deepEqual(['u10', 'u11', 'u20', 'u21', 'u22'].map((id) => state.units[id].in ?? state.units[id].to), ['b1', 'b1', 'b1', 'b1', 'b2']);
+  assert.deepEqual([state.units.u20.until, state.units.u21.until], [state.tick + WALK_TICKS, state.tick + 1 + WALK_TICKS], 'a tick apart');
+  assert.deepEqual(applyCommand(board, state, 0, call), { ok: false, reason: 'they are all home' });
+  runUntil(board, state, () => ['u10', 'u11', 'u20', 'u21'].every((id) => state.units[id].in === 'b1'));
+  assert.deepEqual(crewOf(state, 'b2'), ['u22']);
+  assert.deepEqual(crewOf(state, 'b3'), []);
+  assert.deepEqual(checkState(board, state), []);
+  assert.deepEqual(applyCommand(board, state, 0, { type: 'home', units: ['nope'] }), { ok: false, reason: 'one of those units is gone' });
+});
+
 test('rough ground slows a unit, and running speeds it up, to a second a cell at best', () => {
   const board = boardFrom({ '0,0': 'grass', '1,0': 'scrub', '2,0': 'grass', '3,0': 'grass' });
   const walk = (/** @type {number} */ running) => {
@@ -1008,6 +1028,10 @@ test('a player may end the game: against the Dark Lord he wins; in free for all 
   const duel = ended('ffa', 2);
   assert.equal(duel.winner, duel.players[1].team, 'the other one of two wins');
   assert.equal(duel.players[1].tally.won, 1);
+  // Ended as abandoned, every seat gives up: the Dark Lord wins, or in free for all nobody.
+  const lordGame = newGame(createBoard({ ...BOARD_OPTIONS, seed: 7, players: 2 }), { mode: 'coop' });
+  assert.equal(endWinner(lordGame, 0, true), lordGame.players.find((p) => p.side === DARK_LORD)?.team);
+  assert.equal(endWinner(newGame(createBoard({ ...BOARD_OPTIONS, seed: 7, players: 2 }), { mode: 'ffa' }), 0, true), undefined);
   // A player whose castle has fallen may still end it; the raiders never win.
   const fallen = ended('ffa', 3, (s) => { s.players[0].lost = 0; s.players[2].lost = 0; });
   assert.equal(fallen.winner, fallen.players[1].team);

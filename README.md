@@ -154,7 +154,8 @@ Run `npm start` and open http://127.0.0.1:2567.
   its building, as in the crew chooser) and
   every skill's level, as "Att 15"
   (ranged attack; then close combat, building, farming, breeding and
-  running), each level padded to line up ("Att   8", "Att 100"). Below them
+  running), each level padded to line up ("Att   8", "Att 100"). **All home**, at its foot, calls every living hero home to the castle
+  from wherever they are (a building, a band, or the way to one). Below them
   come those that died while the page was open, in the order they died, as
   they last were: how long each lived, in silver, and how it died. The page
   keeps them only while it is open: a reload forgets them, and it misses
@@ -234,11 +235,13 @@ Run `npm start` and open http://127.0.0.1:2567.
   winners' points: twice for a game won from 10 to 20 minutes of game
   time, 1.5 times from 20 to 40, nothing extra under 10 minutes or from 40
   on. Nobody sees any of it before the end. The table shows each side's
-  total first, then the bonus (only when a side has one), then the lines,
-  the weightiest first: win, castles, buildings felled, kills, damage,
-  upgrades, buildings finished, units born, stone, food. From 10000 a
-  number shows rounded to thousands with a "k" (13516 is 14k), the exact
-  points in its tooltip. It is in the player's language. The table's **Leave the match** goes back to the
+  total points first, then the bonus (only when a side has one), then
+  what it did, as counts, the weightiest first: castles and lairs brought
+  down, other buildings felled, kills, hit points of damage, grades
+  reached by upgrading, buildings finished, units born, stone dug, food
+  grown. Each count's tooltip says the points it gave, and each heading's
+  what it is worth; winners have a ★. From 10000 a number shows rounded
+  to thousands with a "k" (13516 is 14k), the exact number in its tooltip. It is in the player's language. The table's **Leave the match** goes back to the
   lobby; **Keep watching** closes it, and **Scores** brings it back. Once a game is
   over, seats can't be given up, so the table keeps their holders' names.
 - **Hunger**: one number per side, 0 to 100%. At each meal, if there isn't
@@ -314,7 +317,11 @@ Run `npm start` and open http://127.0.0.1:2567.
   the game as finished.
 - **Ending a game early**: **End**, beside the time, ends the game for
   everyone, after asking. The player who started it may at any time; any
-  other seated player (castle standing or not) after an hour of game time.
+  other seated player (castle standing or not) after an hour of game time;
+  and once a game is a day old (real time, from its creation) with none of
+  its other players online, anyone viewing it, spectators too, so an
+  abandoned game can be closed. A spectator's ending counts every seat as
+  giving up: the Dark Lord wins, or in free for all nobody does.
   Their team gives up: if just one other team still has a castle or lair
   standing, it wins (the Dark Lord, in cooperation, or the last rival in a
   duel); otherwise nobody does (free for all with more left). Then it is
@@ -534,13 +541,14 @@ http://127.0.0.1:2567;` with the same headers.
   refuses with a reason and changes nothing:
   - `{ type: 'build', kind, q, r, units? }`: a tower, wagon, pit, farm or band, with a crew if `units` lists one;
   - `{ type: 'crew', building, units }`: that building's whole crew (`[]` sends them all home);
+  - `{ type: 'home', units }`: calls these units home to the castle from wherever they are (a building's crew, a band, or the way to one); those home or on their way home stay. Refused if all are.
   - `{ type: 'upgrade', building }`: paid now, then worked on by its crew;
   - `{ type: 'abort', building }`: gives up a building still going up;
   - `{ type: 'move', building, q, r }`: a wagon or band;
   - `{ type: 'target', building, target }`: an enemy building or band to go for (`''` clears it);
   - `{ type: 'rename', name }`: the game's name (the room takes this one while the game is paused too);
   - `{ type: 'away' }` and `{ type: 'back' }`: the side's player has gone, and the game goes on without them, or is back. Only the room gives these (`ROOM_COMMANDS`), and logs them like the rest, so replays agree.
-  - `{ type: 'end' }`: the side's player ends the game for everyone (see Ending a game early). Only the room gives it, for the game's creator or, after an hour, any seated player, and saves the game at once.
+  - `{ type: 'end', idle? }`: the side's player ends the game for everyone (see Ending a game early), or with `idle: 1` every seat gives up (an abandoned game ended by a spectator, logged as seat 0's). Only the room gives it, and saves the game at once.
 - `advance(board, state)` runs one tick: every second a round of fighting,
   collapses, every minute food and a meal, empty bands breaking up, mending,
   raising and upgrading, work in castles, pits and farms, wagons and bands,

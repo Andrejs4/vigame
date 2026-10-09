@@ -12,7 +12,7 @@ import {
 } from '../core/game.js';
 import { GAME_NAME_MAX, cleanGameName } from '../core/player.js';
 import { PORTRAIT_SIDE, portraitOf } from '../core/names.js';
-import { BUILDING_TYPES, END_ANYONE_TICKS, POINTS, QUICK_WIN, RANGED_RANGE, SKILL_SHORT, TICKS_PER_SECOND, UNIT_LIMIT } from '../core/rules.js';
+import { BUILDING_TYPES, END_ANYONE_TICKS, END_IDLE_MS, POINTS, QUICK_WIN, RANGED_RANGE, SKILL_SHORT, TICKS_PER_SECOND, UNIT_LIMIT } from '../core/rules.js';
 import { getJson, serverBase } from './api.js';
 import { Camera } from './camera.js';
 import { Effects, fallenHeroes, fallenHeroesNote } from './effects.js';
@@ -65,7 +65,7 @@ const HOME_ZOOM = COUNT_ZOOM + 0.15;
  * `score…` and `score…What` (words.js).
  * @type {Array<keyof typeof POINTS>}
  */
-const SCORE_LINES = ['won', 'castles', 'felled', 'kills', 'damage', 'upgrades', 'built', 'born', 'stone', 'food'];
+const SCORE_LINES = ['castles', 'felled', 'kills', 'damage', 'upgrades', 'built', 'born', 'stone', 'food'];
 
 /** Where this browser keeps which panels are folded away: the status panel, the minimap. */
 const FOLDED_KEY = 'vigame.folded';
@@ -202,6 +202,9 @@ export async function startGame(net, me) {
   const crewDialog = /** @type {HTMLDialogElement} */ (document.getElementById('crew'));
   const renameDialog = /** @type {HTMLDialogElement} */ (document.getElementById('rename'));
   const heroesDialog = /** @type {HTMLDialogElement} */ (document.getElementById('heroes'));
+  const heroesHome = /** @type {HTMLButtonElement} */ (document.getElementById('heroes-home'));
+  /** Whether the heroes list waits for the next update to show them going home. */
+  let heroesAgain = false;
   const heroesList = /** @type {HTMLElement} */ (document.getElementById('heroes-list'));
   const heroesCount = /** @type {HTMLElement} */ (document.getElementById('heroes-count'));
   const renameButton = /** @type {HTMLButtonElement} */ (document.getElementById('rename-button'));
@@ -342,6 +345,11 @@ export async function startGame(net, me) {
     refreshHighlights();
     updateHud();
     needsDraw = true;
+    // Heroes called home: the open list shows them on their way.
+    if (heroesAgain && heroesDialog.open) {
+      heroesAgain = false;
+      showHeroes();
+    }
     // The table of points, once, when the game is over (or opens over).
     if (next.over !== undefined && !scoresSeen) {
       scoresSeen = true;
@@ -419,6 +427,10 @@ export async function startGame(net, me) {
     // From 10000 a "k", with the exact points in its tooltip.
     const points = (/** @type {number} */ n, className = '') => Object.assign(
       cell('td', shortPoints(n), shortPoints(n) === String(n) ? '' : String(n)), className ? { className } : {});
+    // A line's own count (stone dug, hit points taken off…), from 10000 a
+    // "k"; the points it gave in its tooltip.
+    const count = (/** @type {number} */ n, /** @type {number} */ worthPoints) => cell('td', shortPoints(n),
+      [shortPoints(n) === String(n) ? '' : String(n), word('pointsWorth', { n: worthPoints })].filter(Boolean).join(' · '));
     const rows = players
       .filter((p) => p.tally && !sideOf(view, p.id).wild)
       .map((p) => ({ p, side: sideOf(view, p.id), score: scoreOf(view, p.id), won: p.team === winner }))
@@ -432,7 +444,7 @@ export async function startGame(net, me) {
     };
     /** @type {HTMLElement} */ (document.getElementById('scores-head')).replaceChildren(
       cell('th', word('scoresSide')),
-      Object.assign(cell('th', word('scoresTotal')), { className: 'total' }),
+      Object.assign(cell('th', word('scoresTotal'), word('scoresTotalTitle', { won: POINTS.won })), { className: 'total' }),
       ...(bonus ? [cell('th', word('scoresBonus'), word('scoresBonusTitle', { ranges }))] : []),
       ...SCORE_LINES.map(heading),
     );
@@ -444,7 +456,7 @@ export async function startGame(net, me) {
       who.style.color = side.accent;
       tr.append(who, points(score.total, 'total'),
         ...(bonus ? [Object.assign(cell('td', score.times > 1 ? `×${number.format(score.times)}` : ''), { className: 'bonus' })] : []),
-        ...SCORE_LINES.map((line) => points(score.lines[line])));
+        ...SCORE_LINES.map((line) => count(p.tally?.[line] ?? 0, score.lines[line])));
       return tr;
     }));
   }
@@ -504,12 +516,25 @@ export async function startGame(net, me) {
   }
 
   /**
-   * Whether this viewer may end the game for everyone: a seated player, its
-   * creator at any time, anyone else after an hour of play (the room checks).
+   * Whether this game is abandoned: a day old, and none of its players but
+   * this viewer is here.
+   */
+  function abandoned() {
+    const me = peers.find((p) => p.isMe)?.uid;
+    const here = new Set(peers.filter((p) => !p.isMe).map((p) => p.uid));
+    return net.createdAt() > 0 && Date.now() - net.createdAt() >= END_IDLE_MS
+      && !net.seats().some((holder) => holder !== null && holder !== me && here.has(holder));
+  }
+
+  /**
+   * Whether this viewer may end the game for everyone (the room checks): a
+   * seated player, its creator at any time, anyone else after an hour of
+   * play; and anyone viewing an abandoned game.
    */
   function canEndGame() {
-    if (net.seat() === null || !view || view.over !== undefined) return false;
-    return net.isCreator() || view.tick >= END_ANYONE_TICKS;
+    if (!view || view.over !== undefined) return false;
+    if (net.seat() !== null && (net.isCreator() || view.tick >= END_ANYONE_TICKS)) return true;
+    return abandoned();
   }
 
   /** Whether this viewer may rename the game: a player still in it, paused or not. */
@@ -833,8 +858,25 @@ export async function startGame(net, me) {
     heroesCount.textContent = [
       word('heroesCount', { n: heroes.length, total: units.length }), gone.length ? word('fallenCount', { n: gone.length }) : '',
     ].filter(Boolean).join(' · ');
-    heroesDialog.showModal();
-    heroesList.scrollTop = 0;
+    // All home: those not home and not on their way there, if any.
+    const castle = castleOf(view, seat)?.id;
+    const away = heroes.filter((u) => u.in !== castle && u.to !== castle).map((u) => u.id);
+    heroesHome.disabled = !away.length || !canCommand();
+    heroesHome.onclick = async () => {
+      // A disabled button lets go of the focus; Close keeps it in the list,
+      // so its keys (H, Escape) still reach it.
+      heroesDialog.querySelector('button[value="close"]')?.focus();
+      heroesHome.disabled = true;
+      // The room takes lists as long as a band's crew at most.
+      for (let i = 0; i < away.length; i += BUILDING_TYPES.band.capacity) {
+        if (!(await give({ type: 'home', units: away.slice(i, i + BUILDING_TYPES.band.capacity) }, 'call them home'))) break;
+      }
+      heroesAgain = true;
+    };
+    if (!heroesDialog.open) {
+      heroesDialog.showModal();
+      heroesList.scrollTop = 0;
+    }
   }
 
   /**
@@ -1419,11 +1461,13 @@ export async function startGame(net, me) {
   // still standing, if just one is (the Dark Lord, in cooperation), or nobody.
   endButton.addEventListener('click', async () => {
     const seat = net.seat();
-    if (!view || seat === null) return;
+    if (!view) return;
     const players = view.players;
-    const team = endWinner(view, seat);
+    // A spectator ends an abandoned game for every seat at once.
+    const team = seat === null ? endWinner(view, 0, true) : endWinner(view, seat);
     const winners = players.filter((p) => p.team === team);
-    const ask = team === undefined ? word('askEndNobody')
+    const ask = seat === null ? word(team === undefined ? 'askEndIdle' : 'askEndIdleLord')
+      : team === undefined ? word('askEndNobody')
       : winners.some((p) => sideOf(view, p.id)?.npc) ? word('askEndLord')
         : word('askEndSide', { side: winners.map((p) => sideName({ players }, p.id)).join(', ') });
     if (!confirm(ask)) return;

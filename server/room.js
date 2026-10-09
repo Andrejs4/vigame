@@ -26,7 +26,7 @@ import { ErrorCode, Room, ServerError, logger } from '@colyseus/core';
 
 import { BOARD_OPTIONS, createBoard, tileAt } from '../src/core/board.js';
 import { ROOM_COMMANDS, advance, applyCommand, checkState, newGame, publicView } from '../src/core/game.js';
-import { BUILDING_TYPES, DEFAULT_MODE, END_ANYONE_TICKS, MODES, TICKS_PER_SECOND } from '../src/core/rules.js';
+import { BUILDING_TYPES, DEFAULT_MODE, END_ANYONE_TICKS, END_IDLE_MS, MODES, TICKS_PER_SECOND } from '../src/core/rules.js';
 import { GameState, ViewerState, syncGame, syncSeats } from './schema.js';
 
 /** What a player token must look like: long, random, URL-safe. */
@@ -232,9 +232,12 @@ export class GameRoom extends Room {
     this.seats = saved.seats.map((pid) => pid ?? null);
     /** The player who started the game, who may start it without the players missing. */
     this.creator = saved.creator ?? null;
+    /** When the game was created: a day on, an abandoned game may be ended. */
+    this.createdAt = saved.createdAt;
 
     const state = new GameState();
     state.creator = this.creator ?? '';
+    state.createdAt = this.createdAt;
     syncGame(state, publicView(game));
     syncSeats(state, this.seats);
     this.setState(state);
@@ -318,9 +321,12 @@ export class GameRoom extends Room {
   }
 
   /**
-   * A seated player ends the game for everyone, as a command the room logs:
+   * End the game for everyone, as a command the room logs: a seated player,
    * its creator at any time, anyone else after an hour of play
-   * (END_ANYONE_TICKS). Then it is over (`finish`).
+   * (END_ANYONE_TICKS). And once the game is a day old (END_IDLE_MS) with
+   * none of its other players here, anyone viewing it, so an abandoned game
+   * can be closed: a spectator's ending counts every seat as giving up
+   * (`idle`). Then it is over (`finish`).
    * @param {string} pid Who asks.
    * @returns {string | null} Why not, or null once done.
    */
@@ -328,9 +334,14 @@ export class GameRoom extends Room {
     if (this.deleted) return 'the game is gone';
     if (this.game.over !== undefined) return 'the game is over';
     const seat = this.seatOf(pid);
-    if (seat === null) return 'not seated';
-    if (pid !== this.creator && this.game.tick < END_ANYONE_TICKS) return 'only its creator may end it in its first hour';
-    const outcome = this.commit(seat, { type: 'end' });
+    const here = this.here();
+    const abandoned = Date.now() - this.createdAt >= END_IDLE_MS
+      && !this.seats.some((holder) => holder !== null && holder !== pid && here.has(holder));
+    const player = seat !== null && (pid === this.creator || this.game.tick >= END_ANYONE_TICKS || abandoned);
+    if (!player && !abandoned) {
+      return seat === null ? 'only its players may end it, until it is a day old with none of them here' : 'only its creator may end it in its first hour';
+    }
+    const outcome = player ? this.commit(seat, { type: 'end' }) : this.commit(0, { type: 'end', idle: 1 });
     if (!outcome.ok) return outcome.reason;
     this.state.running = false;
     this.finish();

@@ -420,13 +420,18 @@ async function finished(browser, url) {
   assert.equal(await text(page, '#scores-outcome'), '15:00 · Blue won · quick win: points ×2');
   // The side, its total and bonus first, then the lines, the weightiest first.
   assert.deepEqual(await page.$$eval('#scores-head th', (ths) => ths.map((th) => th.textContent)),
-    ['Side', 'Total', 'Bonus', 'Win', 'Castles', 'Felled', 'Kills', 'Damage', 'Upgrades', 'Built', 'Born', 'Stone', 'Food']);
+    ['Side', 'Total', 'Bonus', 'Castles', 'Felled', 'Kills', 'Damage', 'Upgrades', 'Built', 'Born', 'Stone', 'Food']);
   // Fay: (1200 + 4321 + 500 + 45 + 30 + 2 + 60 + 100 + 500) × 2 = 13516, shown as 14k with the
-  // exact points in its tooltip; the Dark Lord: 50 + 80, no bonus.
+  // exact points in its tooltip; the Dark Lord: 50 + 80, no bonus. The lines
+  // are counts, each with the points it gave in its tooltip: 43210 hit points
+  // of damage, 43k, gave 4321.
   await page.waitForFunction(() => document.querySelector('#scores-body tr td')?.textContent === 'Fay · Blue');
   const rows = await page.$$eval('#scores-body tr', (trs) => trs.map((tr) => [...tr.cells].slice(0, 4).map((td) => td.textContent)));
-  assert.deepEqual(rows, [['Fay · Blue', '14k', '×2', '500'], ['Dark Lord', '130', '', '0']]);
+  assert.deepEqual(rows, [['Fay · Blue', '14k', '×2', '1'], ['Dark Lord', '130', '', '0']]);
   assert.equal(await page.getAttribute('#scores-body tr td.total', 'title'), '13516');
+  const fay = await page.$$eval('#scores-body tr:first-child td', (tds) => tds.slice(3).map((td) => [td.textContent, td.title]));
+  assert.deepEqual(fay, [['1', '500 points'], ['0', '0 points'], ['120', '1200 points'], ['43k', '43210 · 4321 points'], ['2', '100 points'],
+    ['3', '60 points'], ['9', '45 points'], ['30', '30 points'], ['25', '2 points']]);
   // Every column in view on a desktop, and Keep watching has the focus.
   const fitsTable = (/** @type {import('playwright').Page} */ p) => p.$eval('#scores .scores-wrap', (w) => w.scrollWidth <= w.clientWidth);
   assert.ok(await fitsTable(page), 'the table of points scrolls on a desktop');
@@ -442,7 +447,7 @@ async function finished(browser, url) {
   assert.equal(await text(ru, '#scores-title'), 'Игра окончена');
   assert.equal(await text(ru, '#scores-outcome'), '15:00 · победили Синие · быстрая победа: очки ×2');
   await ru.waitForFunction(() => document.querySelector('#scores-body tr td')?.textContent === 'Fay · Синие');
-  assert.deepEqual(await ru.$$eval('#scores-head th', (ths) => ths.slice(0, 4).map((th) => th.textContent)), ['Сторона', 'Всего', 'Бонус', 'Победа']);
+  assert.deepEqual(await ru.$$eval('#scores-head th', (ths) => ths.slice(0, 4).map((th) => th.textContent)), ['Сторона', 'Всего', 'Бонус', 'Замки']);
   assert.equal(await text(ru, '#scores-leave'), 'Покинуть матч');
   assert.ok(await fitsTable(ru), 'the Russian table of points scrolls on a desktop');
   await ru.screenshot({ path: join(OUT, 'scores-ru.png') });
@@ -960,6 +965,7 @@ async function threeBrowsers(browser, url, { full, label }) {
     id: /** @type {HTMLElement} */ (e).dataset.unit,
     level: Number(/^Lv *(\d+) · \d+m$/.exec(e.querySelector('.stats')?.textContent ?? '')?.[1]),
     skills: e.querySelector('.skills')?.textContent ?? '',
+    where: e.querySelector('.where')?.textContent ?? '',
   })));
   // Each listed unit is a hero of hers (unless gone since), and each of
   // hers born before it opened is listed.
@@ -1011,6 +1017,18 @@ async function threeBrowsers(browser, url, { full, label }) {
   const skillLine = new RegExp(`^${['Att', 'Mel', 'Bld', 'Frm', 'Brd', 'Run'].map((s) => `${s} [ \\d]{2}\\d`).join('')}$`);
   for (const { skills } of listed) assert.match(skills, skillLine);
   await a.screenshot({ path: join(OUT, 'heroes.png') });
+  // All home calls the heroes out of their buildings: the list shows them
+  // going home, and has nothing more to call. (With all of them home
+  // already, it has nothing to call from the start.)
+  const awayHeroes = listed.filter((h) => !/^(at home|going home)$/.test(h.where)).length;
+  assert.equal(await a.locator('#heroes-home').isDisabled(), awayHeroes === 0, `${awayHeroes} heroes away`);
+  if (awayHeroes) {
+    await a.click('#heroes-home');
+    await a.waitForFunction(() => [...document.querySelectorAll('#heroes-list li:not(.fallen) .where')]
+      .every((e) => /^(at home|going home)$/.test(e.textContent ?? '')));
+    assert.equal(await a.locator('#heroes-home').isDisabled(), true, 'nobody left to call');
+    await a.screenshot({ path: join(OUT, 'heroes-home.png') });
+  }
   // A hero the page saw die goes below the living, as last seen: how long
   // it lived in silver, and how it died where it would be. (One is made up
   // here, from one of her units: nobody dies this early in the game.)
@@ -1149,6 +1167,7 @@ async function threeBrowsers(browser, url, { full, label }) {
   await waitText(a, '#players', '2/2');
   assert.equal(await a.locator('#players.waiting').count(), 0, 'Players still blinks with everyone here');
   assert.equal(await c.locator('#build-tower').isDisabled(), true);
+  assert.equal(await c.locator('#end-button').isVisible(), false, 'a spectator may end only a day-old game none of its players is in');
 
   // A link to a game that doesn't exist lands in the lobby, which says so.
   // (Chromium logs the refused join request itself as a console error, and
