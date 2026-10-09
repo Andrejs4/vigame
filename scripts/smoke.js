@@ -511,7 +511,8 @@ async function settings(a, { full }) {
   await waitText(a, '#lobby-settings', 'Настройки');
   await waitText(a, '#lobby-mine-section h2 [data-word]', 'Ваши игры');
   await waitText(a, '#lobby-mode option[value="ffa"]', 'Все против всех: каждый сам за себя');
-  await waitText(a, '#lobby-mode option[value="veryEasy"]', 'Очень Лёгкий Лорд: как Общий Лёгкий, и юниты плодятся вдвое быстрее');
+  await waitText(a, '#lobby-breeding option[value="slow"]', 'Медленный (0,5×)');
+  await waitText(a, 'label[for="lobby-breeding"]', 'Прирост юнитов');
   await a.click('#lobby-how-section summary');
   await a.click('#lobby-about-section summary');
   assert.equal(await a.locator('#lobby-how-section [lang="ru"]').isVisible(), true);
@@ -676,6 +677,8 @@ async function threeBrowsers(browser, url, { full, label }) {
   await inLobby(b);
   await b.locator('#lobby-open li', { hasText: rename }).first().waitFor({ timeout: 10000 });
   if (full) await b.screenshot({ path: join(OUT, 'lobby-games.png') });
+  // Its mode, with no word on its units: they come as usual.
+  assert.match(await b.locator('#lobby-open li', { hasText: rename }).first().locator('.when').innerText(), /^Cooperation · \d+:\d\d$/);
   await openFromLobby(b, 'open', 'Ann & —');
   await waitText(b, '#seat', 'Bella · Crimson');
   // Now the castle Ann has selected says it is Bella's.
@@ -1271,14 +1274,15 @@ async function latvianFinnish(browser, url) {
   await waitText(lv, '#lobby-mode option[value="coop"]', 'Sadarbība: kopā pret Tumšo Kungu');
   assert.equal(await lv.evaluate(() => document.documentElement.lang), 'lv');
   assert.equal(await lv.locator('#lobby-how-section [lang="lv"]').count(), 1);
-  // A Very Easy Lord game: one stock for both, and castles raise units twice as fast.
-  await lv.selectOption('#lobby-mode', 'veryEasy');
-  assert.equal(await lv.locator('#lobby-mode option:checked').textContent(), 'Ļoti Vieglais Kungs: kā Kopīgais Vieglais, un vienības vairojas divreiz ātrāk');
+  // A Shared Easy Lord game where castles raise units twice as fast.
+  await lv.selectOption('#lobby-mode', 'shared');
+  await lv.selectOption('#lobby-breeding', 'fast');
+  assert.equal(await lv.locator('#lobby-breeding option:checked').textContent(), 'Ātrs (2×)');
   await lv.screenshot({ path: join(OUT, 'lobby-lv.png') });
   await lv.selectOption('#lobby-players', '2');
   await lv.tap('#lobby-new');
   await inGame(lv);
-  assert.equal(await lv.evaluate(() => /** @type {any} */ (window).__vigame.view.mode), 'veryEasy');
+  assert.deepEqual(await lv.evaluate(() => [/** @type {any} */ (window).__vigame.view.mode, /** @type {any} */ (window).__vigame.view.breeding]), ['shared', 'fast']);
   const fi = await newPlayer(browser, lv.url(), 'finnish', 'Aino', { viewport: { width: 1280, height: 800 }, locale: 'fi-FI' });
   await inGame(fi);
   await waitMatch(lv, '#time', /^0:0[1-9]$/);

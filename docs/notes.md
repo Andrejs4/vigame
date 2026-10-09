@@ -303,8 +303,8 @@ game's terms), which the rest of the game should match: юниты (units),
 (Abort), «Герои…» (Heroes), «Атака…» (Attack), «Апгрейд» (Upgrade, the
 author's word), яма (pit), воз (wagon), отряд (band), башня, ферма,
 прочность (a building's hit points), кустарник (scrub), Тёмный Лорд (the
-Dark Lord), modes Кооператив, Лёгкий Лорд, Общий Лёгкий Лорд, Очень Лёгкий Лорд, Все против
-всех, sides Синие, Багровые, Зелёные, Золотые, Бирюзовые, Оранжевые,
+Dark Lord), modes Кооператив, Лёгкий Лорд, Общий Лёгкий Лорд, Все против
+всех, «Прирост юнитов» (unit production: Обычный, Быстрый, Медленный), sides Синие, Багровые, Зелёные, Золотые, Бирюзовые, Оранжевые,
 Розовые, Серебряные (plural, as teams: "победили Синие"), and for seats 9
 to 16 Лазурные, Салатовые, Индиго, Вишнёвые, Оливковые, Коралловые, Белые,
 Мятные (Azure, Lime, Indigo, Cherry, Olive, Coral, White, Mint; Latvian
@@ -475,6 +475,15 @@ already rules out e-mails and phone numbers with + or dashes. Phone and
 PII libraries (libphonenumber-js, OpenRedaction…) are far bigger than the
 need. AI toxicity models are too big and don't know Latvian or Finnish;
 for slang and double meanings, an admin rename or clear is the tool.
+
+### Game exports with a map version
+
+The author's thought (October 2026), after Very Easy Lord gave way to
+unit production and every game was dropped once more: a game could be
+exported (its seed, players, mode, pace and command log) with the version
+of the map and rules it was played under, so a change that drops games
+needn't lose one worth keeping. Not built; for now each such change
+deletes the games (CLAUDE.md), and only the high scores stay.
 
 ### Further off
 

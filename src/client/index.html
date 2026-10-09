@@ -84,8 +84,14 @@
       <option value="coop" selected data-word="coopChoice">Cooperation: together against the Dark Lord</option>
       <option value="easy" data-word="easyChoice">Easy Lord: together against a weaker Dark Lord</option>
       <option value="shared" data-word="sharedChoice">Shared Easy Lord: one stock for all, against a weaker Dark Lord</option>
-      <option value="veryEasy" data-word="veryEasyChoice">Very Easy Lord: as Shared Easy Lord, and units breed twice as fast</option>
       <option value="ffa" data-word="ffaChoice">Free for all: each against the other</option>
+    </select>
+    <!-- How fast castles raise units, in any mode. -->
+    <label for="lobby-breeding" data-word="unitProduction">Unit production</label>
+    <select id="lobby-breeding">
+      <option value="normal" selected data-word="breedingNormal">Normal</option>
+      <option value="fast" data-word="breedingFast">Fast (2×)</option>
+      <option value="slow" data-word="breedingSlow">Slow (0.5×)</option>
     </select>
     <label for="lobby-players" data-word="players">Players</label>
     <select id="lobby-players">

@@ -82,7 +82,7 @@ function row(game, action, language) {
   });
   const when = document.createElement('span');
   when.className = 'when';
-  const mode = Object.hasOwn(MODES, game.mode) && isWord(game.mode) ? say(language, { word: game.mode }) : '';
+  const mode = modeText(game.mode, game.breeding, language);
   when.textContent = `${mode} · ${gameTime(game.tick)}${game.over === null ? '' : ` · ${result(game, language)}`}`;
   who.append(when);
 
@@ -134,7 +134,7 @@ function fillBest(best, language) {
     title.append(`${i + 1}. `, name, s.won ? ' ★' : '');
     const when = document.createElement('span');
     when.className = 'when';
-    const mode = Object.hasOwn(MODES, s.game.mode) && isWord(s.game.mode) ? say(language, { word: s.game.mode }) : '';
+    const mode = modeText(s.game.mode, s.details.breeding, language);
     when.textContent = [s.game.name ?? say(language, { word: 'aGame' }), mode].filter(Boolean).join(' · ');
     who.append(title, when);
     const points = document.createElement('span');
@@ -156,6 +156,21 @@ function fillBest(best, language) {
 }
 
 /**
+ * A game's mode, and how fast its units were raised unless as usual
+ * ("Cooperation · Fast units"). A score from Very Easy Lord, which gave way
+ * to the choice, reads as what it was: Shared Easy Lord with fast units.
+ * @param {string} mode
+ * @param {string | null | undefined} breeding
+ * @param {PageLanguage} language
+ */
+function modeText(mode, breeding, language) {
+  const [shown, pace] = mode === 'veryEasy' ? ['shared', 'fast'] : [mode, breeding];
+  const name = Object.hasOwn(MODES, shown) && isWord(shown) ? say(language, { word: shown }) : '';
+  const units = pace === 'fast' ? 'fastUnits' : pace === 'slow' ? 'slowUnits' : null;
+  return [name, units ? say(language, { word: units }) : ''].filter(Boolean).join(' · ');
+}
+
+/**
  * Show the lobby. It stays up until the player opens a game, which loads
  * that game's address.
  * @param {string} token
@@ -170,6 +185,7 @@ export function showLobby(token, me, { notice } = {}) {
   const newButton = /** @type {HTMLButtonElement} */ (document.getElementById('lobby-new'));
   const modeSelect = /** @type {HTMLSelectElement} */ (document.getElementById('lobby-mode'));
   const playersSelect = /** @type {HTMLSelectElement} */ (document.getElementById('lobby-players'));
+  const breedingSelect = /** @type {HTMLSelectElement} */ (document.getElementById('lobby-breeding'));
   const language = chosenLanguage(me.language, autoLanguage(browserLanguages(), me.name));
 
   // Every text in the player's language; How to play and About are written
@@ -275,7 +291,7 @@ export function showLobby(token, me, { notice } = {}) {
     newButton.disabled = true;
     limit.hidden = true;
     try {
-      const res = await post('api/games', { token, mode: modeSelect.value, players: Number(playersSelect.value) });
+      const res = await post('api/games', { token, mode: modeSelect.value, breeding: breedingSelect.value, players: Number(playersSelect.value) });
       // Too many games on the go: the server says how many and which, to go
       // back to.
       if (res.status === 409) {

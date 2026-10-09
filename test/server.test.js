@@ -272,10 +272,15 @@ test('new games are stored with a castle per side, and listed; unknown ones are 
   assert.equal(easy.status, 201);
   const easyGame = await (await fetch(`${base}/api/games/${(await easy.json()).id}`)).json();
   assert.deepEqual([easyGame.state.mode, easyGame.seats.length], ['easy', 1], 'Easy Lord, one player by default');
-  const veryEasy = await post('/api/games', { token: TOKENS.a, mode: 'veryEasy', players: 2 });
-  assert.equal(veryEasy.status, 201);
-  assert.equal((await (await fetch(`${base}/api/games/${(await veryEasy.json()).id}`)).json()).state.mode, 'veryEasy');
+  const fast = await post('/api/games', { token: TOKENS.a, mode: 'shared', breeding: 'fast', players: 2 });
+  assert.equal(fast.status, 201);
+  const fastId = (await fast.json()).id;
+  const fastState = (await (await fetch(`${base}/api/games/${fastId}`)).json()).state;
+  assert.deepEqual([fastState.mode, fastState.breeding], ['shared', 'fast']);
+  assert.deepEqual([...new Set((await (await fetch(`${base}/api/games`)).json()).map((/** @type {any} */ g) => g.breeding))].sort(), ['fast', 'normal'], 'normal by default');
   assert.equal((await post('/api/games', { token: TOKENS.a, mode: 'solo' })).status, 400);
+  assert.equal((await post('/api/games', { token: TOKENS.a, mode: 'veryEasy' })).status, 400, 'Very Easy Lord gave way to Fast');
+  assert.equal((await post('/api/games', { token: TOKENS.a, breeding: 'veryFast' })).status, 400);
   const sixteen = await post('/api/games', { token: TOKENS.a, players: 16 });
   assert.equal(sixteen.status, 201);
   assert.equal((await (await fetch(`${base}/api/games/${(await sixteen.json()).id}`)).json()).seats.length, 16);

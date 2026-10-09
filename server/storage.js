@@ -24,7 +24,7 @@ import Database from 'better-sqlite3';
 import { HIGH_SCORES, scoreRows } from './scores.js';
 
 /** Bump when the tables change, and add the upgrade step to `migrate`. */
-const SCHEMA_VERSION = 25;
+const SCHEMA_VERSION = 26;
 
 /**
  * @typedef {{ id: string, seed: number, state: unknown, seq: number, seats: Array<string | null>,
@@ -66,7 +66,7 @@ export function openStorage(file = ':memory:') {
   const selectCommands = db.prepare(`
     SELECT seq, tick, player, command, at FROM commands WHERE game_id = ? AND seq > ? ORDER BY seq`);
   const SUMMARY = `id, seats, former, creator, created_at, updated_at, json_extract(state, '$.tick') AS tick,
-    json_extract(state, '$.mode') AS mode, json_extract(state, '$.name') AS name,
+    json_extract(state, '$.mode') AS mode, json_extract(state, '$.breeding') AS breeding, json_extract(state, '$.name') AS name,
     json_extract(state, '$.over') AS over, json_extract(state, '$.winner') AS winner,
     (SELECT json_group_array(key) FROM json_each(state, '$.players') WHERE json_extract(value, '$.lost') IS NOT NULL) AS fallen`;
   const selectRecent = db.prepare(`SELECT ${SUMMARY} FROM games ORDER BY updated_at DESC, id LIMIT ?`);
@@ -542,6 +542,16 @@ function migrate(db) {
       db.exec('PRAGMA user_version = 25;');
     })();
   }
+  if (version < 26) {
+    // Very Easy Lord gave way to choosing how fast units are raised, in any
+    // mode. The author's choice: games under way and finished go; the high
+    // scores and the players stay.
+    db.transaction(() => db.exec(`
+      DELETE FROM commands;
+      DELETE FROM games;
+      PRAGMA user_version = 26;
+    `))();
+  }
 }
 
 /**
@@ -590,6 +600,7 @@ function summary(row) {
   return {
     id: row.id,
     mode: row.mode,
+    breeding: row.breeding ?? null,
     name: row.name ?? null,
     over: row.over ?? null,
     winner: row.winner ?? null,

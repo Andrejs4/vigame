@@ -41,7 +41,7 @@ import { tileAt } from './board.js';
 import { gameName, unitName } from './names.js';
 import { GAME_NAME_MAX, cleanGameName } from './player.js';
 import {
-  BREED_RATE, BUILDING_TYPES, BUILD_RANGE, DARK_LORD, HERO_LEVEL_GROWTH, HERO_LEVEL_XP, HERO_SHARE, LORD_HP, LORD_PLAYERS_MAX, SHARED_STOCK, HORDE_MAX, HORDE_PERIOD, HORDE_START, POINTS, QUICK_WIN, RAIDERS, SALVAGE, SEAT_SIDES, RAID_CHANCE, RAID_CLEAR, RAID_PER_PLAYER, RAID_PERIOD, RAID_ROAM, START_METAL, DEFAULT_MODE, MAX_PLAYERS, MODES, COMBAT_PERIOD, DEPART_GAP, FOOD_PER_UNIT, KILL_EVEN, KILL_MAX, KILL_STEP, KILL_XP, MELEE_DAMAGE, MELEE_RANGE,
+  BREEDING, BUILDING_TYPES, BUILD_RANGE, DARK_LORD, HERO_LEVEL_GROWTH, HERO_LEVEL_XP, HERO_SHARE, LORD_HP, LORD_PLAYERS_MAX, SHARED_STOCK, HORDE_MAX, HORDE_PERIOD, HORDE_START, POINTS, QUICK_WIN, RAIDERS, SALVAGE, SEAT_SIDES, RAID_CHANCE, RAID_CLEAR, RAID_PER_PLAYER, RAID_PERIOD, RAID_ROAM, START_METAL, DEFAULT_BREEDING, DEFAULT_MODE, MAX_PLAYERS, MODES, COMBAT_PERIOD, DEPART_GAP, FOOD_PER_UNIT, KILL_EVEN, KILL_MAX, KILL_STEP, KILL_XP, MELEE_DAMAGE, MELEE_RANGE,
   RANGED_DAMAGE, RANGED_RANGE, REPAIR_WORK, FOOD_PERIOD, FOOD_STORE, HUNGER_PULL, LEVEL_GROWTH,
   LEVEL_RATE, LEVEL_XP, MAX_HUNGER, MAX_LEVEL, SIDES, SKILLS, SKILL_RATE, SKILL_XP, START_STONE, START_UNITS, STARVE_CHANCE,
   UNIT_LIMIT, WAGON_PATIENCE, WALK_TICKS, WORK_BASE,
@@ -101,6 +101,7 @@ import {
  * @typedef {object} GameState
  * @property {number} version The shape of this object; see STATE_VERSION.
  * @property {string} mode A key of MODES.
+ * @property {string} breeding How fast castles raise units: a key of BREEDING.
  * @property {string} name What the lobby calls it: one of GAME_NAMES (in
  *   names.js) at first, then whatever its players rename it (cleanGameName).
  * @property {number} [over] The tick the game ended: once only one team (or
@@ -164,7 +165,7 @@ import {
 export const ROOM_COMMANDS = Object.freeze(['away', 'back', 'end']);
 
 /** Bump when GameState changes shape, and teach `checkState` the new one. */
-export const STATE_VERSION = 12;
+export const STATE_VERSION = 13;
 
 const SKILL_NAMES = /** @type {Skill[]} */ (Object.keys(SKILLS));
 
@@ -197,14 +198,15 @@ export function levelXp(level, hero = false) {
  * each with its first units; in cooperation, the players on one team and
  * the Dark Lord's lair in the middle.
  * @param {Board} board Made for as many players (`createBoard`'s `players`).
- * @param {{ mode?: string }} [options]
+ * @param {{ mode?: string, breeding?: string }} [options]
  * @returns {GameState}
  */
-export function newGame(board, { mode = DEFAULT_MODE } = {}) {
+export function newGame(board, { mode = DEFAULT_MODE, breeding = DEFAULT_BREEDING } = {}) {
   /** @type {GameState} */
   const state = {
     version: STATE_VERSION,
     mode,
+    breeding,
     name: gameName(board.seed),
     seed: board.seed,
     tick: 0,
@@ -481,12 +483,16 @@ export function depthOf(b) {
 }
 
 /**
- * How fast castles raise units in this mode, as a multiple of the usual
- * (BREED_RATE): twice as fast in Very Easy Lord.
- * @param {string} mode
+ * The work a building does for each thing it yields; for a castle's new
+ * unit, divided by how fast the game raises them (BREEDING).
+ * @param {Pick<GameState, 'breeding'>} state
+ * @param {string} type
+ * @returns {number | undefined} None for a building that does no work.
  */
-export function breedRate(mode) {
-  return Object.hasOwn(BREED_RATE, mode) ? BREED_RATE[mode] : 1;
+export function workFor(state, type) {
+  const { work, yields } = BUILDING_TYPES[type];
+  if (work === undefined || yields !== 'unit') return work;
+  return work / (Object.hasOwn(BREEDING, state.breeding) ? BREEDING[state.breeding] : 1);
 }
 
 /**
@@ -1840,19 +1846,18 @@ function work(board, state, occ) {
     const workers = elsewhere ? [] : inside;
     if (!workers.length && !type.idleWork) continue;
 
-    // Some modes raise units faster; the units learn as fast as ever.
-    const rate = type.yields === 'unit' ? breedRate(state.mode) : 1;
-    let done = /** @type {number} */ (b.work) + (type.idleWork ?? 0) * rate;
+    const need = /** @type {number} */ (workFor(state, b.type));
+    let done = /** @type {number} */ (b.work) + (type.idleWork ?? 0);
     for (const id of workers) {
       const u = state.units[id];
-      done += (WORK_BASE + u.skills[type.skill]) * rate;
+      done += WORK_BASE + u.skills[type.skill];
       practise(u, type.skill);
     }
-    if (done < type.work) {
+    if (done < need) {
       b.work = done;
       continue;
     }
-    b.work = Math.min(done - type.work, type.work - 1);
+    b.work = Math.min(done - need, need - 1);
 
     const stock = state.players[b.owner];
     if (type.yields === 'unit') {
@@ -2065,6 +2070,7 @@ export function checkState(board, raw) {
     return [...problems, 'bad players'];
   }
   if (!Object.hasOwn(MODES, state.mode)) fail('bad mode');
+  if (!Object.hasOwn(BREEDING, state.breeding)) fail('bad breeding');
   if (state.over !== undefined && !isCount(state.over, Infinity)) fail('bad over');
   if (state.winner !== undefined && (state.over === undefined || !Number.isInteger(state.winner))) fail('bad winner');
   state.players.forEach((p, i) => {
@@ -2101,7 +2107,7 @@ export function checkState(board, raw) {
     if (!isOwner(b.owner)) { fail(`building ${id}: bad owner`); continue; }
     if (!Number.isInteger(b.grade) || b.grade < 1 || b.grade > type.grades) fail(`building ${id}: bad grade`);
     if (b.type === 'castle') castles[b.owner] += 1;
-    if (type.work === undefined ? b.work !== undefined : !isCount(b.work, type.work)) fail(`building ${id}: bad work`);
+    if (type.work === undefined ? b.work !== undefined : !isCount(b.work, /** @type {number} */ (workFor(state, b.type)))) fail(`building ${id}: bad work`);
     const deepest = /** @type {number} */ (type.depth) * /** @type {number} */ (type.perDepth);
     if (type.depth === undefined ? b.dug !== undefined : !isCount(b.dug, deepest + 1)) fail(`building ${id}: bad dug`);
     if (b.raised !== undefined && !(type.raise && isCount(b.raised, type.raise))) fail(`building ${id}: bad raised`);
@@ -2205,6 +2211,7 @@ export function publicView(state) {
   return {
     version: state.version,
     mode: state.mode,
+    breeding: state.breeding,
     name: state.name,
     ...(state.over !== undefined ? { over: state.over } : {}),
     ...(state.winner !== undefined ? { winner: state.winner } : {}),

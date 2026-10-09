@@ -26,7 +26,7 @@ import { ErrorCode, Room, ServerError, logger } from '@colyseus/core';
 
 import { BOARD_OPTIONS, createBoard, tileAt } from '../src/core/board.js';
 import { ROOM_COMMANDS, advance, applyCommand, checkState, newGame, publicView } from '../src/core/game.js';
-import { BUILDING_TYPES, DEFAULT_MODE, END_ANYONE_TICKS, END_IDLE_MS, MODES, TICKS_PER_SECOND } from '../src/core/rules.js';
+import { BREEDING, BUILDING_TYPES, DEFAULT_BREEDING, DEFAULT_MODE, END_ANYONE_TICKS, END_IDLE_MS, MODES, TICKS_PER_SECOND } from '../src/core/rules.js';
 import { GameState, ViewerState, syncGame, syncSeats } from './schema.js';
 
 /** What a player token must look like: long, random, URL-safe. */
@@ -100,8 +100,11 @@ export function restoreGame(saved, commandsAfter) {
     const game = /** @type {import('../src/core/game.js').GameState} */ (saved.state);
     return { board, game, seq: replay(board, game, commandsAfter(saved.seq), saved.seq) };
   }
-  const mode = /** @type {any} */ (saved.state)?.mode;
-  const game = newGame(board, { mode: Object.hasOwn(MODES, mode) ? mode : DEFAULT_MODE });
+  const { mode, breeding } = /** @type {any} */ (saved.state) ?? {};
+  const game = newGame(board, {
+    mode: Object.hasOwn(MODES, mode) ? mode : DEFAULT_MODE,
+    breeding: Object.hasOwn(BREEDING, breeding) ? breeding : DEFAULT_BREEDING,
+  });
   return { board, game, seq: replay(board, game, commandsAfter(0)) };
 }
 

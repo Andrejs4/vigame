@@ -110,10 +110,13 @@ Run `npm start` and open http://127.0.0.1:2567.
     every player's stone together (400 for two), and keeps food for all
     their castles. The HUD calls it Team stone, Team metal and Team food.
     Each player's points still count what their own units did.
-  - **Very Easy Lord**: Shared Easy Lord where castles raise units twice as
-    fast, with units at home or none (the units learn breeding no faster).
   - **Free for all** (two players or more): each against the others; the
     middle of the map is left empty.
+- **Unit production**, chosen with the game beside its mode, in any mode:
+  **Normal**, **Fast (2×)** or **Slow (0.5×)**: how fast castles raise new
+  units, with units at home or none (the units learn breeding no faster).
+  The lobby names a fast or slow game's pace after its mode (Cooperation ·
+  Fast units). Shared Easy Lord with Fast units is what Very Easy Lord was.
 - **The game clock** runs only while every player is here. (`npm run dev`
   runs it with one, for trying things alone.) While it waits, the player
   who started the game has **Start** beside the count of players (**Go on**
@@ -127,7 +130,7 @@ Run `npm start` and open http://127.0.0.1:2567.
   your side has lost. It is every unit's home, and starts with 12. The units at
   home raise new ones: the more of them, and the better they breed, the
   sooner. With nobody at home it still raises one every four minutes by
-  itself (two in Very Easy Lord), even while damaged or upgraded. It has room for 40 units, and 10
+  itself (two with Fast units, eight with Slow), even while damaged or upgraded. It has room for 40 units, and 10
   more with each upgrade (40, 50, 60); it takes in all its units, however
   many, but stops breeding while it holds its room or more. Then its count
   on the board shows its room too, as 40/40 or 65/60. Selected, any castle
@@ -613,10 +616,10 @@ HTTP API:
 | `GET /api/challenge` | A sum to answer when signing in: `{ id, question }`. Each one answers once and lasts 10 minutes. |
 | `POST /api/players` | Signs in: `{ token, name, language, challenge, answer }` gives `{ pid, name, language }`. `400` for a bad token, name or language, `403` for a wrong answer. The login page always sends a language (`auto` at least), so a sign-in without one fails as a wrong answer does, using its sum up: a small check that it came from the page. |
 | `POST /api/settings` | Changes a signed-in player's settings: `{ token, name?, language? }` gives `{ pid, name, language }`; what isn't given stays. `401` if not signed in, `400` for a bad name or language. |
-| `POST /api/games` | Starts a game with a random map: `{ token, mode?, players? }` of a signed-in player (`mode` `coop`, `easy`, `shared`, `veryEasy` or `ffa`, `players` 1 to 16; by default a cooperation game for one) gives `201 { id }`; `401` if not signed in, `400` for a bad mode or number; `409 { error, waiting, seated, games }` while the player has too many games on the go (three of theirs waiting for a player, or seats in three under way): why in English, how many of each (0 for one that isn't why, so the page can say it in its own words), and those games as `GET /api/games` lists them, each with `clear`: `'delete'`, `'leave'` or `null`. |
+| `POST /api/games` | Starts a game with a random map: `{ token, mode?, breeding?, players? }` of a signed-in player (`mode` `coop`, `easy`, `shared` or `ffa`, `breeding` `normal`, `fast` or `slow`, `players` 1 to 16; by default a cooperation game for one, units at the normal pace) gives `201 { id }`; `401` if not signed in, `400` for a bad mode, pace or number; `409 { error, waiting, seated, games }` while the player has too many games on the go (three of theirs waiting for a player, or seats in three under way): why in English, how many of each (0 for one that isn't why, so the page can say it in its own words), and those games as `GET /api/games` lists them, each with `clear`: `'delete'`, `'leave'` or `null`. |
 | `POST /api/games/:id/delete` | `{ token }`: deletes a game under way that the player started and nobody else holds a seat in, closing its room if open; `403` if they didn't start it, `409` if someone else plays it or it is over. |
 | `POST /api/games/:id/leave` | `{ token }`: gives up the player's seat in a game under way, through its room if open; `409` if they hold none or it is over. |
-| `GET /api/games` | The 50 most recently active games, for the lobby, with their name, mode, who holds each seat (`{ pid, name }` or `null`) and `fallen`, the seats whose castles have fallen, which nobody can take. |
+| `GET /api/games` | The 50 most recently active games, for the lobby, with their name, mode, `breeding`, who holds each seat (`{ pid, name }` or `null`) and `fallen`, the seats whose castles have fallen, which nobody can take. |
 | `GET /api/scores` | The lobby's high scores: the ten best scores kept (`scores`), highest first, each `{ name, seat, points, won, game: { id, name, mode }, at, open, details }`; `open` whether the game is still kept. |
 | `GET /api/games/:id` | One game: its seed, latest snapshot and seats. |
 | `GET /api/games/:id/commands` | Its command log, with each command's tick. |
@@ -672,7 +675,8 @@ comes next.
     differ; players keep their names. Version 22, players' language, kept
     games. Version 23 (sixteen players, Very Easy Lord) drops every game,
     finished ones and their points too, at the author's wish: they were
-    test games.
+    test games. Version 26 (unit production in place of Very Easy Lord)
+    drops every game again; the high scores and players stay.
 - A seat is held until its player releases it, however long they are away,
   and the game waits for them until its creator has it go on without them;
   if the creator is away too, it waits.

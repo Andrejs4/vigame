@@ -60,13 +60,12 @@ export const DEFAULT_PLAYERS = 1;
 /**
  * Game modes. In cooperation the players are one team against the Dark
  * Lord; Easy Lord is the same against a weaker one; Shared Easy Lord is
- * Easy Lord with one stock for the whole team (SHARED_STOCK); Very Easy
- * Lord is Shared Easy Lord with castles that raise units twice as fast
- * (BREED_RATE); in free for all, each against the others (two players at
- * least).
+ * Easy Lord with one stock for the whole team (SHARED_STOCK); in free for
+ * all, each against the others (two players at least). How fast units are
+ * raised is chosen apart, for any mode (BREEDING).
  */
 export const MODES = {
-  coop: 'Cooperation', easy: 'Easy Lord', shared: 'Shared Easy Lord', veryEasy: 'Very Easy Lord', ffa: 'Free for all',
+  coop: 'Cooperation', easy: 'Easy Lord', shared: 'Shared Easy Lord', ffa: 'Free for all',
 };
 export const DEFAULT_MODE = 'coop';
 
@@ -75,15 +74,16 @@ export const DEFAULT_MODE = 'coop';
  * lair's and his horde's), as a share of the usual.
  * @type {Record<string, number>}
  */
-export const LORD_HP = { coop: 1, easy: 0.5, shared: 0.5, veryEasy: 0.5 };
+export const LORD_HP = { coop: 1, easy: 0.5, shared: 0.5 };
 
 /**
- * How fast castles raise new units in a mode, as a multiple of the usual:
- * their units' work and what they do by themselves both count this many
- * times. One in any mode not listed.
+ * How fast castles raise new units, chosen with a game in any mode, as a
+ * multiple of the usual: a new unit takes the castle's work divided by it.
+ * The units learn as fast as ever.
  * @type {Record<string, number>}
  */
-export const BREED_RATE = { veryEasy: 2 };
+export const BREEDING = { normal: 1, fast: 2, slow: 0.5 };
+export const DEFAULT_BREEDING = 'normal';
 
 /**
  * The Dark Lord grows stronger with the players (`lordScale` in game.js) up
@@ -97,7 +97,7 @@ export const LORD_PLAYERS_MAX = 8;
  * sides would have had, together.
  * @type {string[]}
  */
-export const SHARED_STOCK = ['shared', 'veryEasy'];
+export const SHARED_STOCK = ['shared'];
 
 /** Most units one player may have at once, inside buildings or out. */
 export const UNIT_LIMIT = 300;

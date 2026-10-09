@@ -8,7 +8,7 @@ import { axialToPixel, bounds, distance, key, pixelToAxial } from '../core/hex.j
 import { BOARD_OPTIONS, createBoard, tileAt } from '../core/board.js';
 import {
   buildCost, capacityOf, castleOf, crewOf, depthOf, endWinner, foodStore, fullMeal, inBuildRange, isDugOut, isRising, maxHp, occupancy, purseOf, quickWin, scoreOf,
-  raiseWork, seatsOf, sharesStock, shortOf, sideOf, upgradeCost,
+  raiseWork, seatsOf, sharesStock, shortOf, sideOf, upgradeCost, workFor,
 } from '../core/game.js';
 import { GAME_NAME_MAX, cleanGameName } from '../core/player.js';
 import { PORTRAIT_SIDE, portraitOf } from '../core/names.js';
@@ -740,7 +740,7 @@ export async function startGame(net, me) {
     const name = holder ? `${graded} · ${holder}` : graded;
     /** @type {string[]} */
     const parts = [];
-    const done = percent(b.work ?? 0, type.work ?? 1);
+    const done = percent(b.work ?? 0, (view && workFor(view, b.type)) ?? 1);
     if (b.type === 'castle') {
       parts.push(word('atHome', { n: occ?.inside.get(b.id)?.length ?? 0, max: capacityOf(b) }), word('nextUnit', { done }));
     } else if (type.capacity) {
