@@ -385,7 +385,8 @@
     <button id="abort-button" disabled title="Give up a building still going up: its crew goes home, and its cost is lost" data-word-title="abortTitle" data-word="abort">Abort</button>
     <button id="attack-button" data-word-key="keyAttack" disabled aria-pressed="false" aria-keyshortcuts="A" title="Attack (A)" data-word-title="attackTitle"><b>A</b>ttack…</button>
     <div class="group-label" data-word="groupView">View</div>
-    <button id="recenter" data-word="recenter">Recenter</button>
+    <!-- Looks at your castle and selects it (H, or the Home key); with it selected, H is Heroes. -->
+    <button id="home-button" data-word-key="keyHome" aria-keyshortcuts="H" title="Look at your castle and select it (H)" data-word-title="homeTitle"><b>H</b>ome</button>
     <div class="zoom-row">
       <button id="zoom-out" aria-label="Zoom out" data-word-label="zoomOut">&minus;</button>
       <button id="zoom-in" aria-label="Zoom in" data-word-label="zoomIn">+</button>
@@ -401,6 +402,8 @@
     <div class="minimap-box">
       <canvas id="minimap-canvas" aria-label="Map of the whole board: press or drag on it to look there" data-word-label="minimapLabel"></canvas>
       <div class="minimap-frame" id="minimap-frame"></div>
+      <!-- Home's key over your castle; pressing it is Home too (a phone has no Home button). -->
+      <button class="minimap-home" id="minimap-home" hidden title="Look at your castle and select it (H)" data-word-title="homeTitle">H</button>
     </div>
   </div>
 </div>

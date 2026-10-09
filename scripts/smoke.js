@@ -632,16 +632,20 @@ async function threeBrowsers(browser, url, { full, label }) {
   assert.equal(await a.locator('#players.waiting').count(), 1, 'Players does not blink while waiting');
   // She started it, so she could start it without Bella; she waits.
   await waitText(a, '#start-button', 'Start');
-  // Recenter looks at her own castle, close enough to read unit counts.
+  // Home looks at her own castle, close enough to read unit counts, and
+  // selects it.
   const home = await a.evaluate(() => {
     const v = /** @type {any} */ (window).__vigame;
     return Object.values(v.view.buildings).find((b) => b.type === 'castle' && b.owner === 0);
   });
-  await a.click('#recenter');
+  assert.equal(await a.locator('#home-button').innerText(), 'Home');
+  await a.click('#home-button');
   const centre = await hexPoint(a, home.q, home.r);
   const box = /** @type {{ x: number, y: number, width: number, height: number }} */ (await a.locator('#board').boundingBox());
-  assert.ok(Math.abs(centre.x - (box.x + box.width / 2)) < 2 && Math.abs(centre.y - (box.y + box.height / 2)) < 2, 'Recenter did not centre on her castle');
-  assert.ok(await a.evaluate(() => /** @type {any} */ (window).__vigame.camera.zoom) > 0.45, 'Recenter is too far out to show unit counts');
+  assert.ok(Math.abs(centre.x - (box.x + box.width / 2)) < 2 && Math.abs(centre.y - (box.y + box.height / 2)) < 2, 'Home did not centre on her castle');
+  assert.ok(await a.evaluate(() => /** @type {any} */ (window).__vigame.camera.zoom) > 0.45, 'Home is too far out to show unit counts');
+  assert.equal(await a.evaluate(() => /** @type {any} */ (window).__vigame.selected), home.id, 'Home did not select her castle');
+  await a.keyboard.press('Escape');
   await waitText(a, '#time', '0:00 · paused');
   assert.equal(await a.locator('#build-tower').isDisabled(), true);
 
@@ -787,7 +791,26 @@ async function threeBrowsers(browser, url, { full, label }) {
     seconds: performance.now() / 1000,
   }));
   assert.ok(paints >= 1 && paints <= seconds * 2 + 1, `the minimap repainted ${paints} times in ${seconds.toFixed(1)} s`);
-  await a.click('#recenter');
+  // Home's letter stands just above her castle on the minimap; pressing it,
+  // or the keyboard's Home key, is Home.
+  const castleNow = await castleOf(a, 0);
+  const letter = /** @type {{ x: number, y: number, width: number, height: number }} */ (await a.locator('#minimap-home').boundingBox());
+  const castleOnMap = await a.evaluate(({ q, r }) => {
+    const v = /** @type {any} */ (window).__vigame;
+    const rect = v.minimap.canvas.getBoundingClientRect();
+    const p = v.minimap.layout.cell(q, r);
+    return { x: rect.left + (p.x + 1) / v.minimap.layout.width * rect.width, y: rect.top + (p.y - 2) / v.minimap.layout.height * rect.height };
+  }, castleNow);
+  assert.equal(await text(a, '#minimap-home'), 'H');
+  assert.ok(Math.abs(letter.x + letter.width / 2 - castleOnMap.x) < 1.5 && Math.abs(letter.y + letter.height - castleOnMap.y) < 1.5,
+    `Home's letter is not over her castle: ${JSON.stringify({ letter, castleOnMap })}`);
+  await a.locator('#minimap .minimap-box').screenshot({ path: join(OUT, 'minimap-home.png') });
+  await a.click('#minimap-home');
+  assert.equal(await a.evaluate(() => /** @type {any} */ (window).__vigame.selected), castleNow.id, 'Home\'s letter did not select her castle');
+  await a.keyboard.press('Escape');
+  await a.mouse.click(map.x + 4, map.y + 4);
+  await a.keyboard.press('Home');
+  assert.equal(await a.evaluate(() => /** @type {any} */ (window).__vigame.selected), castleNow.id, 'the Home key did not select her castle');
 
   // Once her tower stands, Ann looks at its crew and upgrades it; Bella sees it.
   await a.keyboard.press('Escape');
@@ -815,7 +838,7 @@ async function threeBrowsers(browser, url, { full, label }) {
   pictures.forEach(({ id }, i) => assert.ok(loaded[i], `${id}'s picture doesn't load`));
   // Each button with a key shows its letter in bold.
   assert.deepEqual(await a.$$eval('#controls button[aria-keyshortcuts]', (els) => els.map((el) => el.querySelector('b')?.textContent)),
-    ['T', 'W', 'P', 'F', 'B', 'U', 'C', 'H', 'A']);
+    ['T', 'W', 'P', 'F', 'B', 'U', 'C', 'H', 'A', 'H']);
   // The upgrade is work for the crew too. U upgrades, as the button does.
   await a.keyboard.press('u');
   await waitSelection(a, /^Tower \(grade 1\) \| crew \d+\/\d+ · upgrading\s+\d+%/);
@@ -970,10 +993,13 @@ async function threeBrowsers(browser, url, { full, label }) {
     return [v.selected, v.aiming, v.crewTarget];
   }), [null, null, null], 'the page let go of the pit');
 
-  // Her castle has no crew: Heroes takes the button's place, listing her
-  // heroes alive now, highest level first, with every skill's level. H
-  // closes it again, and it stays closed.
-  await selectBuilding(a, await castleOf(a, 0));
+  // H is Home while her castle isn't selected: it selects her castle, which
+  // has no crew, so Heroes takes the Crew button's place, and H is Heroes
+  // then, listing her heroes alive now, highest level first, with every
+  // skill's level. H closes it again, and it stays closed.
+  await a.keyboard.press('h');
+  assert.equal(await a.evaluate(() => /** @type {any} */ (window).__vigame.selected), (await castleOf(a, 0)).id, 'H did not go home');
+  assert.ok(await a.isHidden('#heroes'), 'H went home and opened Heroes too');
   assert.ok(await a.isHidden('#crew-button'), 'no Crew for a castle');
   // Units are born meanwhile: those there before it opened must be in it.
   const opened = await a.evaluate(() => /** @type {any} */ (window).__vigame.view.tick);
@@ -1261,7 +1287,7 @@ async function latvianFinnish(browser, url) {
   const bold = (/** @type {import('playwright').Page} */ page) => page.$$eval('#controls button[aria-keyshortcuts]', (els) => els.map((el) => el.querySelector('b')?.textContent));
   assert.equal(await lv.locator('#build-tower').innerText(), 'Tornis\n60');
   assert.equal(await lv.locator('#seat-button').innerText(), 'Atlaist');
-  assert.deepEqual(await bold(lv), ['T', 'R', 'e', 'F', 'B', 'U', 'K', 'V', 'A']);
+  assert.deepEqual(await bold(lv), ['T', 'R', 'e', 'F', 'B', 'U', 'K', 'V', 'A', 'j']);
   const lvFit = await controlsFit(lv);
   assert.deepEqual(lvFit.over, [], 'a Latvian label overflows its button');
   assert.ok(Object.values(lvFit.lines).every((n) => n <= 2) && lvFit.rows <= 3, `Latvian buttons: ${JSON.stringify(lvFit)}`);
@@ -1270,7 +1296,7 @@ async function latvianFinnish(browser, url) {
   assert.equal(await fi.locator('#build-farm').innerText(), 'Farmi · 30');
   assert.equal(await fi.getAttribute('#build-farm', 'title'),
     'Farmi (F). Kasvattaa ruokaa. Heikko: puolet siihen osuvista iskuista osuu sisällä oleviin. Hinta: 30 kiveä.');
-  assert.deepEqual(await bold(fi), ['T', 'V', 'p', 'F', 'J', 'K', 'R', 'S', 'y']);
+  assert.deepEqual(await bold(fi), ['T', 'V', 'p', 'F', 'J', 'K', 'R', 'S', 'y', 'o']);
   const fiFit = await controlsFit(fi);
   assert.deepEqual(fiFit.over, [], 'a Finnish label overflows its button');
   assert.ok(Object.values(fiFit.lines).every((n) => n === 1) && fiFit.width <= 200, `Finnish buttons: ${JSON.stringify(fiFit)}`);
@@ -1319,7 +1345,7 @@ async function sixteen(browser, url) {
   await page.screenshot({ path: join(OUT, 'game-sixteen.png') });
   // Close up, each cell shows a picture of its ground.
   await page.waitForFunction((n) => /** @type {any} */ (window).__vigame.ground.images.size === n, GROUND_PICTURES.length);
-  await page.click('#recenter');
+  await page.click('#home-button');
   for (let i = 0; i < 12; i++) await page.click('#zoom-in');
   assert.equal(await page.evaluate(() => /** @type {any} */ (window).__vigame.camera.zoom), 2.5, 'not at the closest zoom');
   await frames(page);
@@ -1435,7 +1461,7 @@ async function phone(browser, url) {
   assert.equal(await page.locator('#heroes-button').innerText(), 'Герои…');
   assert.equal(await page.locator('#seat-button').innerText(), 'Отпусти');
   assert.deepEqual(await page.$$eval('#controls button[aria-keyshortcuts]', (els) => els.map((el) => el.querySelector('b')?.textContent)),
-    ['Б', 'В', 'Я', 'а', 'О', 'г', 'д', 'р', 'т']);
+    ['Б', 'В', 'Я', 'а', 'О', 'г', 'д', 'р', 'т', 'м']);
   // A phone has no keys, so the letters aren't bold there.
   assert.ok(await page.$$eval('#controls button b', (els) => els.every((b) => getComputedStyle(b).fontWeight === getComputedStyle(/** @type {Element} */ (b.parentElement)).fontWeight)),
     'key letters are bold on a phone');
@@ -1443,6 +1469,12 @@ async function phone(browser, url) {
   assert.deepEqual(phoneFit.over, [], 'a button\'s label overflows it on a phone');
   assert.ok(Object.values(phoneFit.lines).every((n) => n <= 2), `a label takes three lines on a phone: ${JSON.stringify(phoneFit.lines)}`);
   assert.ok(phoneFit.rows <= 3, `the buttons take ${phoneFit.rows} rows on a phone`);
+  // A phone has no Home button: Home's letter on the minimap is it.
+  assert.ok(await page.isHidden('#home-button'), 'Home takes a button on a phone');
+  assert.equal(await text(page, '#minimap-home'), 'М');
+  await page.keyboard.press('Escape');
+  await page.tap('#minimap-home');
+  assert.equal(await page.evaluate(() => /** @type {any} */ (window).__vigame.selected), castle.id, 'Home\'s letter did not select the castle on a phone');
   // Once a castle falls, the seat button offers a new base: it fits as well
   // (put in its place for one measure, as no castle falls here).
   const newBase = await page.evaluate(() => {

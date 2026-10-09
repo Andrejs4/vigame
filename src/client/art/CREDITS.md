@@ -31,7 +31,6 @@ like people: the author's idea. The band's four stand closer together.
 | `return.svg` | return-arrow | Lorc |
 | `abort.svg` | cross-mark | Lorc |
 | `attack.svg` | crossed-swords | Lorc |
-| `recenter.svg` | convergence-target | Delapouite |
 | `sound.svg` | speaker | Delapouite |
 | `muted.svg` | speaker-off | Delapouite |
 | `coords.svg` | compass | Lorc |

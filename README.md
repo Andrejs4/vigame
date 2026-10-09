@@ -43,8 +43,8 @@ Run `npm start` and open http://127.0.0.1:2567.
   that a phone's rows of buttons stay as in English: Башня, Воз, Яма,
   Ферма, Отряд, Апгрейд, Бригада…, Герои…, Вернуть, Бросить, Атака…,
   Отпусти; Tornis, Rati, Bedre, Ferma, Bars, Uzlabot, Komanda…, Varoņi…,
-  Mājās, Atcelt, Atakot…, Atlaist; Torni, Vaunu, Kuoppa, Farmi, Joukko,
-  Kehitä, Ryhmä…, Sankarit…, Kotiin, Peru, Hyökkää…, Vapauta. Messages,
+  Atsaukt, Atcelt, Atakot…, Atlaist; Torni, Vaunu, Kuoppa, Farmi, Joukko,
+  Kehitä, Ryhmä…, Sankarit…, Palauta, Peru, Hyökkää…, Vapauta. Messages,
   the renaming dialog, and the heroes list's three-letter skill names
   (Att, Mel, Bld…, explained in its top line) are in English for now.
 - **The lobby** lists your games under way, games with a free seat, other
@@ -295,13 +295,15 @@ Run `npm start` and open http://127.0.0.1:2567.
   target), and any other building drops its target.
 - **Keys**: a button's bold letter presses it: **T**ower, **W**agon, **P**it,
   **F**arm and **B**and pick what to place (again to stop), **U**pgrade,
-  **C**rew and **A**ttack act on the selected building, **H**eroes on your
-  castle, and Escape lets go. In another language the bold letters are
+  **C**rew and **A**ttack act on the selected building, **H**ome looks at
+  your castle and selects it, and then **H** is **H**eroes; the keyboard's
+  Home key is always Home. Escape lets go. In another language the bold letters are
   its own: **Б**ашня, **В**оз, **Я**ма, Ферм**а**, **О**тряд, Ап**г**рейд,
-  Брига**д**а, Ге**р**ои, А**т**ака; **T**ornis, **R**ati, B**e**dre,
-  **F**erma, **B**ars, **U**zlabot, **K**omanda, **V**aroņi, **A**takot;
+  Брига**д**а, Ге**р**ои, А**т**ака, До**м**ой; **T**ornis, **R**ati, B**e**dre,
+  **F**erma, **B**ars, **U**zlabot, **K**omanda, **V**aroņi, **A**takot, Mā**j**as;
   **T**orni, **V**aunu, Kuo**p**pa, **F**armi, **J**oukko, **K**ehitä,
-  **R**yhmä, **S**ankarit, H**y**ökkää. Where the word has the letter on
+  **R**yhmä, **S**ankarit, H**y**ökkää, K**o**ti. M is the minimap's in
+  every language, so Home's own letter is the next free one. Where the word has the letter on
   the English key, it is that one (in Russian Г is on U, Р on H, А on F),
   else the first letter, else one on a key the English ones leave free;
   and the English keys work in every language. Every key works whichever layout the keyboard
@@ -361,8 +363,11 @@ Run `npm start` and open http://127.0.0.1:2567.
   of the game's seats (such as 1/2), and how many are away (`2/16, 14
   away`), and blinks while the game waits for the rest; **Observers**
   counts those watching without a seat.
-  **Recenter** looks at your own castle, close enough to read how many
-  are in each building (a spectator sees the whole map).
+  **Home** looks at your own castle, close enough to read how many
+  are in each building, and selects it while it stands (a spectator, or a
+  player whose castle fell, sees the whole map). On the minimap, Home's
+  letter stands over your castle, and pressing it is Home too: a phone has
+  no Home button.
 - Drag to pan, and use the wheel or the − / + buttons to zoom. A press
   that wanders less than 6 px with a mouse (10 with a finger) is still a
   click, and the board holds still meanwhile; past that it pans. Close up

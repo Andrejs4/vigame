@@ -6,7 +6,8 @@
  * It repaints as little as it can: the ground once per map; the rest only
  * after the server reported a change, at most once every MINIMAP_PERIOD, and
  * only if a pixel would differ. The frame is a positioned element over the
- * canvas, so panning and zooming never repaint the minimap.
+ * canvas, so panning and zooming never repaint the minimap. So is Home's
+ * letter over the player's castle.
  */
 
 import { footprint, sideOf } from '../core/game.js';
@@ -15,6 +16,9 @@ import { groundColor } from './render.js';
 
 /** Shortest time between two repaints, in milliseconds. */
 export const MINIMAP_PERIOD = 500;
+
+/** Minimap pixels Home's letter needs above a castle. */
+const HOME_ROOM = 8;
 
 /**
  * How much wider than tall a minimap pixel stands for on the board: √3/2 of
@@ -98,8 +102,9 @@ export class Minimap {
    * @param {HTMLCanvasElement} canvas
    * @param {HTMLElement} frame Outlines the main view, over the canvas.
    * @param {import('../core/board.js').Board} board
+   * @param {HTMLElement} [home] Home's letter, over the canvas.
    */
-  constructor(canvas, frame, board) {
+  constructor(canvas, frame, board, home) {
     const ctx = canvas.getContext('2d');
     if (!ctx) throw new Error('2D canvas context unavailable');
     this.canvas = canvas;
@@ -130,6 +135,8 @@ export class Minimap {
     this.paintedAt = -Infinity;
     this.shown = '';
     this.framed = '';
+    this.home = home;
+    this.homed = '';
     /** How many times it has repainted, for the smoke check. */
     this.paints = 0;
   }
@@ -184,6 +191,27 @@ export class Minimap {
     if (framed === this.framed) return;
     this.framed = framed;
     [this.frame.style.left, this.frame.style.top, this.frame.style.width, this.frame.style.height] = box;
+  }
+
+  /**
+   * Put Home's letter just above a castle, or hide it. Touches the page only
+   * when the castle changed.
+   * @param {{ q: number, r: number } | null | undefined} castle
+   */
+  markHome(castle) {
+    const at = castle ? this.layout.cell(castle.q, castle.r) : null;
+    const homed = at ? `${at.x},${at.y}` : 'none';
+    if (!this.home || homed === this.homed) return;
+    this.homed = homed;
+    this.home.hidden = !at;
+    if (!at) return;
+    const { width, height } = this.layout;
+    // Above the castle (its footprint's top is a row over its middle cell),
+    // or below it for a castle at the minimap's top edge.
+    const above = at.y - 2 >= HOME_ROOM;
+    this.home.style.left = `${((at.x + 1) / width * 100).toFixed(2)}%`;
+    this.home.style.top = `${((above ? at.y - 2 : at.y + 4) / height * 100).toFixed(2)}%`;
+    this.home.style.transform = above ? 'translate(-50%, -100%)' : 'translate(-50%, 0)';
   }
 
   /**

@@ -187,6 +187,15 @@ button[aria-pressed="true"] { background: rgba(255, 216, 77, 0.18); border-color
   border: 1.5px solid rgba(255, 255, 255, 0.9);
   pointer-events: none;
 }
+/* Home's letter just above your castle, which stays in sight below it. */
+button.minimap-home {
+  position: absolute; transform: translate(-50%, -100%);
+  padding: 1px 3px; border: none; border-radius: 0; background: none;
+  font: 700 11px/1 var(--sans); color: #fff;
+  text-shadow: 0 0 2px #000, 0 0 2px #000, 0 0 3px #000;
+  -webkit-tap-highlight-color: transparent;
+}
+button.minimap-home:hover:not(:disabled) { background: none; color: var(--amber); }
 
 .masthead {
   font-size: 11px;
@@ -302,7 +311,7 @@ dl { margin: 0; }
 #return-button { --icon: url(art/return.svg); }
 #abort-button { --icon: url(art/abort.svg); }
 #attack-button { --icon: url(art/attack.svg); }
-#recenter { --icon: url(art/recenter.svg); }
+#home-button { --icon: url(art/castle.svg); }
 #mute-button { --icon: url(art/sound.svg); }
 #mute-button[aria-pressed="true"] { --icon: url(art/muted.svg); }
 #toggle-coords { --icon: url(art/coords.svg); }
@@ -470,7 +479,7 @@ button.inline:hover:not(:disabled) { background: none; color: var(--amber); }
   #controls button, #controls .button { flex: 1; text-align: center; padding: 8px 6px; }
   /* The picture above the label, so the label keeps the button's width. */
   #controls :is(button, .button):not(#zoom-in, #zoom-out)::before { display: block; width: 18px; height: 18px; margin: 0 auto 3px; }
-  #controls .group-label, #toggle-coords, #recenter, #controls .price .dot { display: none; }
+  #controls .group-label, #toggle-coords, #home-button, #controls .price .dot { display: none; }
   /* A phone has no keys: their letters aren't bold. */
   #controls b { font-weight: inherit; }
   #controls .price { display: block; }

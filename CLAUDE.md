@@ -164,6 +164,12 @@ drawing during play). Read it before art or graphics work.
   layout. The smoke check holds the Russian buttons to their fit: no
   overflow, two lines at most and three rows on a phone, one line on a
   desktop.
+- Home and Heroes share H on purpose: a key presses the first of its
+  buttons that shows and is enabled, and Heroes shows only while your
+  castle is selected, which Home does. Home's own letter in each language
+  (`keyHome`) is otherwise free, and no button may sit on M, the
+  minimap's key (the tests check). Home has no button on a phone: its
+  letter over your castle on the minimap (`markHome`) is it there.
 
 ## Game server (server/)
 
