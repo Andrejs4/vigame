@@ -43,8 +43,8 @@ Run `npm start` and open http://127.0.0.1:2567.
   that a phone's rows of buttons stay as in English: Башня, Воз, Яма,
   Ферма, Отряд, Апгрейд, Бригада…, Герои…, Вернуть, Бросить, Атака…,
   Отпусти; Tornis, Rati, Bedre, Ferma, Bars, Uzlabot, Komanda…, Varoņi…,
-  Mājās, Atcelt, Atakot…, Atlaist; Torni, Vaunu, Kuoppa, Farmi, Joukko,
-  Kehitä, Ryhmä…, Sankarit…, Kotiin, Peru, Hyökkää…, Vapauta. Messages,
+  Atsaukt, Atcelt, Atakot…, Atlaist; Torni, Vaunu, Kuoppa, Farmi, Joukko,
+  Kehitä, Ryhmä…, Sankarit…, Palauta, Peru, Hyökkää…, Vapauta. Messages,
   the renaming dialog, and the heroes list's three-letter skill names
   (Att, Mel, Bld…, explained in its top line) are in English for now.
 - **The lobby** lists your games under way, games with a free seat, other
@@ -65,8 +65,11 @@ Run `npm start` and open http://127.0.0.1:2567.
   each other. A game's address (`?game=…`) is also the link to send
   someone. Players who join take the seats in order (Blue, Crimson, Green,
   Gold, Teal, Orange, Rose, Silver, then Azure, Lime, Indigo, Cherry,
-  Olive, Coral, White, Mint); once they are full, visitors watch.
-  **Release** frees a seat for a spectator to take.
+  Olive, Coral, White, Mint), round the ring of castles clockwise from
+  the left; once they are full, visitors watch. **Release** frees a seat
+  for a spectator to take. A newcomer gets the next free seat after the
+  last one anyone has held, so a freed seat comes round again only after
+  the rest. Clicking a free castle still takes that one.
 - **Too many games**: New game is refused while three games you started
   wait for a player, or while you hold a seat in three games under way;
   finished games, and games nobody has touched for three days, don't
@@ -110,10 +113,43 @@ Run `npm start` and open http://127.0.0.1:2567.
     every player's stone together (400 for two), and keeps food for all
     their castles. The HUD calls it Team stone, Team metal and Team food.
     Each player's points still count what their own units did.
-  - **Very Easy Lord**: Shared Easy Lord where castles raise units twice as
-    fast, with units at home or none (the units learn breeding no faster).
+  - **Two teams** (two players or more): the first half of the seats
+    against the rest, which get the odd seat (two against three for five);
+    each team holds one half of the ring, and the first fills before the
+    second. No Dark Lord, and each player keeps their own stock. The lobby
+    shows teammates with "&" and the teams with "vs" (Fay & Gus vs Hal &
+    Ivy), and the winners by colour (Green & Gold won).
   - **Free for all** (two players or more): each against the others; the
     middle of the map is left empty.
+- **Unit production**, chosen with the game beside its mode, in any mode:
+  **Normal**, **Fast (2×)** or **Slow (0.5×)**: how fast castles raise new
+  units, with units at home or none (the units learn breeding no faster).
+  The lobby names a fast or slow game's pace after its mode (Cooperation ·
+  Fast units). Shared Easy Lord with Fast units is what Very Easy Lord was.
+- **NPCs play free seats**, a checkbox with a new game (off by default):
+  an NPC plays every seat nobody holds, while its castle stands, and the
+  clock doesn't wait for those seats, so a game starts as soon as its
+  seated players are here. A newcomer may take an NPC's seat at any time,
+  and against the Dark Lord so may a player whose castle fell (against
+  players, they watch). A seat its player releases goes back to an NPC;
+  an NPC never plays for an away player. NPCs share a shared stock like
+  anyone. They are named NPC in the lobby, the castle panel and the table
+  of points, and get no high scores. Every few seconds an NPC answers
+  threats it has seen a while (enemy bands, wagons, raiders and the horde
+  near its buildings, manned towers that reach one) with a band, builds a
+  farm for each 12 units beyond what its castle feeds (6 at most), fills
+  its crews, upgrades its castle and towers, builds pits and towers in
+  turn, keeping at most 60% of its units at work so the rest can form
+  bands, and sends bands against
+  the nearest enemy (against the Dark Lord, his horde and raiders near
+  it). From twelve minutes in it builds and upgrades wagons behind its
+  castle with dark metal; once the metal is spent the wagons attack, and
+  ten seconds later everyone at home goes all in. Its timings and rules
+  are the table `NPC` in `src/core/rules.js`.
+  **NPCs alone**: start a game with NPCs and **Release** your seat, and NPCs
+  play every side; its clock runs while anyone watches, and its creator
+  may end it from the stands. Such a game counts among your three waiting
+  for a player.
 - **The game clock** runs only while every player is here. (`npm run dev`
   runs it with one, for trying things alone.) While it waits, the player
   who started the game has **Start** beside the count of players (**Go on**
@@ -127,7 +163,7 @@ Run `npm start` and open http://127.0.0.1:2567.
   your side has lost. It is every unit's home, and starts with 12. The units at
   home raise new ones: the more of them, and the better they breed, the
   sooner. With nobody at home it still raises one every four minutes by
-  itself (two in Very Easy Lord), even while damaged or upgraded. It has room for 40 units, and 10
+  itself (two with Fast units, eight with Slow), even while damaged or upgraded. It has room for 40 units, and 10
   more with each upgrade (40, 50, 60); it takes in all its units, however
   many, but stops breeding while it holds its room or more. Then its count
   on the board shows its room too, as 40/40 or 65/60. Selected, any castle
@@ -295,13 +331,15 @@ Run `npm start` and open http://127.0.0.1:2567.
   target), and any other building drops its target.
 - **Keys**: a button's bold letter presses it: **T**ower, **W**agon, **P**it,
   **F**arm and **B**and pick what to place (again to stop), **U**pgrade,
-  **C**rew and **A**ttack act on the selected building, **H**eroes on your
-  castle, and Escape lets go. In another language the bold letters are
+  **C**rew and **A**ttack act on the selected building, **H**ome looks at
+  your castle and selects it, and then **H** is **H**eroes; the keyboard's
+  Home key is always Home. Escape lets go. In another language the bold letters are
   its own: **Б**ашня, **В**оз, **Я**ма, Ферм**а**, **О**тряд, Ап**г**рейд,
-  Брига**д**а, Ге**р**ои, А**т**ака; **T**ornis, **R**ati, B**e**dre,
-  **F**erma, **B**ars, **U**zlabot, **K**omanda, **V**aroņi, **A**takot;
+  Брига**д**а, Ге**р**ои, А**т**ака, До**м**ой; **T**ornis, **R**ati, B**e**dre,
+  **F**erma, **B**ars, **U**zlabot, **K**omanda, **V**aroņi, **A**takot, Mā**j**as;
   **T**orni, **V**aunu, Kuo**p**pa, **F**armi, **J**oukko, **K**ehitä,
-  **R**yhmä, **S**ankarit, H**y**ökkää. Where the word has the letter on
+  **R**yhmä, **S**ankarit, H**y**ökkää, K**o**ti. M is the minimap's in
+  every language, so Home's own letter is the next free one. Where the word has the letter on
   the English key, it is that one (in Russian Г is on U, Р on H, А on F),
   else the first letter, else one on a key the English ones leave free;
   and the English keys work in every language. Every key works whichever layout the keyboard
@@ -361,8 +399,11 @@ Run `npm start` and open http://127.0.0.1:2567.
   of the game's seats (such as 1/2), and how many are away (`2/16, 14
   away`), and blinks while the game waits for the rest; **Observers**
   counts those watching without a seat.
-  **Recenter** looks at your own castle, close enough to read how many
-  are in each building (a spectator sees the whole map).
+  **Home** looks at your own castle, close enough to read how many
+  are in each building, and selects it while it stands (a spectator, or a
+  player whose castle fell, sees the whole map). On the minimap, Home's
+  letter stands over your castle, and pressing it is Home too: a phone has
+  no Home button.
 - Drag to pan, and use the wheel or the − / + buttons to zoom. A press
   that wanders less than 6 px with a mouse (10 with a finger) is still a
   click, and the board holds still meanwhile; past that it pans. Close up
@@ -440,6 +481,7 @@ have one, install it with `npx playwright install chromium`.
 | `src/core/board.js` | Seeded terrain, with what each terrain allows, and the castle and lair sites; same seed and player count, same map everywhere. |
 | `src/core/rules.js` | The numbers: tick rate, sides and modes, skills and experience, food and hunger, fighting, raiders, the Dark Lord's horde, building types. |
 | `src/core/names.js` | Medieval names for units, and which face goes with a name (`portraitOf`). |
+| `src/core/npc.js` | NPC players: the next command for a seat an NPC plays, worked out from the game as it is. |
 | `src/core/game.js` | The game core: the state as plain JSON, `applyCommand`, `advance` (one tick), `occupancy`, `checkState`, `publicView`. Deterministic. |
 | `src/core/player.js` | Player-name rules and the languages a player may choose, checked on the page and on the server. |
 | `src/client/` | The page, served as it is. |
@@ -582,7 +624,7 @@ only when it changes. The page sends commands, never state:
 | Message | Payload | Answer |
 | --- | --- | --- |
 | `command` | a core command, such as `{ type: 'crew', building, units: ['u3', 'u9'] }` | the command's number, or the core's refusal, `not seated`, `the game is paused`, or `unknown command` for `away` and `back`, which only the room gives |
-| `claimSeat` | none, or `{ seat }` for the one wanted | the seat: a free one whose castle stands, or, for a player whose castle fell, one in place of theirs; or `no free seat` |
+| `claimSeat` | none, or `{ seat }` for the one wanted | the seat: the one wanted if free, else the next free one round the ring whose castle stands, or, for a player whose castle fell, one in place of theirs; or `no free seat` |
 | `releaseSeat` | none | |
 | `startNow` | none | `true` once the game goes on without the players missing; refused unless you started the game, someone it waits for is here and someone is missing |
 | `select` | `{ q, r }` or `null` | none; shows your picked hex to everyone |
@@ -608,10 +650,10 @@ HTTP API:
 | `GET /api/challenge` | A sum to answer when signing in: `{ id, question }`. Each one answers once and lasts 10 minutes. |
 | `POST /api/players` | Signs in: `{ token, name, language, challenge, answer }` gives `{ pid, name, language }`. `400` for a bad token, name or language, `403` for a wrong answer. The login page always sends a language (`auto` at least), so a sign-in without one fails as a wrong answer does, using its sum up: a small check that it came from the page. |
 | `POST /api/settings` | Changes a signed-in player's settings: `{ token, name?, language? }` gives `{ pid, name, language }`; what isn't given stays. `401` if not signed in, `400` for a bad name or language. |
-| `POST /api/games` | Starts a game with a random map: `{ token, mode?, players? }` of a signed-in player (`mode` `coop`, `easy`, `shared`, `veryEasy` or `ffa`, `players` 1 to 16; by default a cooperation game for one) gives `201 { id }`; `401` if not signed in, `400` for a bad mode or number; `409 { error, waiting, seated, games }` while the player has too many games on the go (three of theirs waiting for a player, or seats in three under way): why in English, how many of each (0 for one that isn't why, so the page can say it in its own words), and those games as `GET /api/games` lists them, each with `clear`: `'delete'`, `'leave'` or `null`. |
+| `POST /api/games` | Starts a game with a random map: `{ token, mode?, breeding?, players? }` of a signed-in player (`mode` `coop`, `easy`, `shared`, `teams` or `ffa`, `breeding` `normal`, `fast` or `slow`, `npcs` true for NPCs in the free seats, `players` 1 to 16; by default a cooperation game for one, units at the normal pace) gives `201 { id }`; `401` if not signed in, `400` for a bad mode, pace or number; `409 { error, waiting, seated, games }` while the player has too many games on the go (three of theirs waiting for a player, or seats in three under way): why in English, how many of each (0 for one that isn't why, so the page can say it in its own words), and those games as `GET /api/games` lists them, each with `clear`: `'delete'`, `'leave'` or `null`. |
 | `POST /api/games/:id/delete` | `{ token }`: deletes a game under way that the player started and nobody else holds a seat in, closing its room if open; `403` if they didn't start it, `409` if someone else plays it or it is over. |
 | `POST /api/games/:id/leave` | `{ token }`: gives up the player's seat in a game under way, through its room if open; `409` if they hold none or it is over. |
-| `GET /api/games` | The 50 most recently active games, for the lobby, with their name, mode, who holds each seat (`{ pid, name }` or `null`) and `fallen`, the seats whose castles have fallen, which nobody can take. |
+| `GET /api/games` | The 50 most recently active games, for the lobby, with their name, mode, `breeding`, who holds each seat (`{ pid, name }` or `null`) and `fallen`, the seats whose castles have fallen, which nobody can take. |
 | `GET /api/scores` | The lobby's high scores: the ten best scores kept (`scores`), highest first, each `{ name, seat, points, won, game: { id, name, mode }, at, open, details }`; `open` whether the game is still kept. |
 | `GET /api/games/:id` | One game: its seed, latest snapshot and seats. |
 | `GET /api/games/:id/commands` | Its command log, with each command's tick. |
@@ -667,7 +709,8 @@ comes next.
     differ; players keep their names. Version 22, players' language, kept
     games. Version 23 (sixteen players, Very Easy Lord) drops every game,
     finished ones and their points too, at the author's wish: they were
-    test games.
+    test games. Version 26 (unit production in place of Very Easy Lord)
+    drops every game again; the high scores and players stay.
 - A seat is held until its player releases it, however long they are away,
   and the game waits for them until its creator has it go on without them;
   if the creator is away too, it waits.

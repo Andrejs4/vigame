@@ -9,7 +9,7 @@
  * Auto, the one their name and browser suggest (`autoLanguage`).
  */
 
-import { hasLord } from '../core/game.js';
+import { hasLord, teamOfSeat } from '../core/game.js';
 import { MODES, SEAT_SIDES, SIDES, TICKS_PER_SECOND } from '../core/rules.js';
 import { getJson, post, reason } from './api.js';
 import { autoLanguage, browserLanguages, chosenLanguage } from './language.js';
@@ -49,8 +49,11 @@ function gameTime(tick) {
 function result(game, language) {
   if (game.winner === null) return say(language, { word: 'nobodyWon' });
   if (hasLord(game.mode)) return say(language, { word: game.winner === 0 ? 'won' : 'lordWon' });
-  const side = SIDES[SEAT_SIDES[game.winner]]?.name.toLowerCase();
-  return isWord(side) ? say(language, { word: 'sideWon', values: { side: say(language, { word: side }) } }) : '?';
+  // The winning team's sides ("Blue & Crimson won"), or the one side.
+  const sides = game.seats.map((_, i) => i).filter((i) => teamOfSeat(game.mode, i, game.seats.length) === game.winner)
+    .map((i) => SIDES[SEAT_SIDES[i]]?.name.toLowerCase());
+  if (!sides.length || !sides.every(isWord)) return '?';
+  return say(language, { word: 'sideWon', values: { side: sides.map((side) => say(language, { word: /** @type {Word} */ (side) })).join(' & ') } });
 }
 
 /**
@@ -69,20 +72,22 @@ function row(game, action, language) {
   title.textContent = game.name ?? say(language, { word: 'aGame' });
   who.append(title);
   // Teammates with "&", rivals with "vs".
-  const between = hasLord(game.mode) ? ' & ' : ' vs ';
+  const team = (/** @type {number} */ i) => (hasLord(game.mode) ? 0 : teamOfSeat(game.mode, i, game.seats.length));
   game.seats.forEach((seated, i) => {
-    if (i) who.append(between);
+    if (i) who.append(team(i) === team(i - 1) ? ' & ' : ' vs ');
     // A seat its player left for another base, or that the game ended
     // without, still names who played it; one left open stays open.
     const holder = seated ?? (game.over !== null || game.fallen?.includes(i) ? game.former?.[i] ?? null : null);
+    // A seat nobody holds in a game with NPCs is an NPC's while its castle stands.
+    const npc = !holder && game.npcs && game.over === null && !game.fallen?.includes(i);
     const name = document.createElement('span');
-    name.textContent = holder ? holder.name || '?' : '—';
+    name.textContent = holder ? holder.name || '?' : npc ? say(language, { word: 'npc' }) : '—';
     name.style.color = holder ? SIDES[SEAT_SIDES[i]]?.accent ?? '' : '';
     who.append(name);
   });
   const when = document.createElement('span');
   when.className = 'when';
-  const mode = Object.hasOwn(MODES, game.mode) && isWord(game.mode) ? say(language, { word: game.mode }) : '';
+  const mode = modeText(game.mode, game.breeding, language);
   when.textContent = `${mode} · ${gameTime(game.tick)}${game.over === null ? '' : ` · ${result(game, language)}`}`;
   who.append(when);
 
@@ -134,7 +139,7 @@ function fillBest(best, language) {
     title.append(`${i + 1}. `, name, s.won ? ' ★' : '');
     const when = document.createElement('span');
     when.className = 'when';
-    const mode = Object.hasOwn(MODES, s.game.mode) && isWord(s.game.mode) ? say(language, { word: s.game.mode }) : '';
+    const mode = modeText(s.game.mode, s.details.breeding, language);
     when.textContent = [s.game.name ?? say(language, { word: 'aGame' }), mode].filter(Boolean).join(' · ');
     who.append(title, when);
     const points = document.createElement('span');
@@ -156,6 +161,21 @@ function fillBest(best, language) {
 }
 
 /**
+ * A game's mode, and how fast its units were raised unless as usual
+ * ("Cooperation · Fast units"). A score from Very Easy Lord, which gave way
+ * to the choice, reads as what it was: Shared Easy Lord with fast units.
+ * @param {string} mode
+ * @param {string | null | undefined} breeding
+ * @param {PageLanguage} language
+ */
+function modeText(mode, breeding, language) {
+  const [shown, pace] = mode === 'veryEasy' ? ['shared', 'fast'] : [mode, breeding];
+  const name = Object.hasOwn(MODES, shown) && isWord(shown) ? say(language, { word: shown }) : '';
+  const units = pace === 'fast' ? 'fastUnits' : pace === 'slow' ? 'slowUnits' : null;
+  return [name, units ? say(language, { word: units }) : ''].filter(Boolean).join(' · ');
+}
+
+/**
  * Show the lobby. It stays up until the player opens a game, which loads
  * that game's address.
  * @param {string} token
@@ -170,6 +190,8 @@ export function showLobby(token, me, { notice } = {}) {
   const newButton = /** @type {HTMLButtonElement} */ (document.getElementById('lobby-new'));
   const modeSelect = /** @type {HTMLSelectElement} */ (document.getElementById('lobby-mode'));
   const playersSelect = /** @type {HTMLSelectElement} */ (document.getElementById('lobby-players'));
+  const breedingSelect = /** @type {HTMLSelectElement} */ (document.getElementById('lobby-breeding'));
+  const npcsBox = /** @type {HTMLInputElement} */ (document.getElementById('lobby-npcs'));
   const language = chosenLanguage(me.language, autoLanguage(browserLanguages(), me.name));
 
   // Every text in the player's language; How to play and About are written
@@ -275,7 +297,7 @@ export function showLobby(token, me, { notice } = {}) {
     newButton.disabled = true;
     limit.hidden = true;
     try {
-      const res = await post('api/games', { token, mode: modeSelect.value, players: Number(playersSelect.value) });
+      const res = await post('api/games', { token, mode: modeSelect.value, breeding: breedingSelect.value, npcs: npcsBox.checked, players: Number(playersSelect.value) });
       // Too many games on the go: the server says how many and which, to go
       // back to.
       if (res.status === 409) {

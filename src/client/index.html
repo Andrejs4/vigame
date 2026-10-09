@@ -79,13 +79,22 @@
     <h1>Vigame</h1>
     <p class="hint"><span data-word="playingAs">Playing as</span> <strong id="lobby-name"></strong> &middot; <a href="?settings" id="lobby-settings" data-word="settings">Settings</a></p>
     <p class="error" id="lobby-notice" role="status" hidden></p>
+    <!-- The new game's choices, each label beside its chooser. -->
+    <div class="new-game">
     <label for="lobby-mode" data-word="mode">Mode</label>
     <select id="lobby-mode">
       <option value="coop" selected data-word="coopChoice">Cooperation: together against the Dark Lord</option>
       <option value="easy" data-word="easyChoice">Easy Lord: together against a weaker Dark Lord</option>
       <option value="shared" data-word="sharedChoice">Shared Easy Lord: one stock for all, against a weaker Dark Lord</option>
-      <option value="veryEasy" data-word="veryEasyChoice">Very Easy Lord: as Shared Easy Lord, and units breed twice as fast</option>
+      <option value="teams" data-word="teamsChoice">Two teams: half the seats against the other half</option>
       <option value="ffa" data-word="ffaChoice">Free for all: each against the other</option>
+    </select>
+    <!-- How fast castles raise units, in any mode. -->
+    <label for="lobby-breeding" data-word="unitProduction">Unit production</label>
+    <select id="lobby-breeding">
+      <option value="normal" selected data-word="breedingNormal">Normal</option>
+      <option value="fast" data-word="breedingFast">Fast (2×)</option>
+      <option value="slow" data-word="breedingSlow">Slow (0.5×)</option>
     </select>
     <label for="lobby-players" data-word="players">Players</label>
     <select id="lobby-players">
@@ -106,6 +115,9 @@
       <option value="15">15</option>
       <option value="16">16</option>
     </select>
+    <!-- NPCs play the seats nobody holds (npc.js). -->
+    <label class="check"><input type="checkbox" id="lobby-npcs"> <span data-word="npcsChoice">NPCs play free seats</span></label>
+    </div>
     <button id="lobby-new" class="primary" data-word="newGame">New game</button>
     <div id="lobby-limit" hidden>
       <p class="error" id="lobby-limit-text" role="alert"></p>
@@ -385,7 +397,8 @@
     <button id="abort-button" disabled title="Give up a building still going up: its crew goes home, and its cost is lost" data-word-title="abortTitle" data-word="abort">Abort</button>
     <button id="attack-button" data-word-key="keyAttack" disabled aria-pressed="false" aria-keyshortcuts="A" title="Attack (A)" data-word-title="attackTitle"><b>A</b>ttack…</button>
     <div class="group-label" data-word="groupView">View</div>
-    <button id="recenter" data-word="recenter">Recenter</button>
+    <!-- Looks at your castle and selects it (H, or the Home key); with it selected, H is Heroes. -->
+    <button id="home-button" data-word-key="keyHome" aria-keyshortcuts="H" title="Look at your castle and select it (H)" data-word-title="homeTitle"><b>H</b>ome</button>
     <div class="zoom-row">
       <button id="zoom-out" aria-label="Zoom out" data-word-label="zoomOut">&minus;</button>
       <button id="zoom-in" aria-label="Zoom in" data-word-label="zoomIn">+</button>
@@ -401,6 +414,8 @@
     <div class="minimap-box">
       <canvas id="minimap-canvas" aria-label="Map of the whole board: press or drag on it to look there" data-word-label="minimapLabel"></canvas>
       <div class="minimap-frame" id="minimap-frame"></div>
+      <!-- Home's key over your castle; pressing it is Home too (a phone has no Home button). -->
+      <button class="minimap-home" id="minimap-home" hidden title="Look at your castle and select it (H)" data-word-title="homeTitle">H</button>
     </div>
   </div>
 </div>

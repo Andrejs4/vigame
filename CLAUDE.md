@@ -164,6 +164,12 @@ drawing during play). Read it before art or graphics work.
   layout. The smoke check holds the Russian buttons to their fit: no
   overflow, two lines at most and three rows on a phone, one line on a
   desktop.
+- Home and Heroes share H on purpose: a key presses the first of its
+  buttons that shows and is enabled, and Heroes shows only while your
+  castle is selected, which Home does. Home's own letter in each language
+  (`keyHome`) is otherwise free, and no button may sit on M, the
+  minimap's key (the tests check). Home has no button on a phone: its
+  letter over your castle on the minimap (`markHome`) is it there.
 
 ## Game server (server/)
 
@@ -194,6 +200,20 @@ drawing during play). Read it before art or graphics work.
   paused the room refuses commands, except `rename`, which needs no clock;
   after a rename it saves a snapshot at once, since the lobby reads a game's
   name from its snapshot and a paused game takes none.
+- NPCs (`src/core/npc.js`, the numbers in `NPC` in rules.js) play the
+  seats nobody holds in a game with `npcs` in its state. The room asks
+  `npcMove` for each NPC seat every `NPC.think` ticks (`playNpcs`) and
+  gives its commands through `commit` under that seat, logged like a
+  player's: replays never run NPC code, so NPCs may change freely without
+  touching saved games. An NPC reads the game but never changes it, and
+  never draws on `random(state)` (that would change the game); what it
+  remembers between moves (`NpcMemory`) lives in the room and is lost on
+  a restart. The clock doesn't wait for NPC seats (`awaited`), and a game
+  NPCs play alone runs while anyone watches; its creator may end it
+  unseated (`endGame`). In a game
+  of player against player with NPCs a fallen player may not take another
+  seat (`fallenMayMove`, `barred`). test/npc.test.js plays games of NPCs
+  alone, which is also the way to try balance.
 - Commands are flat objects of short strings, numbers and short lists of
   short strings (such as a crew's unit ids); the room rejects
   anything else before the core sees it (`flatCommand`).
@@ -212,8 +232,8 @@ drawing during play). Read it before art or graphics work.
   Change tables only by adding a step to `migrate()`.
 - The author doesn't want old games kept playable across changes: when the
   rules or the state's shape change in a way saved games can't follow,
-  add a `migrate()` step that deletes games and commands (as version 23
-  did), rather than code that carries old games along. The high scores
+  add a `migrate()` step that deletes games and commands (as versions 23
+  and 26 did), rather than code that carries old games along. The high scores
   live apart (`scores`, written once by `finish` in the room when a game
   ends) and stay; players stay too.
 

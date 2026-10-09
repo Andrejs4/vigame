@@ -34,7 +34,7 @@ import express from 'express';
 import { BOARD_OPTIONS, createBoard } from '../src/core/board.js';
 import { newGame } from '../src/core/game.js';
 import { cleanLanguage, cleanPlayerName } from '../src/core/player.js';
-import { DEFAULT_MODE, DEFAULT_PLAYERS, MAX_PLAYERS, MIN_PLAYERS, MODES, TICKS_PER_SECOND } from '../src/core/rules.js';
+import { BREEDING, DEFAULT_BREEDING, DEFAULT_MODE, DEFAULT_PLAYERS, MAX_PLAYERS, MIN_PLAYERS, MODES, TICKS_PER_SECOND } from '../src/core/rules.js';
 import { createChallenges } from './challenge.js';
 import { gameRoom, isToken, liveRoom, playerId, signedIn } from './room.js';
 import { openStorage } from './storage.js';
@@ -58,12 +58,14 @@ const GAME_ID = /^[\w-]{1,64}$/;
 /**
  * Start a new game and store it.
  * @param {import('./storage.js').Storage} storage
- * @param {{ seed?: number, mode?: string, players?: number }} [options]
+ * @param {{ seed?: number, mode?: string, breeding?: string, npcs?: boolean, players?: number }} [options]
  * @returns {string} The new game's id.
  */
-export function startGame(storage, { seed = randomInt(1, 2 ** 31), mode = DEFAULT_MODE, players = DEFAULT_PLAYERS, creator = null } = {}) {
+export function startGame(storage, {
+  seed = randomInt(1, 2 ** 31), mode = DEFAULT_MODE, breeding = DEFAULT_BREEDING, npcs = false, players = DEFAULT_PLAYERS, creator = null,
+} = {}) {
   const id = randomBytes(6).toString('base64url');
-  const state = newGame(createBoard({ ...BOARD_OPTIONS, seed, players }), { mode });
+  const state = newGame(createBoard({ ...BOARD_OPTIONS, seed, players }), { mode, breeding, npcs });
   storage.createGame({ id, seed, state, seats: Array.from({ length: players }, () => null), creator });
   return id;
 }
@@ -229,12 +231,16 @@ export async function startGameServer({
       app.post('/api/games', (req, res) => {
         if (!signedIn(storage, req.body?.token)) return void res.status(401).json({ error: 'sign in first' });
         const mode = req.body?.mode ?? DEFAULT_MODE;
+        const breeding = req.body?.breeding ?? DEFAULT_BREEDING;
         const players = req.body?.players ?? DEFAULT_PLAYERS;
         if (typeof mode !== 'string' || !Object.hasOwn(MODES, mode)) return void res.status(400).json({ error: 'unknown mode' });
+        if (typeof breeding !== 'string' || !Object.hasOwn(BREEDING, breeding)) return void res.status(400).json({ error: 'unknown breeding' });
+        const npcs = req.body?.npcs ?? false;
+        if (typeof npcs !== 'boolean') return void res.status(400).json({ error: 'npcs is true or false' });
         if (!Number.isInteger(players) || players < MIN_PLAYERS || players > MAX_PLAYERS) {
           return void res.status(400).json({ error: `players must be ${MIN_PLAYERS} to ${MAX_PLAYERS}` });
         }
-        if (mode === 'ffa' && players < 2) return void res.status(400).json({ error: 'free for all needs two players' });
+        if ((mode === 'ffa' || mode === 'teams') && players < 2) return void res.status(400).json({ error: `${MODES[mode].toLowerCase()} needs two players` });
         const creator = playerId(req.body.token);
         const crowded = tooManyGames(storage.gamesUnderWayOf(creator), creator, gamesPerPlayer, Date.now());
         if (crowded) {
@@ -244,7 +250,7 @@ export async function startGameServer({
           const { error, waiting, seated } = crowded;
           return void res.status(409).json({ error, waiting, seated, games: seatNames(games) });
         }
-        res.status(201).json({ id: startGame(storage, { mode, players, creator }) });
+        res.status(201).json({ id: startGame(storage, { mode, breeding, npcs, players, creator }) });
       });
       /**
        * Games as the lobby lists them, with each seat's holder by name, and

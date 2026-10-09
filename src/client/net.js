@@ -20,7 +20,8 @@
  *   seats()         the player id in each seat, or null for a free one
  *   freeSeats()     the free seats whose castles stand
  *   canClaimSeat()  whether this viewer could take one of them: as a
- *                   spectator, or once their own castle has fallen
+ *                   spectator, or once their own castle has fallen (not
+ *                   against players with NPCs: `fallenMayMove`)
  *   claimSeat(seat) take a free seat, the one given if it is free
  *   releaseSeat()
  *   isCreator()     whether this viewer started the game
@@ -34,6 +35,7 @@
  *   leave()
  */
 
+import { fallenMayMove } from '../core/game.js';
 import { TICKS_PER_SECOND } from '../core/rules.js';
 
 /** @typedef {{ q: number, r: number }} Axial */
@@ -291,8 +293,8 @@ export async function createServerNet({ client, gameId, token, now = () => perfo
     onSeat: (fn) => seatListeners.add(fn),
     seats: () => [...seatList],
     freeSeats,
-    canClaimSeat: () => isConnected && view?.over === undefined && freeSeats().length > 0
-      && (mySeat === null || view?.players[mySeat]?.lost !== undefined),
+    canClaimSeat: () => isConnected && view !== null && view.over === undefined && freeSeats().length > 0
+      && (mySeat === null || (view.players[mySeat]?.lost !== undefined && fallenMayMove(view))),
     /** @param {number} [seat] */
     claimSeat: (seat) => room.request('claimSeat', seat === undefined ? undefined : { seat }).then(() => {}, () => {}),
     releaseSeat: () => room.request('releaseSeat').then(() => {}, () => {}),

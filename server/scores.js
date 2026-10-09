@@ -12,10 +12,10 @@ import { scoreOf } from '../src/core/game.js';
 export const HIGH_SCORES = 10;
 
 /**
- * @typedef {{ id: string, name: string | null, mode: string, over: number, winner?: number | null,
+ * @typedef {{ id: string, name: string | null, mode: string, breeding?: string, over: number, winner?: number | null,
  *   seats: Array<string | null>, players: any[] }} EndedGame
  * @typedef {{ seat: number, pid: string, points: number, won: boolean,
- *   details: { side: number, times: number, over: number, tally: Record<string, number> } }} ScoreRow
+ *   details: { side: number, times: number, over: number, breeding?: string, tally: Record<string, number> } }} ScoreRow
  */
 
 /**
@@ -33,7 +33,7 @@ export function scoreRows(game) {
     const { total, times } = scoreOf(state, seat);
     return [{
       seat, pid, points: total, won: winner !== undefined && p.team === winner,
-      details: { side: p.side, times, over: game.over, tally: { ...p.tally } },
+      details: { side: p.side, times, over: game.over, ...(game.breeding ? { breeding: game.breeding } : {}), tally: { ...p.tally } },
     }];
   });
 }

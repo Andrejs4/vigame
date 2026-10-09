@@ -25,8 +25,9 @@ import { createHash } from 'node:crypto';
 import { ErrorCode, Room, ServerError, logger } from '@colyseus/core';
 
 import { BOARD_OPTIONS, createBoard, tileAt } from '../src/core/board.js';
-import { ROOM_COMMANDS, advance, applyCommand, checkState, newGame, publicView } from '../src/core/game.js';
-import { BUILDING_TYPES, DEFAULT_MODE, END_ANYONE_TICKS, END_IDLE_MS, MODES, TICKS_PER_SECOND } from '../src/core/rules.js';
+import { ROOM_COMMANDS, advance, applyCommand, checkState, fallenMayMove, newGame, publicView } from '../src/core/game.js';
+import { npcMemory, npcMove, npcRefused } from '../src/core/npc.js';
+import { BREEDING, BUILDING_TYPES, DEFAULT_BREEDING, DEFAULT_MODE, END_ANYONE_TICKS, END_IDLE_MS, MODES, NPC, TICKS_PER_SECOND } from '../src/core/rules.js';
 import { GameState, ViewerState, syncGame, syncSeats } from './schema.js';
 
 /** What a player token must look like: long, random, URL-safe. */
@@ -100,8 +101,12 @@ export function restoreGame(saved, commandsAfter) {
     const game = /** @type {import('../src/core/game.js').GameState} */ (saved.state);
     return { board, game, seq: replay(board, game, commandsAfter(saved.seq), saved.seq) };
   }
-  const mode = /** @type {any} */ (saved.state)?.mode;
-  const game = newGame(board, { mode: Object.hasOwn(MODES, mode) ? mode : DEFAULT_MODE });
+  const { mode, breeding, npcs } = /** @type {any} */ (saved.state) ?? {};
+  const game = newGame(board, {
+    mode: Object.hasOwn(MODES, mode) ? mode : DEFAULT_MODE,
+    breeding: Object.hasOwn(BREEDING, breeding) ? breeding : DEFAULT_BREEDING,
+    npcs: npcs === true,
+  });
   return { board, game, seq: replay(board, game, commandsAfter(0)) };
 }
 
@@ -234,6 +239,12 @@ export class GameRoom extends Room {
     this.creator = saved.creator ?? null;
     /** When the game was created: a day on, an abandoned game may be ended. */
     this.createdAt = saved.createdAt;
+    /**
+     * What each NPC remembers between moves, by seat: kept while the room is
+     * open; a new room starts each afresh.
+     * @type {Map<number, import('../src/core/npc.js').NpcMemory>}
+     */
+    this.npcMemory = new Map();
 
     const state = new GameState();
     state.creator = this.creator ?? '';
@@ -278,17 +289,28 @@ export class GameRoom extends Room {
   }
 
   /**
+   * Whether an NPC plays a seat: in a game with NPCs, one nobody holds
+   * whose castle stands.
+   * @param {number} seat
+   */
+  npcSeat(seat) {
+    return this.game.npcs === true && this.seats[seat] === null && this.standing(seat);
+  }
+
+  /**
    * The seats the game waits for: those still in the game, but for the ones
-   * it goes on without while their players are away (`away` in the core).
+   * NPCs play, and those it goes on without while their players are away
+   * (`away` in the core).
    * @returns {boolean[]}
    */
   awaited() {
-    return this.seats.map((_, i) => this.standing(i) && this.game.players[i]?.away === undefined);
+    return this.seats.map((_, i) => this.standing(i) && !this.npcSeat(i) && this.game.players[i]?.away === undefined);
   }
 
   /**
    * Whether the clock runs: while every seat it waits for is held by someone
    * here, and someone is; or with `soloClock`, while any seated player is here.
+   * A game NPCs play alone runs while anyone watches it.
    */
   clockRuns() {
     if (this.game.over !== undefined) return false; // the game is over
@@ -296,6 +318,7 @@ export class GameRoom extends Room {
     const present = (/** @type {string | null} */ pid) => pid !== null && here.has(pid);
     if (this.soloClock) return this.seats.some(present);
     const awaited = this.awaited();
+    if (this.game.npcs && !awaited.some(Boolean) && this.seats.some((_, i) => this.npcSeat(i))) return here.size > 0;
     return this.seats.some((pid, i) => awaited[i] && present(pid)) && this.seats.every((pid, i) => !awaited[i] || present(pid));
   }
 
@@ -326,7 +349,8 @@ export class GameRoom extends Room {
    * (END_ANYONE_TICKS). And once the game is a day old (END_IDLE_MS) with
    * none of its other players here, anyone viewing it, so an abandoned game
    * can be closed: a spectator's ending counts every seat as giving up
-   * (`idle`). Then it is over (`finish`).
+   * (`idle`); so does the creator's, watching a game with NPCs. Then it is
+   * over (`finish`).
    * @param {string} pid Who asks.
    * @returns {string | null} Why not, or null once done.
    */
@@ -338,7 +362,8 @@ export class GameRoom extends Room {
     const abandoned = Date.now() - this.createdAt >= END_IDLE_MS
       && !this.seats.some((holder) => holder !== null && holder !== pid && here.has(holder));
     const player = seat !== null && (pid === this.creator || this.game.tick >= END_ANYONE_TICKS || abandoned);
-    if (!player && !abandoned) {
+    const watching = seat === null && pid === this.creator && this.game.npcs === true;
+    if (!player && !abandoned && !watching) {
       return seat === null ? 'only its players may end it, until it is a day old with none of them here' : 'only its creator may end it in its first hour';
     }
     const outcome = player ? this.commit(seat, { type: 'end' }) : this.commit(0, { type: 'end', idle: 1 });
@@ -387,9 +412,39 @@ export class GameRoom extends Room {
     if (this.state.running !== running) this.state.running = running;
     if (!running) return;
     advance(this.board, this.game);
+    if (this.game.over === undefined) this.playNpcs();
     if (this.game.over !== undefined) this.finish();
     else if (this.game.tick - this.snapshotAt >= SNAPSHOT_TICKS) this.snapshot();
     syncGame(this.state, publicView(this.game));
+  }
+
+  /**
+   * Each NPC thinks every NPC.think ticks, the seats a few ticks apart, and
+   * gives up to NPC.perThink commands, logged as its seat's. One the game
+   * had gone on without, marked away, is back first. A refused command is
+   * noted, so it isn't tried again soon; a failed write is logged, and the
+   * NPC tries again next time.
+   */
+  playNpcs() {
+    this.seats.forEach((_, seat) => {
+      if (!this.npcSeat(seat) || (this.game.tick + seat * 3) % NPC.think !== 0) return;
+      let memory = this.npcMemory.get(seat);
+      if (!memory) this.npcMemory.set(seat, memory = npcMemory());
+      try {
+        if (this.game.players[seat]?.away !== undefined) this.commit(seat, { type: 'back' });
+        for (let i = 0; i < NPC.perThink; i++) {
+          const command = npcMove(this.board, this.game, seat, memory);
+          if (!command) break;
+          const outcome = this.commit(seat, /** @type {Record<string, string | number | string[]>} */ (command));
+          if (!outcome.ok) {
+            npcRefused(memory, command, this.game.tick);
+            break;
+          }
+        }
+      } catch (e) {
+        logger.error(`game ${this.gameId}: the NPC in seat ${seat} failed`, e);
+      }
+    });
   }
 
   /**
@@ -457,27 +512,48 @@ export class GameRoom extends Room {
   }
 
   /**
-   * A free seat whose castle stands: the one wanted if it is, else the first.
+   * A free seat whose castle stands: the one wanted if it is, else the next
+   * after the last seat anyone has held (or holds), round the ring of
+   * castles, clockwise from the left. So seats fill in order (in two teams,
+   * the first team's, then the second's), and one let go of comes round
+   * again only after the others.
    * @param {number | null} [wanted]
    * @returns {number | null}
    */
   freeSeat(wanted = null) {
     const free = (/** @type {number} */ i) => this.seats[i] === null && this.standing(i);
     if (wanted !== null && Number.isInteger(wanted) && free(wanted)) return wanted;
-    const first = this.seats.findIndex((_, i) => free(i));
-    return first < 0 ? null : first;
+    const last = this.storage.namedSeats(this.gameId).findLastIndex((pid) => pid !== null);
+    const count = this.seats.length;
+    for (let k = 1; k <= count; k++) {
+      const seat = (last + k) % count;
+      if (free(seat)) return seat;
+    }
+    return null;
   }
 
   /**
-   * Give the player the first free seat whose castle stands, unless they
-   * already have a seat.
+   * Give the player the next free seat whose castle stands (`freeSeat`),
+   * unless they already have a seat.
    * @param {string} pid
    * @returns {number | null} Their seat, or null when no seat is free.
    */
   takeSeat(pid) {
     const held = this.seatOf(pid);
     if (held !== null) return held;
+    if (this.barred(pid)) return null;
     return this.moveTo(pid, this.freeSeat());
+  }
+
+  /**
+   * Whether a player may not take another seat: in a game of player
+   * against player with NPCs, one whose castle fell (holding its seat or
+   * the last to leave it) may only watch.
+   * @param {string} pid
+   */
+  barred(pid) {
+    if (fallenMayMove(this.game)) return false;
+    return this.storage.namedSeats(this.gameId).some((holder, seat) => holder === pid && !this.standing(seat));
   }
 
   /**
@@ -490,7 +566,7 @@ export class GameRoom extends Room {
   claimSeat(pid, wanted) {
     const held = this.seatOf(pid);
     if (held !== null && this.standing(held)) return held;
-    if (this.game.over !== undefined) return held;
+    if (this.game.over !== undefined || this.barred(pid)) return held;
     return this.moveTo(pid, this.freeSeat(wanted)) ?? held;
   }
 
@@ -502,6 +578,7 @@ export class GameRoom extends Room {
    */
   moveTo(pid, seat) {
     if (seat === null) return null;
+    this.npcMemory.delete(seat); // a player has it now; an NPC starts afresh if it gets it back
     this.saveSeats(this.seats.map((holder, i) => (i === seat ? pid : holder === pid ? null : holder)));
     this.welcomeBack();
     return seat;
@@ -551,8 +628,8 @@ export class GameRoom extends Room {
   }
 
   /**
-   * Players who join take the free seats in order, those whose castles
-   * stand; one the game went on without is back.
+   * Players who join take the free seats in turn round the ring, those
+   * whose castles stand; one the game went on without is back.
    * @param {import('@colyseus/core').Client} client
    */
   onJoin(client) {

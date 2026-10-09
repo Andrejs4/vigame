@@ -18,7 +18,7 @@ import { advance, castleOf, checkState, nearStanding, newGame, occupancy, public
 import { key } from '../src/core/hex.js';
 import { GAME_NAMES } from '../src/core/names.js';
 import { createServerNet } from '../src/client/net.js';
-import { BUILDING_TYPES, END_ANYONE_TICKS, END_IDLE_MS, TICKS_PER_SECOND } from '../src/core/rules.js';
+import { BUILDING_TYPES, END_ANYONE_TICKS, END_IDLE_MS, NPC, TICKS_PER_SECOND } from '../src/core/rules.js';
 
 /** @type {Awaited<ReturnType<typeof startGameServer>>} */
 let server;
@@ -272,10 +272,15 @@ test('new games are stored with a castle per side, and listed; unknown ones are 
   assert.equal(easy.status, 201);
   const easyGame = await (await fetch(`${base}/api/games/${(await easy.json()).id}`)).json();
   assert.deepEqual([easyGame.state.mode, easyGame.seats.length], ['easy', 1], 'Easy Lord, one player by default');
-  const veryEasy = await post('/api/games', { token: TOKENS.a, mode: 'veryEasy', players: 2 });
-  assert.equal(veryEasy.status, 201);
-  assert.equal((await (await fetch(`${base}/api/games/${(await veryEasy.json()).id}`)).json()).state.mode, 'veryEasy');
+  const fast = await post('/api/games', { token: TOKENS.a, mode: 'shared', breeding: 'fast', players: 2 });
+  assert.equal(fast.status, 201);
+  const fastId = (await fast.json()).id;
+  const fastState = (await (await fetch(`${base}/api/games/${fastId}`)).json()).state;
+  assert.deepEqual([fastState.mode, fastState.breeding], ['shared', 'fast']);
+  assert.deepEqual([...new Set((await (await fetch(`${base}/api/games`)).json()).map((/** @type {any} */ g) => g.breeding))].sort(), ['fast', 'normal'], 'normal by default');
   assert.equal((await post('/api/games', { token: TOKENS.a, mode: 'solo' })).status, 400);
+  assert.equal((await post('/api/games', { token: TOKENS.a, mode: 'veryEasy' })).status, 400, 'Very Easy Lord gave way to Fast');
+  assert.equal((await post('/api/games', { token: TOKENS.a, breeding: 'veryFast' })).status, 400);
   const sixteen = await post('/api/games', { token: TOKENS.a, players: 16 });
   assert.equal(sixteen.status, 201);
   assert.equal((await (await fetch(`${base}/api/games/${(await sixteen.json()).id}`)).json()).seats.length, 16);
@@ -770,6 +775,78 @@ test('releasing a seat lets a spectator take it', async () => {
   assert.equal(await refusal(a.request('claimSeat')), 'no free seat');
   assert.equal(await b.request('claimSeat'), 1, 'asking for a seat you hold is harmless');
   await leaveAll(a, b, c);
+});
+
+test('in two teams, players fill the first team\'s seats, then the second\'s; a freed seat comes round again only after the rest', async () => {
+  const res = await post('/api/games', { token: TOKENS.a, mode: 'teams', players: 3 });
+  assert.equal(res.status, 201);
+  const id = (await res.json()).id;
+  assert.deepEqual((await (await fetch(`${base}/api/games/${id}`)).json()).state.players.map((/** @type {any} */ p) => p.team), [0, 1, 1, -1],
+    'one against two, then the raiders');
+  assert.equal((await post('/api/games', { token: TOKENS.a, mode: 'teams', players: 1 })).status, 400, 'two teams need two players');
+  const seatOf = (/** @type {any} */ room, /** @type {any} */ who) => room.state.toJSON().viewers[who.sessionId]?.seat;
+  const a = await join(id, TOKENS.a);
+  const b = await join(id, TOKENS.b);
+  await until(() => seatOf(a, b) === 1);
+  assert.equal(seatOf(a, a), 0);
+  await b.request('releaseSeat');
+  await until(() => seatOf(a, b) === -1);
+  // Seat 1 is free again, but the next player goes on round the ring.
+  const c = await join(id, TOKENS.c);
+  await until(() => seatOf(a, c) === 2);
+  assert.equal(await b.request('claimSeat'), 1, 'and then it is the free one');
+  await leaveAll(a, b, c);
+});
+
+test('with NPCs, the clock runs without waiting for free seats, whose NPCs play as their seats; a newcomer takes one over', async () => {
+  const res = await post('/api/games', { token: TOKENS.a, mode: 'coop', players: 2, npcs: true });
+  assert.equal(res.status, 201);
+  const id = (await res.json()).id;
+  assert.equal((await post('/api/games', { token: TOKENS.a, npcs: 'yes' })).status, 400);
+  const listed = (await (await fetch(`${base}/api/games`)).json()).find((/** @type {any} */ g) => g.id === id);
+  assert.equal(listed.npcs, true);
+  const a = await join(id, TOKENS.a);
+  await until(() => a.state.running === true);
+  const npcCommands = async () => (await (await fetch(`${base}/api/games/${id}/commands`)).json()).filter((/** @type {any} */ c) => c.player === 1);
+  // NPC.start is 20 game seconds: two here.
+  /** @type {any[]} */
+  let given = [];
+  for (let i = 0; i < 80 && !given.length; i++) {
+    given = await npcCommands();
+    await sleep(100);
+  }
+  assert.ok(given.length > 0, 'the NPC gave no command');
+  assert.ok(given.every((c) => c.tick >= NPC.start));
+  // Bēla comes along and takes the NPC's seat; it gives no more.
+  const b = await join(id, TOKENS.b);
+  await until(() => b.state.toJSON().viewers[b.sessionId]?.seat === 1);
+  const before = (await npcCommands()).length;
+  await sleep(NPC.think / TICK_RATE * 1000 * 3);
+  assert.equal((await npcCommands()).length, before, 'the NPC stopped');
+  await leaveAll(a, b);
+});
+
+test('a game of NPCs alone runs while someone watches; its creator may end it from the stands', async () => {
+  const res = await post('/api/games', { token: TOKENS.a, mode: 'ffa', players: 2, npcs: true });
+  const id = (await res.json()).id;
+  const a = await join(id, TOKENS.a);
+  await until(() => a.state.running === true);
+  await a.request('releaseSeat');
+  await until(() => a.state.toJSON().viewers[a.sessionId]?.seat === -1);
+  const tick = seen(a).tick;
+  await sleep(300);
+  assert.equal(a.state.running, true, 'it runs with nobody seated');
+  assert.ok(seen(a).tick > tick);
+  // Someone else watching may not end it; its creator may.
+  const c = await join(id, TOKENS.c);
+  await until(() => c.state.toJSON().viewers[c.sessionId]?.seat === 0, 3000).catch(() => {});
+  if (c.state.toJSON().viewers[c.sessionId]?.seat !== -1) await c.request('releaseSeat');
+  await until(() => c.state.toJSON().viewers[c.sessionId]?.seat === -1);
+  assert.match(await refusal(c.request('endGame')), /only its players may end it/);
+  assert.equal(await a.request('endGame'), true);
+  await until(() => seen(a).over !== undefined);
+  assert.equal(seen(a).winner, undefined, 'nobody wins');
+  await leaveAll(a, c);
 });
 
 test('selections are shared, but only for hexes on the board', async () => {

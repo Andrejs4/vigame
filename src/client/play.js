@@ -8,7 +8,7 @@ import { axialToPixel, bounds, distance, key, pixelToAxial } from '../core/hex.j
 import { BOARD_OPTIONS, createBoard, tileAt } from '../core/board.js';
 import {
   buildCost, capacityOf, castleOf, crewOf, depthOf, endWinner, foodStore, fullMeal, inBuildRange, isDugOut, isRising, maxHp, occupancy, purseOf, quickWin, scoreOf,
-  raiseWork, seatsOf, sharesStock, shortOf, sideOf, upgradeCost,
+  raiseWork, seatsOf, sharesStock, shortOf, sideOf, upgradeCost, workFor,
 } from '../core/game.js';
 import { GAME_NAME_MAX, cleanGameName } from '../core/player.js';
 import { PORTRAIT_SIDE, portraitOf } from '../core/names.js';
@@ -55,7 +55,7 @@ const DRAG_SLOP = Object.freeze({ mouse: 6, other: 10 });
  */
 const FEW_AT_HOME = Object.freeze([{ under: 8, ticked: 1 }, { under: 21, ticked: 3 }]);
 
-/** Recenter's zoom at least: close enough to read how many are in each building. */
+/** Home's zoom at least: close enough to read how many are in each building. */
 const HOME_ZOOM = COUNT_ZOOM + 0.15;
 
 /**
@@ -124,6 +124,7 @@ export async function startGame(net, me) {
   const mapCanvas = /** @type {HTMLCanvasElement} */ (document.getElementById('minimap-canvas'));
   const mapFrame = /** @type {HTMLElement} */ (document.getElementById('minimap-frame'));
   const mapPanel = /** @type {HTMLElement} */ (document.getElementById('minimap'));
+  const mapHome = /** @type {HTMLButtonElement} */ (document.getElementById('minimap-home'));
   const controls = /** @type {HTMLElement} */ (document.getElementById('controls'));
   // The panels, the buttons and the crew, heroes and points dialogs are in
   // the player's language; messages, renaming and the heroes list's skill
@@ -161,6 +162,10 @@ export async function startGame(net, me) {
     const keyWord = /** @type {import('./words.js').Word} */ (button.dataset.wordKey);
     button.setAttribute('aria-keyshortcuts', [...new Set([word(keyWord), say('en', { word: keyWord })])].join(' '));
   }
+  // Home is also the keyboard's Home key, and its letter marks the castle on the minimap.
+  const homeButton = /** @type {HTMLButtonElement} */ (document.getElementById('home-button'));
+  homeButton.setAttribute('aria-keyshortcuts', [...keysOf(homeButton), 'Home'].join(' '));
+  mapHome.textContent = word('keyHome');
   const hud = {
     gameName: document.getElementById('game-name'),
     time: document.getElementById('time'),
@@ -196,6 +201,7 @@ export async function startGame(net, me) {
   keyLabel(crewButton, word('crew'));
   keyLabel(heroesButton, word('heroes'));
   keyLabel(attackButton, word('attack'));
+  keyLabel(homeButton, word('home'));
   const scoresButton = /** @type {HTMLButtonElement} */ (document.getElementById('scores-button'));
   const scoresDialog = /** @type {HTMLDialogElement} */ (document.getElementById('scores'));
   const gameId = new URLSearchParams(location.search).get('game') ?? '';
@@ -234,7 +240,7 @@ export async function startGame(net, me) {
   const tokens = new Tokens(() => { needsDraw = true; });
   const ground = new Ground(() => { needsDraw = true; });
   let renderer = new BoardRenderer(canvas, board, tokens, ground);
-  let minimap = new Minimap(mapCanvas, mapFrame, board);
+  let minimap = new Minimap(mapCanvas, mapFrame, board, mapHome);
   /** The main view's size, in CSS pixels. */
   let viewW = 0;
   let viewH = 0;
@@ -291,13 +297,13 @@ export async function startGame(net, me) {
   let highlights = new Set();
   let showCoords = false;
   let needsDraw = true;
-  /** Whether Recenter has looked at this viewer's own castle yet. */
+  /** Whether this viewer has looked at their own castle yet. */
   let homed = false;
 
   // --- state ---------------------------------------------------------------
 
-  /** Frame the whole board. */
-  function recenter() {
+  /** Frame the whole board, or look at the player's castle. */
+  function lookHome() {
     const rect = canvas.getBoundingClientRect();
     camera.fit(bounds(board.list, board.hexSize), rect.width, rect.height);
     // A player looks at their own castle, close enough to read the unit
@@ -313,6 +319,20 @@ export async function startGame(net, me) {
     needsDraw = true;
   }
 
+  /** Home: look at the player's castle, and select it while it stands. */
+  function goHome() {
+    lookHome();
+    const seat = net.seat();
+    const home = view && seat !== null ? castleOf(view, seat) : null;
+    if (!home) return;
+    aiming = null;
+    placing = null;
+    if (selected !== home.id) sounds.play('select');
+    selected = home.id;
+    refreshHighlights();
+    updateHud();
+  }
+
   /**
    * Take in the game as the server reports it.
    * @param {import('./net.js').GameView} next
@@ -324,8 +344,8 @@ export async function startGame(net, me) {
       board = createBoard({ ...BOARD_OPTIONS, seed: next.seed, players });
       renderer = new BoardRenderer(canvas, board, tokens, ground);
       renderer.showCoords = showCoords;
-      minimap = new Minimap(mapCanvas, mapFrame, board);
-      recenter();
+      minimap = new Minimap(mapCanvas, mapFrame, board, mapHome);
+      lookHome();
     }
     const fresh = effects.update(view, next, performance.now());
     // The player's heroes who died meanwhile, said where refusals are, and
@@ -339,8 +359,10 @@ export async function startGame(net, me) {
     if (view) letGo(view, next, fresh);
     view = next;
     // A player's first sight of the game is their own castle.
-    if (!homed && net.seat() !== null) recenter();
+    if (!homed && net.seat() !== null) lookHome();
     minimap.show(next);
+    const seat = net.seat();
+    minimap.markHome(seat !== null ? castleOf(next, seat) : null);
     occ = occupancy(next);
     moving = Object.values(next.units).some((u) => u.path) || Object.values(next.buildings).some((b) => b.path);
     if (selected && !next.buildings[selected]) selected = null;
@@ -453,7 +475,9 @@ export async function startGame(net, me) {
     /** @type {HTMLElement} */ (document.getElementById('scores-body')).replaceChildren(...rows.map(({ p, side, score, won }) => {
       const tr = document.createElement('tr');
       if (won) tr.className = 'won';
-      const name = seatNames[p.id] ? `${seatNames[p.id]} · ${sideName(view, p.id)}` : sideName(view, p.id);
+      // A side nobody played, in a game with NPCs, was an NPC's.
+      const holder = seatNames[p.id] || (view.npcs && !sideOf(view, p.id).npc ? word('npc') : '');
+      const name = holder ? `${holder} · ${sideName(view, p.id)}` : sideName(view, p.id);
       const who = cell('td', name);
       who.style.color = side.accent;
       tr.append(who, points(score.total, 'total'),
@@ -536,6 +560,8 @@ export async function startGame(net, me) {
   function canEndGame() {
     if (!view || view.over !== undefined) return false;
     if (net.seat() !== null && (net.isCreator() || view.tick >= END_ANYONE_TICKS)) return true;
+    // Its creator, watching a game with NPCs.
+    if (net.seat() === null && net.isCreator() && view.npcs) return true;
     return abandoned();
   }
 
@@ -713,12 +739,12 @@ export async function startGame(net, me) {
     const graded = type.grades > 1 ? word('graded', { name: typeName(b.type), n: b.grade }) : typeName(b.type);
     // A castle says whose it is: its seat's player, or that the seat is free.
     const holder = b.type === 'castle' && net.seats()[b.owner] !== undefined
-      ? (net.seats()[b.owner] === null ? word('seatFree') : seatNames[b.owner] ?? '')
+      ? (net.seats()[b.owner] === null ? word(view?.npcs ? 'npc' : 'seatFree') : seatNames[b.owner] ?? '')
       : '';
     const name = holder ? `${graded} · ${holder}` : graded;
     /** @type {string[]} */
     const parts = [];
-    const done = percent(b.work ?? 0, type.work ?? 1);
+    const done = percent(b.work ?? 0, (view && workFor(view, b.type)) ?? 1);
     if (b.type === 'castle') {
       parts.push(word('atHome', { n: occ?.inside.get(b.id)?.length ?? 0, max: capacityOf(b) }), word('nextUnit', { done }));
     } else if (type.capacity) {
@@ -1328,12 +1354,16 @@ export async function startGame(net, me) {
   // A letter presses its button (aria-keyshortcuts): the one it is bold on,
   // or M the minimap's arrow; unless typing or in a dialog, or a dialog just
   // took it to close (it shuts before the key gets here, so it must not open
-  // again).
-  const shortcuts = new Map([...stage.querySelectorAll('button[aria-keyshortcuts]')]
-    .flatMap((button) => keysOf(button).map((k) => [k.toLowerCase(), /** @type {HTMLButtonElement} */ (button)])));
+  // again). Heroes and Home share H: Heroes while it shows (your castle is
+  // selected), as it comes first.
+  /** @type {Map<string, HTMLButtonElement[]>} */
+  const shortcuts = new Map();
+  for (const button of /** @type {NodeListOf<HTMLButtonElement>} */ (stage.querySelectorAll('button[aria-keyshortcuts]'))) {
+    for (const k of keysOf(button).map((k) => k.toLowerCase())) shortcuts.set(k, [...(shortcuts.get(k) ?? []), button]);
+  }
   addEventListener('keydown', (e) => {
-    const button = keyCandidates(e).map((k) => shortcuts.get(k)).find(Boolean);
-    if (!button || button.disabled || button.hidden) return;
+    const button = keyCandidates(e).flatMap((k) => shortcuts.get(k) ?? []).find((b) => !b.disabled && !b.hidden);
+    if (!button) return;
     if (e.defaultPrevented || e.repeat || e.ctrlKey || e.metaKey || e.altKey) return;
     if (crewDialog.open || heroesDialog.open || scoresDialog.open || renameDialog.open) return;
     if (e.target instanceof Element && e.target.closest('input, select, textarea, [contenteditable]')) return;
@@ -1483,7 +1513,9 @@ export async function startGame(net, me) {
     // A spectator ends an abandoned game for every seat at once.
     const team = seat === null ? endWinner(view, 0, true) : endWinner(view, seat);
     const winners = players.filter((p) => p.team === team);
-    const ask = seat === null ? word(team === undefined ? 'askEndIdle' : 'askEndIdleLord')
+    const watching = seat === null && net.isCreator() && view.npcs && !abandoned();
+    const ask = watching ? word(team === undefined ? 'askEndNpcs' : 'askEndNpcsLord')
+      : seat === null ? word(team === undefined ? 'askEndIdle' : 'askEndIdleLord')
       : team === undefined ? word('askEndNobody')
       : winners.some((p) => sideOf(view, p.id)?.npc) ? word('askEndLord')
         : word('askEndSide', { side: winners.map((p) => sideName({ players }, p.id)).join(', ') });
@@ -1512,7 +1544,8 @@ export async function startGame(net, me) {
 
   document.getElementById('zoom-in')?.addEventListener('click', () => zoomCentre(1.25));
   document.getElementById('zoom-out')?.addEventListener('click', () => zoomCentre(1 / 1.25));
-  document.getElementById('recenter')?.addEventListener('click', recenter);
+  homeButton.addEventListener('click', goHome);
+  mapHome.addEventListener('click', goHome);
   addEventListener('resize', resize);
 
   // The status panel folds to its header, and the minimap hides (its arrow
@@ -1586,7 +1619,7 @@ export async function startGame(net, me) {
       loadSeatNames();
     }
     // The first time this viewer has a castle, look at it.
-    if (!homed && net.seat() !== null) recenter();
+    if (!homed && net.seat() !== null) lookHome();
     refreshHighlights();
     updateHud();
   });

@@ -60,13 +60,15 @@ export const DEFAULT_PLAYERS = 1;
 /**
  * Game modes. In cooperation the players are one team against the Dark
  * Lord; Easy Lord is the same against a weaker one; Shared Easy Lord is
- * Easy Lord with one stock for the whole team (SHARED_STOCK); Very Easy
- * Lord is Shared Easy Lord with castles that raise units twice as fast
- * (BREED_RATE); in free for all, each against the others (two players at
- * least).
+ * Easy Lord with one stock for the whole team (SHARED_STOCK); in two teams,
+ * the first half of the seats (round the ring from the left, clockwise)
+ * against the rest, which get the odd one (`teamOfSeat` in game.js); in
+ * free for all, each against the others. The last two need two players
+ * at least. How fast units are
+ * raised is chosen apart, for any mode (BREEDING).
  */
 export const MODES = {
-  coop: 'Cooperation', easy: 'Easy Lord', shared: 'Shared Easy Lord', veryEasy: 'Very Easy Lord', ffa: 'Free for all',
+  coop: 'Cooperation', easy: 'Easy Lord', shared: 'Shared Easy Lord', teams: 'Two teams', ffa: 'Free for all',
 };
 export const DEFAULT_MODE = 'coop';
 
@@ -75,15 +77,16 @@ export const DEFAULT_MODE = 'coop';
  * lair's and his horde's), as a share of the usual.
  * @type {Record<string, number>}
  */
-export const LORD_HP = { coop: 1, easy: 0.5, shared: 0.5, veryEasy: 0.5 };
+export const LORD_HP = { coop: 1, easy: 0.5, shared: 0.5 };
 
 /**
- * How fast castles raise new units in a mode, as a multiple of the usual:
- * their units' work and what they do by themselves both count this many
- * times. One in any mode not listed.
+ * How fast castles raise new units, chosen with a game in any mode, as a
+ * multiple of the usual: a new unit takes the castle's work divided by it.
+ * The units learn as fast as ever.
  * @type {Record<string, number>}
  */
-export const BREED_RATE = { veryEasy: 2 };
+export const BREEDING = { normal: 1, fast: 2, slow: 0.5 };
+export const DEFAULT_BREEDING = 'normal';
 
 /**
  * The Dark Lord grows stronger with the players (`lordScale` in game.js) up
@@ -97,7 +100,7 @@ export const LORD_PLAYERS_MAX = 8;
  * sides would have had, together.
  * @type {string[]}
  */
-export const SHARED_STOCK = ['shared', 'veryEasy'];
+export const SHARED_STOCK = ['shared'];
 
 /** Most units one player may have at once, inside buildings or out. */
 export const UNIT_LIMIT = 300;
@@ -439,3 +442,51 @@ export const BUILDING_TYPES = {
     skill: 'ranged', extra: 'melee', speed: WALK_TICKS, band: true,
   },
 };
+
+/**
+ * How NPCs play the free seats of a game started with them (`npcMove` in
+ * npc.js). Times are in ticks, distances in cells. The author's to tune.
+ */
+export const NPC = Object.freeze({
+  /** Each NPC thinks this often, the seats a few ticks apart. */
+  think: 5 * TICKS_PER_SECOND,
+  /** Its first move, this long into the game. */
+  start: 20 * TICKS_PER_SECOND,
+  /** At most this many commands each time it thinks. */
+  perThink: 4,
+  /** It answers a threat once it has seen it this long. */
+  react: 10 * TICKS_PER_SECOND,
+  /** A band, wagon, raider or one of the horde this close to one of its buildings is a threat; so is a manned tower that can reach one. */
+  near: 8,
+  /** Units it keeps at home, to breed. */
+  keepHome: 8,
+  /** At most this share of its units work in pits, farms and towers; the rest are for bands. */
+  workShare: 0.6,
+  /** What it builds, in turn, while it has the stone and the units (farms come as food needs them). */
+  order: Object.freeze(['pit', 'tower', 'pit', 'tower']),
+  /** A farm for each this many units beyond what its castles feed, at most maxFarms. */
+  unitsPerFarm: 12,
+  maxFarms: 6,
+  /** Each building's crew; a wagon's raises it, and fills it before it rolls. */
+  crews: Object.freeze({ pit: 6, farm: 4, tower: 10, wagon: 6 }),
+  /** It upgrades its castle once it has this much stone, */
+  castleUpgradeAt: 300,
+  /** and a tower when the upgrade leaves it this much. */
+  stoneReserve: 60,
+  /** With this many at home it sends some out in a band: this share, at most bandMax. */
+  bandFrom: 30,
+  bandShare: 0.5,
+  bandMax: 60,
+  /** No band smaller than this. */
+  bandMin: 6,
+  /** Against the Dark Lord its bands go for his horde, and raiders, this close to its castle; for the lair only all in. */
+  hunt: 20,
+  /** From this far into the game it spends dark metal on wagons, behind its castle, and upgrades them; */
+  wagonsFrom: 12 * 60 * TICKS_PER_SECOND,
+  /** once the metal is spent the wagons attack, at least this many, */
+  wagonsMin: 2,
+  /** and this long after, everyone at home goes too. */
+  allInAfter: 10 * TICKS_PER_SECOND,
+  /** A command refused at a place is not tried there again for this long. */
+  retry: 60 * TICKS_PER_SECOND,
+});

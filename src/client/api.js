@@ -16,6 +16,9 @@
  * @typedef {object} GameSummary A game as the lobby lists it.
  * @property {string} id
  * @property {string} mode A key of MODES.
+ * @property {string | null} breeding How fast castles raise units: a key
+ *   of BREEDING (null for a game from before there was a choice).
+ * @property {boolean} [npcs] Whether NPCs play the seats nobody holds.
  * @property {string | null} name What its players call it (null only for a
  *   game saved before games had names).
  * @property {number | null} over The tick it ended, or null while it's on.
@@ -38,9 +41,9 @@
  * @property {{ id: string, name: string | null, mode: string }} game
  * @property {number} at When the game ended.
  * @property {boolean} open Whether the game is still kept, to open at its table.
- * @property {{ side?: number, times?: number, over?: number, tally?: Record<string, number> }} details
+ * @property {{ side?: number, times?: number, over?: number, breeding?: string, tally?: Record<string, number> }} details
  *   What the total came from: the side's palette, the quick-win bonus, the
- *   tick it ended and the side's tally (units born, kills, stone and so on).
+ *   tick it ended, how fast units were raised, and the side's tally (units born, kills, stone and so on).
  */
 
 const TOKEN_KEY = 'vigame.token';

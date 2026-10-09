@@ -60,7 +60,9 @@ test('a key press stands for the character typed, then the Latin and the Russian
 });
 
 test('each button\'s key is a letter of its label, on a key of its own; English keys work in Russian too', () => {
-  const buttons = Object.keys(WORDS.en).filter((w) => /^key[A-Z]/.test(w));
+  // Home shares Heroes' English key, H (Heroes while your castle is
+  // selected), so it is checked on its own below.
+  const buttons = Object.keys(WORDS.en).filter((w) => /^key[A-Z]/.test(w) && w !== 'keyHome');
   assert.equal(buttons.length, 9);
   /** @param {string} w keyTower */
   const labelOf = (w) => /** @type {keyof typeof WORDS.en} */ (w[3].toLowerCase() + w.slice(4));
@@ -81,7 +83,16 @@ test('each button\'s key is a letter of its label, on a key of its own; English 
       assert.ok(at, `${language}.${w} is on no key`);
       assert.ok(!english[at] || english[at] === w, `${language}.${w} sits on ${english[at]}'s English key`);
     }
+    // Home's key is its own in each language, and only H, or a free key.
+    const home = String(words.keyHome).toLowerCase();
+    assert.ok(words.home.toLowerCase().includes(home), `${language}.keyHome is not in its label`);
+    assert.ok(!buttons.some((w) => String(words[/** @type {keyof typeof WORDS.en} */ (w)]).toLowerCase() === home) || home === 'h', `${language}.keyHome is another button's`);
+    const at = /^[a-z]$/.test(home) ? home : keyOf[home];
+    assert.ok(at && (!english[at] || at === 'h'), `${language}.keyHome sits on ${english[at]}'s English key`);
+    // M shows and hides the minimap.
+    assert.ok([...buttons, 'keyHome'].every((w) => String(words[/** @type {keyof typeof WORDS.en} */ (w)]).toLowerCase() !== 'm' && keyOf[String(words[/** @type {keyof typeof WORDS.en} */ (w)]).toLowerCase()] !== 'm'), `${language}: a button sits on M`);
   }
+  assert.equal(WORDS.en.keyHome, 'H');
 });
 
 test('fill puts values in a text\'s {placeholders}, and leaves one with no value', () => {

@@ -303,8 +303,8 @@ game's terms), which the rest of the game should match: юниты (units),
 (Abort), «Герои…» (Heroes), «Атака…» (Attack), «Апгрейд» (Upgrade, the
 author's word), яма (pit), воз (wagon), отряд (band), башня, ферма,
 прочность (a building's hit points), кустарник (scrub), Тёмный Лорд (the
-Dark Lord), modes Кооператив, Лёгкий Лорд, Общий Лёгкий Лорд, Очень Лёгкий Лорд, Все против
-всех, sides Синие, Багровые, Зелёные, Золотые, Бирюзовые, Оранжевые,
+Dark Lord), modes Кооператив, Лёгкий Лорд, Общий Лёгкий Лорд, Все против
+всех, «Прирост юнитов» (unit production: Обычный, Быстрый, Медленный), sides Синие, Багровые, Зелёные, Золотые, Бирюзовые, Оранжевые,
 Розовые, Серебряные (plural, as teams: "победили Синие"), and for seats 9
 to 16 Лазурные, Салатовые, Индиго, Вишнёвые, Оливковые, Коралловые, Белые,
 Мятные (Azure, Lime, Indigo, Cherry, Olive, Coral, White, Mint; Latvian
@@ -475,6 +475,52 @@ already rules out e-mails and phone numbers with + or dashes. Phone and
 PII libraries (libphonenumber-js, OpenRedaction…) are far bigger than the
 need. AI toxicity models are too big and don't know Latvian or Finnish;
 for slang and double meanings, an admin rename or clear is the tool.
+
+### NPC players: built, to tune
+
+Built in October 2026 (`src/core/npc.js`, the table `NPC` in rules.js; how
+it fits is in CLAUDE.md and the README). The author's decisions: a lobby
+checkbox, off by default, puts NPCs in every seat nobody holds; newcomers
+may take an NPC's seat at any time; against the Dark Lord a player whose
+castle fell may too, but not against players; an NPC never plays for an
+away player; they are named "NPC". On top of the first guesses he asked
+that an NPC answer enemy towers that can reach its buildings, and that from
+twelve minutes in it build and upgrade wagons behind its castle with dark
+metal, send them once the metal is spent (at least `wagonsMin`), and ten
+seconds later go all in with everyone at home.
+
+What games of NPCs alone showed, at the first numbers (a scratch
+simulation, the same loop as `npcsPlay` in test/npc.test.js):
+
+- Two in free for all build a dozen farms, a few pits and towers, and
+  bands now and then, and haven't finished after 30 minutes: their bands
+  of 15 to 30 don't take a castle with towers.
+- Four in cooperation lose to the Dark Lord's horde at about ten minutes,
+  as the earlier bots did; sixteen at about fourteen.
+- Dark metal comes only from loot, so wagons are few: in free for all,
+  one or two now and then from raiders.
+- Fifteen NPCs think in about 5 ms per game second, half a percent of the
+  server's time; the room's copy of the game for each command costs about
+  2 ms more.
+
+After the author's first look: fewer farms (one per 12 units beyond what
+the castle feeds, six at most, none in `order`), and at most `workShare`
+(60%) of the units at work, since with the farms gone the spare units went
+into pits and no band ever formed. Two in free for all then fought all
+along (26 bands in 30 minutes), with five or six farms each.
+
+Knobs to try first: `bandFrom` and `bandShare` (bigger, rarer bands),
+`order` (fewer farms, more towers), `keepHome`, and `hunt` against the
+Dark Lord.
+
+### Game exports with a map version
+
+The author's thought (October 2026), after Very Easy Lord gave way to
+unit production and every game was dropped once more: a game could be
+exported (its seed, players, mode, pace and command log) with the version
+of the map and rules it was played under, so a change that drops games
+needn't lose one worth keeping. Not built; for now each such change
+deletes the games (CLAUDE.md), and only the high scores stay.
 
 ### Further off
 
