@@ -70,8 +70,11 @@ function row(game, action, language) {
   who.append(title);
   // Teammates with "&", rivals with "vs".
   const between = hasLord(game.mode) ? ' & ' : ' vs ';
-  game.seats.forEach((holder, i) => {
+  game.seats.forEach((seated, i) => {
     if (i) who.append(between);
+    // A seat its player left for another base, or that the game ended
+    // without, still names who played it; one left open stays open.
+    const holder = seated ?? (game.over !== null || game.fallen?.includes(i) ? game.former?.[i] ?? null : null);
     const name = document.createElement('span');
     name.textContent = holder ? holder.name || '?' : '—';
     name.style.color = holder ? SIDES[SEAT_SIDES[i]]?.accent ?? '' : '';

@@ -34,11 +34,12 @@ Run `npm start` and open http://127.0.0.1:2567.
   the lobby (How to play and About too), and in a game the buttons, the
   status panel, the stock and selection panel, the crew chooser, the
   heroes list and the table of points are in each of them; the login and settings pages turn at once when another is
-  chosen. On the login page, Auto goes by the first of the browser's
-  languages that the game has, else picks Russian for a name typed in
-  Cyrillic letters, else English. Once signed in (settings, lobby, game),
-  Auto picks Russian for a name in Cyrillic letters first, then goes by
-  the browser, else English. The buttons' words were chosen short enough
+  chosen. Auto goes by the name first, on the login page as it is typed
+  and once signed in (settings, lobby, game): the last letter in it that
+  only one of the languages has picks it (Cyrillic for Russian; ā č ē ģ ī
+  ķ ļ ņ š ū ž for Latvian; ä ö å for Finnish), so "Jānis Ёлкин" is Russian
+  and "Ёлкин Jānis" Latvian. Without such a letter it goes by the first of
+  the browser's languages that the game has, else English. The buttons' words were chosen short enough
   that a phone's rows of buttons stay as in English: Башня, Воз, Яма,
   Ферма, Отряд, Апгрейд, Бригада…, Герои…, Вернуть, Бросить, Атака…,
   Отпусти; Tornis, Rati, Bedre, Ferma, Bars, Uzlabot, Komanda…, Varoņi…,
@@ -172,7 +173,9 @@ Run `npm start` and open http://127.0.0.1:2567.
   it is, after a small picture of the building it is in (none while it
   walks): tick up to
   what it holds (with a mouse, drag down the list to tick or untick a run
-  of them). The skill shown is the one the building wants: building for
+  of them). Beside the count, **✕** unticks everyone and **+n** ticks the
+  n more it has room for, from the top of the list as it is ordered now.
+  The skill shown is the one the building wants: building for
   a pit, farming for a farm, and ranged attack for a tower, wagon or band,
   with close combat beside it (a crew strikes at range, and in close
   combat only an enemy right next to it). The skill's button (**Attack**
@@ -311,7 +314,11 @@ Run `npm start` and open http://127.0.0.1:2567.
   no more commands; its units stay and still fight. While a seat is free
   whose castle stands (nobody took it, or its player released it), the
   player who lost has **New base** in place of Release: it moves them to
-  that seat, to the selected castle's if it is free, and frees theirs. Once only one team has
+  that seat, to the selected castle's if it is free, and frees theirs. A
+  seat its player left (for another base, or by releasing it) still names
+  them: in the lobby once its castle has fallen or the game is over, in
+  the table of points, and in the high scores, where each side they
+  played counts for them. Once only one team has
   a castle (or lair) standing, it has won and the game is over: the clock
   stops, commands are refused, the page says who won, and the lobby lists
   the game as finished.
@@ -599,7 +606,7 @@ HTTP API:
 | --- | --- |
 | `POST /api/me` | Who a token belongs to: `{ token }` gives `{ pid, name, language }`, or `null` if it hasn't signed in. |
 | `GET /api/challenge` | A sum to answer when signing in: `{ id, question }`. Each one answers once and lasts 10 minutes. |
-| `POST /api/players` | Signs in: `{ token, name, language?, challenge, answer }` gives `{ pid, name, language }` (`language` `auto` by default). `400` for a bad token, name or language, `403` for a wrong answer. |
+| `POST /api/players` | Signs in: `{ token, name, language, challenge, answer }` gives `{ pid, name, language }`. `400` for a bad token, name or language, `403` for a wrong answer. The login page always sends a language (`auto` at least), so a sign-in without one fails as a wrong answer does, using its sum up: a small check that it came from the page. |
 | `POST /api/settings` | Changes a signed-in player's settings: `{ token, name?, language? }` gives `{ pid, name, language }`; what isn't given stays. `401` if not signed in, `400` for a bad name or language. |
 | `POST /api/games` | Starts a game with a random map: `{ token, mode?, players? }` of a signed-in player (`mode` `coop`, `easy`, `shared`, `veryEasy` or `ffa`, `players` 1 to 16; by default a cooperation game for one) gives `201 { id }`; `401` if not signed in, `400` for a bad mode or number; `409 { error, waiting, seated, games }` while the player has too many games on the go (three of theirs waiting for a player, or seats in three under way): why in English, how many of each (0 for one that isn't why, so the page can say it in its own words), and those games as `GET /api/games` lists them, each with `clear`: `'delete'`, `'leave'` or `null`. |
 | `POST /api/games/:id/delete` | `{ token }`: deletes a game under way that the player started and nobody else holds a seat in, closing its room if open; `403` if they didn't start it, `409` if someone else plays it or it is over. |
@@ -610,7 +617,8 @@ HTTP API:
 | `GET /api/games/:id/commands` | Its command log, with each command's tick. |
 | `GET /api/games/:id/seats` | Who holds each seat: `{ pid, name }`, or `null` for a free one. |
 
-The database has four tables: `games` (each game's seed, seats, who
+The database has four tables: `games` (each game's seed, seats, each
+seat's former holder (whoever last left it), who
 started it and when (neither shown to players), and a snapshot of its
 state, saved every ten seconds, when it ends and when its room closes),
 `commands` (every accepted command with its tick, in order, never changed),

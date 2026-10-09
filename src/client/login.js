@@ -4,12 +4,12 @@
  * changes the name and language later.
  *
  * It shows in the language chosen on it, or for Auto, the browser's
- * (`loginLanguage`), and turns as soon as the choice does.
+ * (`autoLanguage`, as the name is typed), and turns as soon as the choice does.
  */
 
 import { PLAYER_NAME_MAX, cleanPlayerName } from '../core/player.js';
 import { getJson, post, reason, saveName, savedName } from './api.js';
-import { LANGUAGE_NAMES, browserLanguages, chosenLanguage, loginLanguage } from './language.js';
+import { LANGUAGE_NAMES, autoLanguage, browserLanguages, chosenLanguage } from './language.js';
 import { WORDS, say } from './words.js';
 
 /**
@@ -44,7 +44,7 @@ export function showLogin(token) {
 
   /** Every text on the page, in the language chosen, or for Auto, the browser's. */
   function show() {
-    const auto = loginLanguage(browserLanguages(), nameInput.value);
+    const auto = autoLanguage(browserLanguages(), nameInput.value);
     const language = chosenLanguage(languageSelect.value, auto);
     const words = WORDS[language];
     document.documentElement.lang = language;

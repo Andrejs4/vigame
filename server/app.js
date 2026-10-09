@@ -5,7 +5,7 @@
  *   GET  /client/…, /core/…     the page's modules, as they are in src/
  *   GET  /vendor/colyseus.js    the Colyseus browser client the page uses
  *   GET  /api/challenge         a sum to answer when signing in -> { id, question }
- *   POST /api/players           sign in: { token, name, language?, challenge, answer } -> { pid, name, language }
+ *   POST /api/players           sign in: { token, name, language, challenge, answer } -> { pid, name, language }
  *   POST /api/me                who a token belongs to: { token } -> { pid, name, language }, or null
  *   POST /api/settings          change name or language: { token, name?, language? } -> { pid, name, language }
  *   POST /api/games             start a game: { token } -> 201 { id }, or 409 { error, waiting, seated, games } with too many on the go
@@ -187,12 +187,19 @@ export async function startGameServer({
       };
       // Signing in answers a sum.
       app.post('/api/players', (req, res) => {
-        const { token, name, language = 'auto', challenge, answer } = req.body ?? {};
+        const { token, name, language, challenge, answer } = req.body ?? {};
         if (!isToken(token)) return void res.status(400).json({ error: 'bad token' });
         const clean = cleanPlayerName(name);
         const lang = cleanLanguage(language);
         // Checked before the sum, so a bad name doesn't use up the challenge.
         if (!clean) return void res.status(400).json({ error: 'bad name' });
+        // The login page always sends the language its script filled in (Auto
+        // at least): a sign-in without one didn't come from the page, and
+        // fails as a wrong answer does, using its sum up.
+        if (language === undefined) {
+          challenges.check(challenge, undefined);
+          return void res.status(403).json({ error: 'wrong answer' });
+        }
         if (!lang) return void res.status(400).json({ error: 'bad language' });
         if (!challenges.check(challenge, answer)) return void res.status(403).json({ error: 'wrong answer' });
         const pid = playerId(token);
@@ -240,8 +247,9 @@ export async function startGameServer({
         res.status(201).json({ id: startGame(storage, { mode, players, creator }) });
       });
       /**
-       * Games as the lobby lists them, with each seat's holder by name.
-       * @template {{ seats: Array<string | null> }} G
+       * Games as the lobby lists them, with each seat's holder by name, and
+       * its former holder's (who last left it), if any.
+       * @template {{ seats: Array<string | null>, former?: Array<string | null> }} G
        * @param {G[]} games
        */
       const seatNames = (games) => {
@@ -251,7 +259,8 @@ export async function startGameServer({
           if (!names.has(pid)) names.set(pid, storage.loadPlayer(pid)?.name ?? '');
           return names.get(pid);
         };
-        return games.map((g) => ({ ...g, seats: g.seats.map((pid) => (pid ? { pid, name: nameOf(pid) } : null)) }));
+        const named = (/** @type {string | null | undefined} */ pid) => (pid ? { pid, name: nameOf(pid) } : null);
+        return games.map((g) => ({ ...g, seats: g.seats.map(named), former: (g.former ?? []).map(named) }));
       };
       app.get('/api/games', (_req, res) => {
         res.set('cache-control', 'no-store').json(seatNames(storage.listGames()));
@@ -302,11 +311,13 @@ export async function startGameServer({
         res.json({ ok: true });
       });
       // Who holds each seat, by name: for the table at a game's end, which
-      // names players who have left as well as those still here.
+      // names players who have left as well as those still here, and those
+      // who moved to another base on the side they left.
       app.get('/api/games/:id/seats', (req, res) => {
         const saved = GAME_ID.test(req.params.id) ? storage.loadGame(req.params.id) : null;
         if (!saved) return void res.status(404).json({ error: 'no such game' });
-        res.set('cache-control', 'no-store').json(saved.seats.map((pid) => (pid ? { pid, name: storage.loadPlayer(pid)?.name ?? '' } : null)));
+        // The holder, else whoever last held the seat (a player who moved to another base).
+        res.set('cache-control', 'no-store').json(storage.namedSeats(saved.id).map((pid) => (pid ? { pid, name: storage.loadPlayer(pid)?.name ?? '' } : null)));
       });
       app.get('/api/games/:id/commands', (req, res) => {
         const saved = GAME_ID.test(req.params.id) ? storage.loadGame(req.params.id) : null;

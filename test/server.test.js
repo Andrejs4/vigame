@@ -324,8 +324,7 @@ test('signing in takes a name and the answer to the server\'s sum', async () => 
   assert.deepEqual(await badLanguage.json(), { error: 'bad language' });
 
   // A bad name or language didn't use the challenge up, so it still works.
-  // Without a language, the player gets Auto.
-  const ok = await post('/api/players', { token, name: '  Sam   Lee ', challenge: sum.id, answer: String(sum.answer) });
+  const ok = await post('/api/players', { token, name: '  Sam   Lee ', language: 'auto', challenge: sum.id, answer: String(sum.answer) });
   assert.equal(ok.status, 200);
   assert.deepEqual(await ok.json(), { pid: playerId(token), name: 'Sam Lee', language: 'auto' });
   assert.equal(server.storage.loadPlayer(playerId(token)).name, 'Sam Lee');
@@ -337,6 +336,13 @@ test('signing in takes a name and the answer to the server\'s sum', async () => 
   assert.equal((await post('/api/players', { token, name: 'Sam', challenge: next.id, answer: next.answer + 1 })).status, 403);
   assert.equal((await post('/api/players', { token, name: 'Sam', challenge: next.id, answer: next.answer })).status, 403);
   assert.equal((await post('/api/players', { token, name: 'Sam', challenge: 'made-up', answer: 2 })).status, 403);
+  // The page always sends a language: without one, the right answer fails
+  // as a wrong one does, and the sum is used up.
+  const bare = await challenge();
+  const noLanguage = await post('/api/players', { token, name: 'Bot', challenge: bare.id, answer: bare.answer });
+  assert.equal(noLanguage.status, 403);
+  assert.deepEqual(await noLanguage.json(), { error: 'wrong answer' });
+  assert.equal((await post('/api/players', { token, name: 'Bot', language: 'auto', challenge: bare.id, answer: bare.answer })).status, 403, 'used up');
   for (const body of ['{broken', JSON.stringify('not an object'), JSON.stringify({ name: 'x'.repeat(4000) })]) {
     const res = await fetch(`${base}/api/players`, { method: 'POST', headers: { 'content-type': 'application/json' }, body });
     assert.ok(res.status === 400 || res.status === 413, `${res.status} for ${body.slice(0, 20)}`);
@@ -582,6 +588,18 @@ test('a player whose castle fell may take a free base; the game waits for no fal
   const c = await join(id, TOKENS.c);
   assert.equal(c.state.toJSON().viewers[c.sessionId]?.seat, 2);
   assert.equal(await refusal(b.request('claimSeat')), null, 'asking again, with a standing seat, is harmless');
+
+  // Crimson is still named on the side they played first, in the lobby and
+  // at the end; and when the game ends, both of their sides' scores are theirs.
+  const seats = await (await fetch(`${base}/api/games/${id}/seats`)).json();
+  assert.deepEqual(seats.map((/** @type {any} */ x) => x?.name ?? null), [NAMES.a, NAMES.b, NAMES.c, NAMES.b]);
+  const listed = (await (await fetch(`${base}/api/games`)).json()).find((/** @type {any} */ g) => g.id === id);
+  assert.deepEqual(listed.former.map((/** @type {any} */ x) => x?.name ?? null), [null, NAMES.b, null, null]);
+  room.game.players[1].tally.kills = 9;
+  room.game.players[3].tally.kills = 4;
+  assert.equal(await a.request('endGame'), true);
+  await until(() => server.storage.scoresOf(id).length > 0);
+  assert.deepEqual(server.storage.scoresOf(id).map((x) => [x.seat, x.name]), [[0, NAMES.a], [1, NAMES.b], [2, NAMES.c], [3, NAMES.b]]);
   await leaveAll(a, b, c);
 });
 

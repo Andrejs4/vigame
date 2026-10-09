@@ -437,6 +437,45 @@ same distance comes first (the targets' order in the list), or old games
 replay differently. Check it as the band fix was: a recorded big battle
 must end in the same state, tick for tick.
 
+### Security: two small gaps
+
+From a quick look at the open addresses (logins are checked by our own
+code, `onAuth` and each endpoint, not by a library; the read-only ones
+are open on purpose). Neither is urgent for a server among friends:
+
+- `GET /api/games/:id` and `/api/games/:id/commands` answer anyone, for
+  games under way too, with the raw saved state and every order given.
+  The room hides units' experience and sides' tallies until the end
+  (`publicView`); these don't, so in free for all a player could peek at a
+  rival's. Fix: answer them only for finished games, or pass the state
+  through `publicView`.
+- No request limits. A script asking for sums in a loop pushes real
+  players' sums out of the 10,000 kept (`challenge.js`), and sign-ups are
+  unlimited, each able to start a few games. Fix: a per-address rate limit
+  in nginx (`limit_req`) on `/api/`.
+
+### Friendly notices on names
+
+The author's wish: never refuse a name for these, only say so under the
+name field (login and settings), as it is typed, in every language:
+
+- the admin might not like it (a word-root list: LDNOOBW has English,
+  Russian and Finnish, CC BY 4.0; Latvian he would write; match roots in
+  the name lower-cased, spaces dropped, digits read as letters (0 o, 1 i,
+  3 e, 4 a), look-alike Latin and Cyrillic letters made one, repeats
+  squeezed; an exceptions list for innocent words);
+- it looks like a phone number (seven digits or more in a row);
+- it looks like a full name (two or more capitalised words, surer with a
+  surname ending: -s, -š, -is, -nen, -ov, -ova); a nickname is enough;
+- "There are already 5 players called Andrejs" (a count of the same name,
+  any case).
+
+No library: names are letters, digits and spaces, 15 at most, which
+already rules out e-mails and phone numbers with + or dashes. Phone and
+PII libraries (libphonenumber-js, OpenRedaction…) are far bigger than the
+need. AI toxicity models are too big and don't know Latvian or Finnish;
+for slang and double meanings, an admin rename or clear is the tool.
+
 ### Further off
 
 Units' dice in place of a single kill chance; bots and balance ("much

@@ -451,6 +451,11 @@ button.inline:hover:not(:disabled) { background: none; color: var(--amber); }
 .heroes-list .stats .fallen { color: var(--silver); font-weight: 600; }
 .crew-foot { display: flex; align-items: center; gap: 8px; }
 .crew-foot span { flex: 1; color: var(--ink-dim); font-size: 13px; }
+/* In the crew chooser, the count, then its two small buttons (untick all,
+   tick more from the top), then the room before Cancel. */
+#crew-count { flex: none; }
+.crew-foot .mini { padding: 3px 9px; min-width: 0; font: 600 13px var(--mono); }
+#crew-fill { margin-right: auto; }
 
 /* Narrow screens: controls become a thumb-reachable row along the bottom. */
 @media (max-width: 620px) {
