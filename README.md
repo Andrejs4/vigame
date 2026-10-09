@@ -173,7 +173,9 @@ Run `npm start` and open http://127.0.0.1:2567.
   it is, after a small picture of the building it is in (none while it
   walks): tick up to
   what it holds (with a mouse, drag down the list to tick or untick a run
-  of them). The skill shown is the one the building wants: building for
+  of them). Beside the count, **✕** unticks everyone and **+n** ticks the
+  n more it has room for, from the top of the list as it is ordered now.
+  The skill shown is the one the building wants: building for
   a pit, farming for a farm, and ranged attack for a tower, wagon or band,
   with close combat beside it (a crew strikes at range, and in close
   combat only an enemy right next to it). The skill's button (**Attack**

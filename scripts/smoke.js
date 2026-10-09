@@ -949,6 +949,19 @@ async function threeBrowsers(browser, url, { full, label }) {
   assert.deepEqual(reach, [...reach].sort((x, y) => x - y), 'closest first');
   assert.equal(await a.getAttribute('#crew-sort [data-sort="near"]', 'aria-pressed'), 'true');
   assert.deepEqual(await tickedIds(), tickedBefore, 'the ticks stay');
+  // ✕ unticks everyone; +n then ticks the n there is room for, from the top
+  // of the list as it is ordered now (the nearest).
+  await a.click('#crew-none');
+  assert.equal(await text(a, '#crew-count'), '0 of 8');
+  assert.equal(await a.locator('#crew-none').isDisabled(), true);
+  const room = Math.min(8, await a.locator('#crew-list input').count());
+  assert.equal(await text(a, '#crew-fill'), `+${room}`);
+  await a.click('#crew-fill');
+  assert.equal(await text(a, '#crew-count'), `${room} of 8`);
+  assert.deepEqual(await a.$$eval('#crew-list input', (els) => els.map((e) => /** @type {HTMLInputElement} */ (e).checked)),
+    (await a.locator('#crew-list input').all()).map((_, i) => i < room), 'the top rows, in the order shown');
+  assert.equal(await a.locator('#crew-fill').isDisabled(), room === 8);
+  await a.locator('#crew .crew-foot').screenshot({ path: join(OUT, 'crew-buttons.png') });
   assert.deepEqual(await a.evaluate(() => /** @type {any} */ (window).__vigame.net.send({ type: 'abort', building: /** @type {any} */ (window).__vigame.crewTarget })), { ok: true });
   await a.waitForSelector('#crew', { state: 'hidden' });
   await waitText(a, '#message', 'Your pit is gone.');

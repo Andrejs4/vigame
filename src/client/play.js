@@ -217,6 +217,8 @@ export async function startGame(net, me) {
     list: /** @type {HTMLElement} */ (document.getElementById('crew-list')),
     count: /** @type {HTMLElement} */ (document.getElementById('crew-count')),
     ok: /** @type {HTMLButtonElement} */ (document.getElementById('crew-ok')),
+    none: /** @type {HTMLButtonElement} */ (document.getElementById('crew-none')),
+    fill: /** @type {HTMLButtonElement} */ (document.getElementById('crew-fill')),
     sorts: /** @type {HTMLButtonElement[]} */ ([...document.querySelectorAll('#crew-sort button')]),
   };
   const buildButtons = /** @type {HTMLButtonElement[]} */ ([...document.querySelectorAll('button[data-kind]')]);
@@ -975,6 +977,11 @@ export async function startGame(net, me) {
     const sync = () => {
       crewParts.count.textContent = word('crewCount', { n: chosen.size, max: limit });
       for (const box of crewParts.list.querySelectorAll('input')) box.disabled = !box.checked && chosen.size >= limit;
+      // ✕ unticks everyone; +n ticks the n more it has room for, from the top.
+      const more = Math.min(limit - chosen.size, units.length - chosen.size);
+      crewParts.none.disabled = chosen.size === 0;
+      crewParts.fill.disabled = more <= 0;
+      crewParts.fill.textContent = more > 0 ? `+${more}` : '+';
     };
     crewParts.list.onchange = (e) => {
       const box = /** @type {HTMLInputElement} */ (e.target);
@@ -994,6 +1001,16 @@ export async function startGame(net, me) {
       if (on) chosen.add(box.value);
       else chosen.delete(box.value);
       sync();
+    };
+    crewParts.none.onclick = () => {
+      for (const box of crewParts.list.querySelectorAll('input')) setBox(/** @type {HTMLInputElement} */ (box), false);
+    };
+    // From the top of the list as it is ordered now, whatever the order.
+    crewParts.fill.onclick = () => {
+      for (const box of crewParts.list.querySelectorAll('input')) {
+        if (chosen.size >= limit) break;
+        setBox(/** @type {HTMLInputElement} */ (box), true);
+      }
     };
     const boxAt = (/** @type {EventTarget | null} */ t) => (
       t instanceof Element ? t.closest('label')?.querySelector('input') ?? null : null);
