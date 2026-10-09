@@ -460,8 +460,13 @@ export const NPC = Object.freeze({
   near: 8,
   /** Units it keeps at home, to breed. */
   keepHome: 8,
-  /** What it builds, in turn, while it has the stone and the units. */
-  order: Object.freeze(['pit', 'farm', 'tower', 'pit', 'tower', 'farm']),
+  /** At most this share of its units work in pits, farms and towers; the rest are for bands. */
+  workShare: 0.6,
+  /** What it builds, in turn, while it has the stone and the units (farms come as food needs them). */
+  order: Object.freeze(['pit', 'tower', 'pit', 'tower']),
+  /** A farm for each this many units beyond what its castles feed, at most maxFarms. */
+  unitsPerFarm: 12,
+  maxFarms: 6,
   /** Each building's crew; a wagon's raises it, and fills it before it rolls. */
   crews: Object.freeze({ pit: 6, farm: 4, tower: 10, wagon: 6 }),
   /** It upgrades its castle once it has this much stone, */

@@ -310,6 +310,7 @@ export class GameRoom extends Room {
   /**
    * Whether the clock runs: while every seat it waits for is held by someone
    * here, and someone is; or with `soloClock`, while any seated player is here.
+   * A game NPCs play alone runs while anyone watches it.
    */
   clockRuns() {
     if (this.game.over !== undefined) return false; // the game is over
@@ -317,6 +318,7 @@ export class GameRoom extends Room {
     const present = (/** @type {string | null} */ pid) => pid !== null && here.has(pid);
     if (this.soloClock) return this.seats.some(present);
     const awaited = this.awaited();
+    if (this.game.npcs && !awaited.some(Boolean) && this.seats.some((_, i) => this.npcSeat(i))) return here.size > 0;
     return this.seats.some((pid, i) => awaited[i] && present(pid)) && this.seats.every((pid, i) => !awaited[i] || present(pid));
   }
 
@@ -347,7 +349,8 @@ export class GameRoom extends Room {
    * (END_ANYONE_TICKS). And once the game is a day old (END_IDLE_MS) with
    * none of its other players here, anyone viewing it, so an abandoned game
    * can be closed: a spectator's ending counts every seat as giving up
-   * (`idle`). Then it is over (`finish`).
+   * (`idle`); so does the creator's, watching a game with NPCs. Then it is
+   * over (`finish`).
    * @param {string} pid Who asks.
    * @returns {string | null} Why not, or null once done.
    */
@@ -359,7 +362,8 @@ export class GameRoom extends Room {
     const abandoned = Date.now() - this.createdAt >= END_IDLE_MS
       && !this.seats.some((holder) => holder !== null && holder !== pid && here.has(holder));
     const player = seat !== null && (pid === this.creator || this.game.tick >= END_ANYONE_TICKS || abandoned);
-    if (!player && !abandoned) {
+    const watching = seat === null && pid === this.creator && this.game.npcs === true;
+    if (!player && !abandoned && !watching) {
       return seat === null ? 'only its players may end it, until it is a day old with none of them here' : 'only its creator may end it in its first hour';
     }
     const outcome = player ? this.commit(seat, { type: 'end' }) : this.commit(0, { type: 'end', idle: 1 });

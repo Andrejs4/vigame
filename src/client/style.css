@@ -101,6 +101,22 @@ button[aria-pressed="true"] { background: rgba(255, 216, 77, 0.18); border-color
   padding: 8px 10px;
 }
 .card input:focus-visible { outline: 2px solid var(--amber); outline-offset: 1px; }
+/* The lobby's choices for a new game: labels beside their choosers, the
+   mode across, unit production and players on one row (on a narrow
+   screen, a row each, the mode's long names under their label). */
+.card .new-game {
+  display: grid; grid-template-columns: auto 1fr auto auto; gap: 8px 10px; align-items: center;
+  margin-bottom: 12px;
+}
+.card .new-game > label, .card .new-game > select { margin: 0; }
+.card .new-game #lobby-mode { grid-column: 2 / -1; }
+.card .new-game #lobby-players { width: auto; }
+.card .new-game > label.check { grid-column: 1 / -1; }
+@media (max-width: 440px) {
+  .card .new-game { grid-template-columns: auto 1fr; }
+  .card .new-game #lobby-mode { grid-column: 1 / -1; margin-top: -4px; }
+  .card .new-game #lobby-players { width: 100%; }
+}
 /* A checkbox before its words, on one line. */
 .card label.check { display: flex; align-items: center; gap: 8px; color: var(--ink); font-size: 14px; cursor: pointer; }
 .card label.check input { display: inline-block; width: auto; margin: 0; accent-color: var(--amber); }

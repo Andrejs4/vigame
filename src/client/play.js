@@ -560,6 +560,8 @@ export async function startGame(net, me) {
   function canEndGame() {
     if (!view || view.over !== undefined) return false;
     if (net.seat() !== null && (net.isCreator() || view.tick >= END_ANYONE_TICKS)) return true;
+    // Its creator, watching a game with NPCs.
+    if (net.seat() === null && net.isCreator() && view.npcs) return true;
     return abandoned();
   }
 
@@ -1511,7 +1513,9 @@ export async function startGame(net, me) {
     // A spectator ends an abandoned game for every seat at once.
     const team = seat === null ? endWinner(view, 0, true) : endWinner(view, seat);
     const winners = players.filter((p) => p.team === team);
-    const ask = seat === null ? word(team === undefined ? 'askEndIdle' : 'askEndIdleLord')
+    const watching = seat === null && net.isCreator() && view.npcs && !abandoned();
+    const ask = watching ? word(team === undefined ? 'askEndNpcs' : 'askEndNpcsLord')
+      : seat === null ? word(team === undefined ? 'askEndIdle' : 'askEndIdleLord')
       : team === undefined ? word('askEndNobody')
       : winners.some((p) => sideOf(view, p.id)?.npc) ? word('askEndLord')
         : word('askEndSide', { side: winners.map((p) => sideName({ players }, p.id)).join(', ') });

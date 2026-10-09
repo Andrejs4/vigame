@@ -503,6 +503,12 @@ simulation, the same loop as `npcsPlay` in test/npc.test.js):
   server's time; the room's copy of the game for each command costs about
   2 ms more.
 
+After the author's first look: fewer farms (one per 12 units beyond what
+the castle feeds, six at most, none in `order`), and at most `workShare`
+(60%) of the units at work, since with the farms gone the spare units went
+into pits and no band ever formed. Two in free for all then fought all
+along (26 bands in 30 minutes), with five or six farms each.
+
 Knobs to try first: `bandFrom` and `bandShare` (bigger, rarer bands),
 `order` (fewer farms, more towers), `keepHome`, and `hunt` against the
 Dark Lord.

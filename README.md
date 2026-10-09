@@ -137,13 +137,19 @@ Run `npm start` and open http://127.0.0.1:2567.
   of points, and get no high scores. Every few seconds an NPC answers
   threats it has seen a while (enemy bands, wagons, raiders and the horde
   near its buildings, manned towers that reach one) with a band, builds a
-  farm when food runs short, fills its crews, upgrades its castle and
-  towers, builds pits, farms and towers in turn, and sends bands against
+  farm for each 12 units beyond what its castle feeds (6 at most), fills
+  its crews, upgrades its castle and towers, builds pits and towers in
+  turn, keeping at most 60% of its units at work so the rest can form
+  bands, and sends bands against
   the nearest enemy (against the Dark Lord, his horde and raiders near
   it). From twelve minutes in it builds and upgrades wagons behind its
   castle with dark metal; once the metal is spent the wagons attack, and
   ten seconds later everyone at home goes all in. Its timings and rules
   are the table `NPC` in `src/core/rules.js`.
+  **NPCs alone**: start a game with NPCs and **Release** your seat, and NPCs
+  play every side; its clock runs while anyone watches, and its creator
+  may end it from the stands. Such a game counts among your three waiting
+  for a player.
 - **The game clock** runs only while every player is here. (`npm run dev`
   runs it with one, for trying things alone.) While it waits, the player
   who started the game has **Start** beside the count of players (**Go on**

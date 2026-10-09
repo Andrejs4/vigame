@@ -79,6 +79,8 @@
     <h1>Vigame</h1>
     <p class="hint"><span data-word="playingAs">Playing as</span> <strong id="lobby-name"></strong> &middot; <a href="?settings" id="lobby-settings" data-word="settings">Settings</a></p>
     <p class="error" id="lobby-notice" role="status" hidden></p>
+    <!-- The new game's choices, each label beside its chooser. -->
+    <div class="new-game">
     <label for="lobby-mode" data-word="mode">Mode</label>
     <select id="lobby-mode">
       <option value="coop" selected data-word="coopChoice">Cooperation: together against the Dark Lord</option>
@@ -115,6 +117,7 @@
     </select>
     <!-- NPCs play the seats nobody holds (npc.js). -->
     <label class="check"><input type="checkbox" id="lobby-npcs"> <span data-word="npcsChoice">NPCs play free seats</span></label>
+    </div>
     <button id="lobby-new" class="primary" data-word="newGame">New game</button>
     <div id="lobby-limit" hidden>
       <p class="error" id="lobby-limit-text" role="alert"></p>

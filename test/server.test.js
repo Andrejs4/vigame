@@ -826,6 +826,29 @@ test('with NPCs, the clock runs without waiting for free seats, whose NPCs play 
   await leaveAll(a, b);
 });
 
+test('a game of NPCs alone runs while someone watches; its creator may end it from the stands', async () => {
+  const res = await post('/api/games', { token: TOKENS.a, mode: 'ffa', players: 2, npcs: true });
+  const id = (await res.json()).id;
+  const a = await join(id, TOKENS.a);
+  await until(() => a.state.running === true);
+  await a.request('releaseSeat');
+  await until(() => a.state.toJSON().viewers[a.sessionId]?.seat === -1);
+  const tick = seen(a).tick;
+  await sleep(300);
+  assert.equal(a.state.running, true, 'it runs with nobody seated');
+  assert.ok(seen(a).tick > tick);
+  // Someone else watching may not end it; its creator may.
+  const c = await join(id, TOKENS.c);
+  await until(() => c.state.toJSON().viewers[c.sessionId]?.seat === 0, 3000).catch(() => {});
+  if (c.state.toJSON().viewers[c.sessionId]?.seat !== -1) await c.request('releaseSeat');
+  await until(() => c.state.toJSON().viewers[c.sessionId]?.seat === -1);
+  assert.match(await refusal(c.request('endGame')), /only its players may end it/);
+  assert.equal(await a.request('endGame'), true);
+  await until(() => seen(a).over !== undefined);
+  assert.equal(seen(a).winner, undefined, 'nobody wins');
+  await leaveAll(a, c);
+});
+
 test('selections are shared, but only for hexes on the board', async () => {
   const id = await startGame();
   const a = await join(id, TOKENS.a);

@@ -13,7 +13,7 @@
  * What it does, most pressing first (the numbers are NPC in rules.js):
  * answers threats it has seen for a while (enemy bands, wagons, raiders and
  * the horde near its buildings, and manned towers that reach one) with a
- * band; builds a farm when the next meal falls short; fills its buildings'
+ * band; builds a farm when its units outgrow its food; fills its buildings'
  * crews; upgrades its castle, then towers; from twelve minutes in, builds
  * and upgrades wagons behind its castle with dark metal, sends them once the
  * metal is spent, and soon after goes all in with everyone at home; builds
@@ -25,7 +25,7 @@ import {
   BUILDING_TYPES, BUILD_RANGE, NPC,
 } from './rules.js';
 import {
-  allied, buildCost, capacityOf, castleOf, crewOf, crewReach, footprint, fullMeal, hasLord, inBuildRange, isDugOut,
+  allied, buildCost, capacityOf, castleOf, crewOf, crewReach, footprint, hasLord, inBuildRange, isDugOut,
   isRising, occupancy, purseOf, shortOf, upgradeCost,
 } from './game.js';
 import { distance, hexagon, key } from './hex.js';
@@ -129,6 +129,14 @@ class Npc {
     return Math.max(0, this.home.length - NPC.keepHome);
   }
 
+  /** Units it may still put to work in pits, farms and towers: up to NPC.workShare of all it has. */
+  get hands() {
+    const working = this.mine.filter((b) => ['pit', 'farm', 'tower'].includes(b.type))
+      .reduce((n, b) => n + crewOf(this.state, b.id).length, 0);
+    const room = Math.floor((this.occ.unitCount[this.seat] ?? 0) * NPC.workShare) - working;
+    return Math.max(0, Math.min(this.spare, room));
+  }
+
   /**
    * Up to `n` of those at home, the best at a skill first; taken, so the
    * next command this turn doesn't count them again.
@@ -194,10 +202,18 @@ class Npc {
     return null;
   }
 
-  /** A farm, when the next meal falls short. */
+  /**
+   * A farm, while it has fewer than its units need: one for each
+   * NPC.unitsPerFarm beyond those its castle feeds, NPC.maxFarms at most.
+   */
   feed() {
-    if (fullMeal(this.state, this.seat) || this.rising('farm')) return null;
-    return this.build('farm');
+    if (this.rising('farm')) return null;
+    const farms = this.mine.filter((b) => b.type === 'farm').length;
+    const units = this.occ.unitCount[this.seat] ?? 0;
+    // A castle yields food for half the units it has room for.
+    const fed = this.mine.filter((b) => b.type === 'castle').reduce((n, b) => n + Math.floor(capacityOf(b) / 2), 0);
+    const needed = Math.min(NPC.maxFarms, Math.ceil(Math.max(0, units - fed) / NPC.unitsPerFarm));
+    return farms < needed ? this.build('farm') : null;
   }
 
   /**
@@ -215,8 +231,9 @@ class Npc {
       if (!want || b.type === 'wagon' || isDugOut(b)) continue;
       const crew = crewOf(this.state, b.id);
       const more = Math.min(want, capacityOf(b)) - crew.length;
-      if (more <= 0 || this.spare <= 0) continue;
-      const command = this.may({ type: 'crew', building: b.id, units: [...crew, ...this.take(Math.min(more, this.spare), BUILDING_TYPES[b.type].skill)] });
+      const hands = this.hands;
+      if (more <= 0 || hands <= 0) continue;
+      const command = this.may({ type: 'crew', building: b.id, units: [...crew, ...this.take(Math.min(more, hands), BUILDING_TYPES[b.type].skill)] });
       if (command) return command;
     }
     return null;
@@ -371,7 +388,8 @@ class Npc {
    */
   build(kind) {
     if (shortOf(this.state, this.seat, buildCost(kind))) return null;
-    const want = Math.min(/** @type {Record<string, number>} */ (NPC.crews)[kind] ?? 0, this.spare);
+    // Wagons are for attacking: any at home may crew them.
+    const want = Math.min(/** @type {Record<string, number>} */ (NPC.crews)[kind] ?? 0, kind === 'wagon' ? this.spare : this.hands);
     if (want < Math.ceil((/** @type {Record<string, number>} */ (NPC.crews)[kind] ?? 0) / 2)) return null;
     const enemy = this.goal(true) ?? this.goal(false);
     for (const spot of this.spots(kind, enemy, kind === 'tower')) {

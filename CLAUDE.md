@@ -208,7 +208,9 @@ drawing during play). Read it before art or graphics work.
   touching saved games. An NPC reads the game but never changes it, and
   never draws on `random(state)` (that would change the game); what it
   remembers between moves (`NpcMemory`) lives in the room and is lost on
-  a restart. The clock doesn't wait for NPC seats (`awaited`); in a game
+  a restart. The clock doesn't wait for NPC seats (`awaited`), and a game
+  NPCs play alone runs while anyone watches; its creator may end it
+  unseated (`endGame`). In a game
   of player against player with NPCs a fallen player may not take another
   seat (`fallenMayMove`, `barred`). test/npc.test.js plays games of NPCs
   alone, which is also the way to try balance.
