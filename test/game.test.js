@@ -7,7 +7,7 @@ import {
   depthOf, endWinner, fullMeal, sharesStock, isRising, killChance, maxHp, pointsOf, quickWin, scoreOf, seatsOf, starveChance, ROOM_COMMANDS, teamOfSeat, workFor,
 } from '../src/core/game.js';
 import {
-  BAND_TRAINING, BUILDING_TYPES, COMBAT_PERIOD, DARK_LORD, TICKS_PER_SECOND, HORDE_PERIOD, HORDE_START, RAIDERS, RAID_PERIOD, RAID_PER_PLAYER, SALVAGE, SIDES, FOOD_PER_UNIT, FOOD_PERIOD, KILL_XP, LEVEL_RATE, RANGED_DAMAGE, LEVEL_XP, MAX_HUNGER, MAX_LEVEL, SKILL_RATE, SKILL_XP, START_UNITS, UNIT_LIMIT, WAGON_PATIENCE,
+  BAND_TRAINING, BUILDING_TYPES, COMBAT_PERIOD, DARK_LORD, FELL_XP, TICKS_PER_SECOND, HORDE_PERIOD, HORDE_START, RAIDERS, RAID_PERIOD, RAID_PER_PLAYER, SALVAGE, SIDES, FOOD_PER_UNIT, FOOD_PERIOD, KILL_XP, LEVEL_RATE, RANGED_DAMAGE, LEVEL_XP, MAX_HUNGER, MAX_LEVEL, SKILL_RATE, SKILL_XP, START_UNITS, UNIT_LIMIT, WAGON_PATIENCE,
   WALK_TICKS, WORK_BASE,
 } from '../src/core/rules.js';
 import { distance } from '../src/core/hex.js';
@@ -597,14 +597,15 @@ test('a building going up can be given up: its crew, inside or on the way, goes 
   runUntil(board, state, () => crew.every((id) => state.units[id].in === 'b1'));
 });
 
-test('a strike that brings a building down earns a killing blow; its units are left outside', () => {
+test('a strike that brings a building down earns FELL_XP, twice a killing blow; its units are left outside', () => {
   const board = openBoard(4);
   const state = stateWith([{ id: 'b1', q: 0, r: 0 }, { id: 'b2', owner: 1, q: 1, r: 0, hp: 1 }], [
     ...unitsIn('b1', 1, 10), { id: 'u20', owner: 1, in: 'b2' },
   ]);
   run(board, state, COMBAT_PERIOD);
   assert.equal(state.buildings.b2, undefined);
-  assert.ok(state.units.u10.xp >= KILL_XP, 'a killing blow');
+  // A close-combat strike, and the building: a level's worth, and a little over.
+  assert.deepEqual([state.units.u10.level, state.units.u10.xp], [2, FELL_XP + LEVEL_RATE.melee - LEVEL_XP]);
   assert.deepEqual([state.units.u20.q, state.units.u20.r, state.units.u20.in], [1, 0, undefined], 'left standing');
 });
 

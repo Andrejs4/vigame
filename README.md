@@ -173,10 +173,12 @@ Run `npm start` and open http://127.0.0.1:2567.
   skills: breeding, ranged attack, close combat, building (which covers
   repairing and digging), farming and running. Work trains the skill it
   uses, and the unit's level with it: every skill at the same pace (a
-  strike trains ranged or close combat five times as much as a tick of
+  strike trains ranged or close combat ten times as much as a tick of
   other work, since units strike only once a second), the
   level faster the fiercer the work (breeding least, then running, farming,
-  building, ranged and close combat, and a killing blow most). Walking
+  building, ranged and close combat; a killing blow most, and bringing down
+  a building, one of the horde or a raider twice that). Every skill level
+  takes the same work; levels take more each time. Walking
   trains running; units in a band train it as the band marches, given
   every 10 seconds, as much as walking the way would (in a wagon, not at
   all). A skill

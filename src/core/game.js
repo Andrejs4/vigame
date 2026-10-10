@@ -41,7 +41,7 @@ import { tileAt } from './board.js';
 import { gameName, unitName } from './names.js';
 import { GAME_NAME_MAX, cleanGameName } from './player.js';
 import {
-  BAND_TRAINING, BREEDING, BUILDING_TYPES, BUILD_RANGE, DARK_LORD, HERO_LEVEL_GROWTH, HERO_LEVEL_XP, HERO_SHARE, LORD_HP, LORD_PLAYERS_MAX, SHARED_STOCK, HORDE_MAX, HORDE_PERIOD, HORDE_START, POINTS, QUICK_WIN, RAIDERS, SALVAGE, SEAT_SIDES, RAID_CHANCE, RAID_CLEAR, RAID_PER_PLAYER, RAID_PERIOD, RAID_ROAM, START_METAL, DEFAULT_BREEDING, DEFAULT_MODE, MAX_PLAYERS, MODES, COMBAT_PERIOD, DEPART_GAP, FOOD_PER_UNIT, KILL_EVEN, KILL_MAX, KILL_STEP, KILL_XP, MELEE_DAMAGE, MELEE_RANGE,
+  BAND_TRAINING, BREEDING, BUILDING_TYPES, BUILD_RANGE, DARK_LORD, HERO_LEVEL_GROWTH, HERO_LEVEL_XP, HERO_SHARE, LORD_HP, LORD_PLAYERS_MAX, SHARED_STOCK, HORDE_MAX, HORDE_PERIOD, HORDE_START, POINTS, QUICK_WIN, RAIDERS, SALVAGE, SEAT_SIDES, RAID_CHANCE, RAID_CLEAR, RAID_PER_PLAYER, RAID_PERIOD, RAID_ROAM, START_METAL, DEFAULT_BREEDING, DEFAULT_MODE, MAX_PLAYERS, MODES, COMBAT_PERIOD, DEPART_GAP, FELL_XP, FOOD_PER_UNIT, KILL_EVEN, KILL_MAX, KILL_STEP, KILL_XP, MELEE_DAMAGE, MELEE_RANGE,
   RANGED_DAMAGE, RANGED_RANGE, REPAIR_WORK, FOOD_PERIOD, FOOD_STORE, HUNGER_PULL, LEVEL_GROWTH,
   LEVEL_RATE, LEVEL_XP, MAX_HUNGER, MAX_LEVEL, SIDES, SKILLS, SKILL_RATE, SKILL_XP, START_STONE, START_UNITS, STARVE_CHANCE,
   UNIT_LIMIT, WAGON_PATIENCE, WALK_TICKS, WORK_BASE,
@@ -1511,7 +1511,8 @@ function fight(board, state, occ) {
    * @param {number} damage
    * @param {number} skill
    * @param {string} [from] The building striking, or whose units strike.
-   * @returns {boolean} Whether it brought a building down or killed.
+   * @returns {number} The experience it earns: FELL_XP for bringing a
+   *   building down, KILL_XP for a kill, else none.
    */
   const strike = ({ t }, owner, damage, skill, from) => {
     const hit = t.building;
@@ -1525,20 +1526,19 @@ function fight(board, state, occ) {
       tally.damage += Math.min(damage, /** @type {number} */ (hit.hp));
       hit.hp = Math.max(0, /** @type {number} */ (hit.hp) - damage);
       if (from !== undefined && from !== hit.target && BUILDING_TYPES[hit.type].hunts) turnTo(hit, from);
-      if (hit.hp > 0) return false;
+      if (hit.hp > 0) return 0;
       const { loot, metal = 0, life } = BUILDING_TYPES[hit.type];
       purseOf(state, owner).metal += loot ?? Math.floor(metal * SALVAGE);
       if (life) tally.castles += 1;
       else tally.felled += 1;
-      return true;
+      return FELL_XP;
     }
     const foe = hit ? state.units[sheltered[Math.floor(random(state) * sheltered.length)]] : /** @type {Unit} */ (t.unit);
     const killed = random(state) * 100 < killChance(skill, foe.level);
-    if (killed) {
-      delete state.units[foe.id];
-      tally.kills += 1;
-    }
-    return killed;
+    if (!killed) return 0;
+    delete state.units[foe.id];
+    tally.kills += 1;
+    return KILL_XP;
   };
 
   /**
@@ -1553,8 +1553,8 @@ function fight(board, state, occ) {
     if (!target) return false;
     const melee = target.d <= MELEE_RANGE;
     const skill = melee ? 'melee' : 'ranged';
-    const killed = strike(target, u.owner, (melee ? MELEE_DAMAGE : RANGED_DAMAGE) + u.skills[skill], u.skills[skill], from);
-    practise(u, skill, killed ? KILL_XP : 0);
+    const earned = strike(target, u.owner, (melee ? MELEE_DAMAGE : RANGED_DAMAGE) + u.skills[skill], u.skills[skill], from);
+    practise(u, skill, earned);
     return true;
   };
 

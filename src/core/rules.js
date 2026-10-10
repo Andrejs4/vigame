@@ -160,12 +160,17 @@ export const MAX_LEVEL = 100;
  * Experience. Every tick a unit works, its skill in use gets a point, the
  * same for every skill, and a skill level takes SKILL_XP points. The unit's
  * level gets LEVEL_RATE points for the work, from the gentle (breeding) to
- * the fierce (close combat), and a killing blow is worth KILL_XP at once.
+ * the fierce (close combat), and a killing blow is worth KILL_XP at once,
+ * bringing a building down (one of the horde or a raider too) FELL_XP.
  * Its first level-up takes LEVEL_XP points and each next one LEVEL_GROWTH
  * times as many, so the last levels are all but out of reach: level 10
- * takes about 27 minutes of breeding or 5 of fighting, level 50 about 35
- * hours or 6, and level 100 half a year or a month. Skills come faster than
- * levels, whatever the work, until they reach the unit's level and wait.
+ * takes about 27 minutes of breeding, level 50 about 35 hours, and level
+ * 100 half a year. Units strike only once a second, so fighting with no
+ * kills levels a little faster than breeding (12 points a second for close
+ * combat, 10 for ranged, to breeding's 10); kills are what speed it up, a
+ * kill every half minute nearly trebling it. Every skill level takes the
+ * same SKILL_XP points; skills come faster than levels, whatever the work,
+ * until they reach the unit's level and wait.
  */
 export const LEVEL_XP = 1200;
 export const LEVEL_GROWTH = 1.1;
@@ -185,11 +190,13 @@ export const SKILL_XP = 150;
  * listed. Units strike only once a COMBAT_PERIOD, so fighting skills get more.
  * @type {Partial<Record<Skill, number>>}
  */
-export const SKILL_RATE = { ranged: 5, melee: 5 };
+export const SKILL_RATE = { ranged: 10, melee: 10 };
 /** @type {Record<Skill, number>} */
-export const LEVEL_RATE = { breeding: 1, running: 2, farming: 3, build: 4, ranged: 5, melee: 6 };
-/** Not used until there is combat. */
+export const LEVEL_RATE = { breeding: 1, running: 2, farming: 3, build: 4, ranged: 10, melee: 12 };
+/** A killing blow on a unit. */
 export const KILL_XP = 600;
+/** The strike that brings a building down, one of the horde or a raider too. */
+export const FELL_XP = 2 * KILL_XP;
 
 /** Work a unit does in a tick with the skill at 0; each skill level adds one. */
 export const WORK_BASE = 20;
@@ -230,7 +237,7 @@ export const STARVE_CHANCE = 0.05;
  * depends on the striker's skill less the target's level: KILL_EVEN percent
  * when they match, rising toward KILL_MAX, and falling below 1% once the
  * target is 50 levels ahead (a stand-in for the dice to come). The strike
- * that brings down a building or kills a unit earns KILL_XP.
+ * that kills a unit earns KILL_XP, one that brings down a building FELL_XP.
  *
  * A building may be given a target, an enemy building. One that can't move
  * strikes it while it is in reach, and the nearest enemy otherwise; a wagon
