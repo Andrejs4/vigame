@@ -118,6 +118,13 @@ export const DEPART_GAP = 1;
 export const WAGON_PATIENCE = 3 * TICKS_PER_SECOND;
 
 /**
+ * Units in a band don't walk by themselves, so the band counts the ticks
+ * it has marched, and every BAND_TRAINING gives each unit in it as much
+ * running practice as walking them would have.
+ */
+export const BAND_TRAINING = 10 * TICKS_PER_SECOND;
+
+/**
  * Ticks a unit takes to cross a cell of open ground with no running skill.
  * Running takes time off, down to half at running 100: one second, the
  * fastest anything moves.

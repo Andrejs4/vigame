@@ -7,7 +7,7 @@ import {
   depthOf, endWinner, fullMeal, sharesStock, isRising, killChance, maxHp, pointsOf, quickWin, scoreOf, seatsOf, starveChance, ROOM_COMMANDS, teamOfSeat, workFor,
 } from '../src/core/game.js';
 import {
-  BUILDING_TYPES, COMBAT_PERIOD, DARK_LORD, TICKS_PER_SECOND, HORDE_PERIOD, HORDE_START, RAIDERS, RAID_PERIOD, RAID_PER_PLAYER, SALVAGE, SIDES, FOOD_PER_UNIT, FOOD_PERIOD, KILL_XP, LEVEL_RATE, RANGED_DAMAGE, LEVEL_XP, MAX_HUNGER, MAX_LEVEL, SKILL_RATE, SKILL_XP, START_UNITS, UNIT_LIMIT, WAGON_PATIENCE,
+  BAND_TRAINING, BUILDING_TYPES, COMBAT_PERIOD, DARK_LORD, TICKS_PER_SECOND, HORDE_PERIOD, HORDE_START, RAIDERS, RAID_PERIOD, RAID_PER_PLAYER, SALVAGE, SIDES, FOOD_PER_UNIT, FOOD_PERIOD, KILL_XP, LEVEL_RATE, RANGED_DAMAGE, LEVEL_XP, MAX_HUNGER, MAX_LEVEL, SKILL_RATE, SKILL_XP, START_UNITS, UNIT_LIMIT, WAGON_PATIENCE,
   WALK_TICKS, WORK_BASE,
 } from '../src/core/rules.js';
 import { distance } from '../src/core/hex.js';
@@ -1115,6 +1115,28 @@ test('a band goes at its slowest member\'s pace', () => {
   assert.deepEqual(applyCommand(board, state, 0, { type: 'move', building: 'b1', q: 2, r: 0 }), OK);
   const tick = runUntil(board, state, () => !state.buildings.b1.path);
   assert.equal(tick, 1 + 2 * WALK_TICKS, 'as slow as the one who never ran');
+});
+
+test('a band\'s units train their running as it marches, as if they walked, every BAND_TRAINING', () => {
+  const board = openBoard(8);
+  const state = stateWith([{ id: 'b1', type: 'band', q: 0, r: 0 }], [{ id: 'u10', in: 'b1' }, { id: 'u11', in: 'b1' }]);
+  const alone = stateWith([], [{ id: 'u10', q: 0, r: 0 }]);
+  assert.deepEqual(applyCommand(board, state, 0, { type: 'move', building: 'b1', q: 3, r: 0 }), OK);
+  run(board, state, BAND_TRAINING - 1);
+  assert.equal(state.buildings.b1.walked, 3 * WALK_TICKS, 'counted as it goes');
+  assert.equal(publicView(state).buildings.b1.walked, undefined, 'and kept from players');
+  assert.equal(state.units.u10.practice.running, 0, 'but not given yet');
+  run(board, state, 1);
+  assert.equal(state.buildings.b1.walked, undefined);
+  // As much as one who walked the same way, by the same time.
+  const walker = /** @type {any} */ (alone.units.u10);
+  walker.path = [[1, 0], [2, 0], [3, 0]];
+  walker.since = 0;
+  walker.until = WALK_TICKS;
+  run(board, alone, BAND_TRAINING);
+  for (const id of ['u10', 'u11']) {
+    assert.deepEqual([state.units[id].practice.running, state.units[id].xp], [alone.units.u10.practice.running, alone.units.u10.xp], id);
+  }
 });
 
 test('units and bands cross pits, anyone\'s; wagons go around them', () => {

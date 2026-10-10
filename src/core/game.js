@@ -41,7 +41,7 @@ import { tileAt } from './board.js';
 import { gameName, unitName } from './names.js';
 import { GAME_NAME_MAX, cleanGameName } from './player.js';
 import {
-  BREEDING, BUILDING_TYPES, BUILD_RANGE, DARK_LORD, HERO_LEVEL_GROWTH, HERO_LEVEL_XP, HERO_SHARE, LORD_HP, LORD_PLAYERS_MAX, SHARED_STOCK, HORDE_MAX, HORDE_PERIOD, HORDE_START, POINTS, QUICK_WIN, RAIDERS, SALVAGE, SEAT_SIDES, RAID_CHANCE, RAID_CLEAR, RAID_PER_PLAYER, RAID_PERIOD, RAID_ROAM, START_METAL, DEFAULT_BREEDING, DEFAULT_MODE, MAX_PLAYERS, MODES, COMBAT_PERIOD, DEPART_GAP, FOOD_PER_UNIT, KILL_EVEN, KILL_MAX, KILL_STEP, KILL_XP, MELEE_DAMAGE, MELEE_RANGE,
+  BAND_TRAINING, BREEDING, BUILDING_TYPES, BUILD_RANGE, DARK_LORD, HERO_LEVEL_GROWTH, HERO_LEVEL_XP, HERO_SHARE, LORD_HP, LORD_PLAYERS_MAX, SHARED_STOCK, HORDE_MAX, HORDE_PERIOD, HORDE_START, POINTS, QUICK_WIN, RAIDERS, SALVAGE, SEAT_SIDES, RAID_CHANCE, RAID_CLEAR, RAID_PER_PLAYER, RAID_PERIOD, RAID_ROAM, START_METAL, DEFAULT_BREEDING, DEFAULT_MODE, MAX_PLAYERS, MODES, COMBAT_PERIOD, DEPART_GAP, FOOD_PER_UNIT, KILL_EVEN, KILL_MAX, KILL_STEP, KILL_XP, MELEE_DAMAGE, MELEE_RANGE,
   RANGED_DAMAGE, RANGED_RANGE, REPAIR_WORK, FOOD_PERIOD, FOOD_STORE, HUNGER_PULL, LEVEL_GROWTH,
   LEVEL_RATE, LEVEL_XP, MAX_HUNGER, MAX_LEVEL, SIDES, SKILLS, SKILL_RATE, SKILL_XP, START_STONE, START_UNITS, STARVE_CHANCE,
   UNIT_LIMIT, WAGON_PATIENCE, WALK_TICKS, WORK_BASE,
@@ -73,6 +73,8 @@ import {
  * @property {number} [since] While it rolls to path[0]: the tick it set off,
  * @property {number} [until] and the tick it gets there. It holds both cells meanwhile.
  * @property {number} [waiting] The tick it found its next cell taken.
+ * @property {number} [walked] A band's ticks of marching not yet trained
+ *   into its units' running (BAND_TRAINING).
  */
 
 /**
@@ -1359,6 +1361,27 @@ export function advance(board, state) {
   work(board, state, occ);
   rollWagons(board, state, occ);
   marchUnits(board, state, occ);
+  if (state.tick % BAND_TRAINING === 0) trainBands(state);
+}
+
+/**
+ * Each unit in a band gets running practice for the ticks the band has
+ * marched since the last time, as if it had walked them itself.
+ * @param {GameState} state
+ */
+function trainBands(state) {
+  /** @type {Map<string, number>} */
+  const walked = new Map();
+  for (const b of Object.values(state.buildings)) {
+    if (b.walked === undefined) continue;
+    walked.set(b.id, b.walked);
+    delete b.walked;
+  }
+  if (!walked.size) return;
+  for (const u of Object.values(state.units)) {
+    const ticks = u.in === undefined ? 0 : walked.get(u.in) ?? 0;
+    for (let i = 0; i < ticks; i++) practise(u, 'running');
+  }
 }
 
 /**
@@ -1950,6 +1973,7 @@ function rollWagons(board, state, occ) {
     if (b.until !== undefined) {
       if (state.tick < b.until) continue;
       if (!band) occ.buildingAt.delete(key(b.q, b.r));
+      else b.walked = (b.walked ?? 0) + b.until - /** @type {number} */ (b.since);
       [b.q, b.r] = /** @type {Cell} */ (b.path.shift());
       delete b.since;
       delete b.until;
@@ -2134,6 +2158,7 @@ export function checkState(board, raw) {
     if (!Number.isInteger(b.grade) || b.grade < 1 || b.grade > type.grades) fail(`building ${id}: bad grade`);
     if (b.type === 'castle') castles[b.owner] += 1;
     if (type.work === undefined ? b.work !== undefined : !isCount(b.work, /** @type {number} */ (workFor(state, b.type)))) fail(`building ${id}: bad work`);
+    if (b.walked !== undefined && !(type.band && Number.isSafeInteger(b.walked) && b.walked > 0)) fail(`building ${id}: bad walked`);
     const deepest = /** @type {number} */ (type.depth) * /** @type {number} */ (type.perDepth);
     if (type.depth === undefined ? b.dug !== undefined : !isCount(b.dug, deepest + 1)) fail(`building ${id}: bad dug`);
     if (b.raised !== undefined && !(type.raise && isCount(b.raised, type.raise))) fail(`building ${id}: bad raised`);
@@ -2246,7 +2271,8 @@ export function publicView(state) {
     tick: state.tick,
     // Tallies change all game long, and are for the end: kept back till then.
     players: state.over === undefined ? state.players.map(({ tally: _tally, ...shown }) => shown) : state.players,
-    buildings: Object.fromEntries(Object.entries(state.buildings).map(([id, b]) => [id, cut(b)])),
+    // What a band has marched is for its units' training, not for players.
+    buildings: Object.fromEntries(Object.entries(state.buildings).map(([id, { walked: _walked, ...b }]) => [id, cut(b)])),
     units: Object.fromEntries(units.map((u) => [u.id, u])),
   };
 }

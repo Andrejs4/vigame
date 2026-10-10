@@ -176,7 +176,10 @@ Run `npm start` and open http://127.0.0.1:2567.
   strike trains ranged or close combat five times as much as a tick of
   other work, since units strike only once a second), the
   level faster the fiercer the work (breeding least, then running, farming,
-  building, ranged and close combat, and a killing blow most). A skill
+  building, ranged and close combat, and a killing blow most). Walking
+  trains running; units in a band train it as the band marches, given
+  every 10 seconds, as much as walking the way would (in a wagon, not at
+  all). A skill
   can't pass the unit's level; it climbs faster than the level, then waits
   for it. Each level takes 1.1 times the work of the one before, so the
   last ones are all but out of reach. About one unit in ten, the first
