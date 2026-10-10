@@ -82,6 +82,10 @@ drawing during play). Read it before art or graphics work.
 - Changing the state's shape: bump `STATE_VERSION`. Saved snapshots of the old
   shape then fail `checkState`, and the room rebuilds those games from their
   command logs, which only works if old commands still replay.
+  A rules change that keeps the shape (such as bands training running)
+  still changes what an old log replays to: there is no rules version
+  yet, which replays or exports will need (docs/notes.md, "Game exports
+  with a map version").
 
 ## The page (src/client/)
 
