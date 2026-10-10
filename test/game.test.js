@@ -7,7 +7,7 @@ import {
   depthOf, endWinner, fullMeal, sharesStock, isRising, killChance, maxHp, pointsOf, quickWin, scoreOf, seatsOf, starveChance, ROOM_COMMANDS, teamOfSeat, workFor,
 } from '../src/core/game.js';
 import {
-  BAND_TRAINING, BUILDING_TYPES, COMBAT_PERIOD, DARK_LORD, FELL_XP, TICKS_PER_SECOND, HORDE_PERIOD, HORDE_START, RAIDERS, RAID_PERIOD, RAID_PER_PLAYER, SALVAGE, SIDES, FOOD_PER_UNIT, FOOD_PERIOD, KILL_XP, LEVEL_RATE, RANGED_DAMAGE, LEVEL_XP, MAX_HUNGER, MAX_LEVEL, SKILL_RATE, SKILL_XP, START_UNITS, UNIT_LIMIT, WAGON_PATIENCE,
+  BAND_TRAINING, BUILDING_TYPES, COMBAT_PERIOD, DARK_LORD, FELL_XP, OGRE_CALL, TICKS_PER_SECOND, HORDE_PERIOD, HORDE_START, RAIDERS, RAID_PERIOD, RAID_PER_PLAYER, SALVAGE, SIDES, FOOD_PER_UNIT, FOOD_PERIOD, KILL_XP, LEVEL_RATE, RANGED_DAMAGE, LEVEL_XP, MAX_HUNGER, MAX_LEVEL, SKILL_RATE, SKILL_XP, START_UNITS, UNIT_LIMIT, WAGON_PATIENCE,
   WALK_TICKS, WORK_BASE,
 } from '../src/core/rules.js';
 import { distance } from '../src/core/hex.js';
@@ -796,6 +796,32 @@ test('in two teams, the first half of the ring plays the second, which gets the 
     assert.equal(endWinner(game, players - 1), 0);
   }
   assert.equal(teamOfSeat('ffa', 3, 4), 3, 'in free for all, each seat a team of its own');
+});
+
+test('between waves the Dark Lord spends OGRE_CALL dark metal on an ogre more, sent at a manned tower that reaches his lair', () => {
+  /**
+   * @param {number} crew Units in the tower, five cells from the lair.
+   * @param {number} metal The Dark Lord's.
+   */
+  const play = (crew, metal) => {
+    const board = openBoard(9);
+    const game = stateWith(
+      [{ id: 'b1', type: 'castle', q: -8, r: 0 }, { id: 'b2', owner: 1, type: 'lair', q: 3, r: 0 }, { id: 'b3', type: 'tower', q: -3, r: 0 }],
+      unitsIn('b3', crew, 10),
+    );
+    game.mode = 'coop';
+    game.players[1].side = DARK_LORD;
+    game.players[1].metal = metal;
+    game.buildings.b2.hp = maxHp(game, game.buildings.b2);
+    run(board, game, HORDE_START + HORDE_PERIOD / 2 - 1);
+    const before = Object.values(game.buildings).filter((b) => b.type === 'ogre').length;
+    run(board, game, 1);
+    const ogres = Object.values(game.buildings).filter((b) => b.type === 'ogre');
+    return { called: ogres.length - before, target: ogres.at(-1)?.target, metal: game.players[1].metal };
+  };
+  assert.deepEqual(play(5, OGRE_CALL), { called: 1, target: 'b3', metal: 0 });
+  assert.deepEqual(play(0, OGRE_CALL), { called: 0, target: undefined, metal: OGRE_CALL }, 'an empty tower strikes nothing');
+  assert.deepEqual(play(5, OGRE_CALL - 1), { called: 0, target: undefined, metal: OGRE_CALL - 1 }, 'not without the metal');
 });
 
 test('in Shared Easy Lord the team lives off one stock, kept by its first side, against an easy Lord', () => {

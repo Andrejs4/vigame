@@ -95,6 +95,9 @@ Run `npm start` and open http://127.0.0.1:2567.
     no farm is left, of the players who are here (he leaves those away
     alone, see the clock below); it turns on any building that strikes
     it, and on the nearest one when its way is blocked, whoever's it is.
+    Half-way between waves he looks for a manned tower that can strike his
+    lair; if he has 15 dark metal (from the raiders he kills), he spends
+    it on an ogre more, sent at that tower, even past 24.
     Bringing one down yields 2 dark
     metal (a ghoul) or 6 (an ogre). With more than two players he grows:
     his lair's and his horde's hit points by players / 2 (four times at

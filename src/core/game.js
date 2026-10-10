@@ -41,7 +41,7 @@ import { tileAt } from './board.js';
 import { gameName, unitName } from './names.js';
 import { GAME_NAME_MAX, cleanGameName } from './player.js';
 import {
-  BAND_TRAINING, BREEDING, BUILDING_TYPES, BUILD_RANGE, DARK_LORD, HERO_LEVEL_GROWTH, HERO_LEVEL_XP, HERO_SHARE, LORD_HP, LORD_PLAYERS_MAX, SHARED_STOCK, HORDE_MAX, HORDE_PERIOD, HORDE_START, POINTS, QUICK_WIN, RAIDERS, SALVAGE, SEAT_SIDES, RAID_CHANCE, RAID_CLEAR, RAID_PER_PLAYER, RAID_PERIOD, RAID_ROAM, START_METAL, DEFAULT_BREEDING, DEFAULT_MODE, MAX_PLAYERS, MODES, COMBAT_PERIOD, DEPART_GAP, FELL_XP, FOOD_PER_UNIT, KILL_EVEN, KILL_MAX, KILL_STEP, KILL_XP, MELEE_DAMAGE, MELEE_RANGE,
+  BAND_TRAINING, BREEDING, BUILDING_TYPES, BUILD_RANGE, DARK_LORD, HERO_LEVEL_GROWTH, HERO_LEVEL_XP, HERO_SHARE, LORD_HP, LORD_PLAYERS_MAX, SHARED_STOCK, HORDE_MAX, HORDE_PERIOD, HORDE_START, OGRE_CALL, POINTS, QUICK_WIN, RAIDERS, SALVAGE, SEAT_SIDES, RAID_CHANCE, RAID_CLEAR, RAID_PER_PLAYER, RAID_PERIOD, RAID_ROAM, START_METAL, DEFAULT_BREEDING, DEFAULT_MODE, MAX_PLAYERS, MODES, COMBAT_PERIOD, DEPART_GAP, FELL_XP, FOOD_PER_UNIT, KILL_EVEN, KILL_MAX, KILL_STEP, KILL_XP, MELEE_DAMAGE, MELEE_RANGE,
   RANGED_DAMAGE, RANGED_RANGE, REPAIR_WORK, FOOD_PERIOD, FOOD_STORE, HUNGER_PULL, LEVEL_GROWTH,
   LEVEL_RATE, LEVEL_XP, MAX_HUNGER, MAX_LEVEL, SIDES, SKILLS, SKILL_RATE, SKILL_XP, START_STONE, START_UNITS, STARVE_CHANCE,
   UNIT_LIMIT, WAGON_PATIENCE, WALK_TICKS, WORK_BASE,
@@ -1342,6 +1342,7 @@ export function advance(board, state) {
   settle(state);
   if (state.tick % RAID_PERIOD === 0) raid(board, state);
   if (state.tick >= HORDE_START && (state.tick - HORDE_START) % HORDE_PERIOD === 0) summon(board, state);
+  if (state.tick >= HORDE_START && (state.tick - HORDE_START) % HORDE_PERIOD === HORDE_PERIOD / 2) callOgre(board, state);
   if (state.tick % FOOD_PERIOD === 0) {
     harvest(state);
     for (const p of state.players) if (purseOf(state, p.id) === p) eat(state, p);
@@ -1682,17 +1683,63 @@ function summon(board, state) {
   const out = Object.values(state.buildings).filter((b) => b.owner === lord.id && BUILDING_TYPES[b.type].hunts).length;
   const kinds = [...Array(more(Math.ceil(wave / 2))).fill('ghoul'), ...Array(more(Math.floor(wave / 3))).fill('ogre')]
     .slice(0, Math.max(0, more(HORDE_MAX) - out));
+  const free = aroundLair(board, state, lair);
+  for (const kind of kinds) if (!spawn(state, free, lord.id, kind)) return;
+}
+
+/**
+ * Open cells two or three from the lair, where the horde comes out.
+ * @param {Board} board
+ * @param {GameState} state
+ * @param {Building} lair
+ */
+function aroundLair(board, state, lair) {
   const taken = occupancy(state).buildingAt;
-  const free = board.list.filter((t) => t.passable && !taken.has(key(t.q, t.r)) && distance(t, lair) >= 2 && distance(t, lair) <= 3);
-  for (const kind of kinds) {
-    if (!free.length) return;
-    const [cell] = free.splice(Math.floor(random(state) * free.length), 1);
-    const id = newId(state, 'b');
-    /** @type {Building} */
-    const b = { id, owner: lord.id, type: kind, grade: 1, q: cell.q, r: cell.r, hp: 0 };
-    b.hp = maxHp(state, b);
-    state.buildings[id] = b;
-  }
+  return board.list.filter((t) => t.passable && !taken.has(key(t.q, t.r)) && distance(t, lair) >= 2 && distance(t, lair) <= 3);
+}
+
+/**
+ * One of the horde, on one of these cells picked by the dice (taken from the list).
+ * @param {GameState} state
+ * @param {Axial[]} free
+ * @param {number} owner
+ * @param {string} kind
+ * @returns {Building | null} None when no cell is free.
+ */
+function spawn(state, free, owner, kind) {
+  if (!free.length) return null;
+  const [cell] = free.splice(Math.floor(random(state) * free.length), 1);
+  const id = newId(state, 'b');
+  /** @type {Building} */
+  const b = { id, owner, type: kind, grade: 1, q: cell.q, r: cell.r, hp: 0 };
+  b.hp = maxHp(state, b);
+  state.buildings[id] = b;
+  return b;
+}
+
+/**
+ * Between waves the Dark Lord answers a manned tower that can strike his
+ * lair (the nearest, of a player not away): for OGRE_CALL dark metal, an
+ * ogre more, sent at it.
+ * @param {Board} board
+ * @param {GameState} state
+ */
+function callOgre(board, state) {
+  const lord = state.players.find((p) => p.side === DARK_LORD && p.lost === undefined);
+  const lair = lord && Object.values(state.buildings).find((b) => b.owner === lord.id && b.type === 'lair');
+  if (!lord || !lair || purseOf(state, lord.id).metal < OGRE_CALL) return;
+  const occ = occupancy(state);
+  const cells = footprint(lair.type, lair.q, lair.r);
+  const tower = Object.values(state.buildings)
+    .filter((b) => b.type === 'tower' && !allied(state, b.owner, lord.id) && !state.players[b.owner]?.away && (occ.inside.get(b.id)?.length ?? 0) > 0)
+    .map((b) => ({ b, d: Math.min(...cells.map((c) => distance(c, b))) }))
+    .filter(({ b, d }) => d <= crewReach(b))
+    .sort((x, y) => x.d - y.d)[0]?.b;
+  if (!tower) return;
+  const ogre = spawn(state, aroundLair(board, state, lair), lord.id, 'ogre');
+  if (!ogre) return;
+  purseOf(state, lord.id).metal -= OGRE_CALL;
+  turnTo(ogre, tower.id);
 }
 
 /**

@@ -280,6 +280,13 @@ export const RAID_ROAM = 4;
 export const HORDE_START = 2 * 60 * TICKS_PER_SECOND;
 export const HORDE_PERIOD = 60 * TICKS_PER_SECOND;
 export const HORDE_MAX = 24;
+/**
+ * Between waves, once a HORDE_PERIOD (half-way), the Dark Lord looks for a
+ * manned tower that can strike his lair; if he has OGRE_CALL dark metal
+ * (from the raiders he kills), he spends it on an ogre more, sent at it,
+ * past HORDE_MAX.
+ */
+export const OGRE_CALL = 15;
 
 /**
  * Points, for the table at a game's end: what each thing in a side's tally
