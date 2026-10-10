@@ -522,6 +522,18 @@ of the map and rules it was played under, so a change that drops games
 needn't lose one worth keeping. Not built; for now each such change
 deletes the games (CLAUDE.md), and only the high scores stay.
 
+Replays need the same: a replay is the same commands run through the
+rules again, so any change to the rules, not only to the state's shape,
+changes what an old log plays out to. Training a band's running as it
+marches (October 2026) is one: its units get faster, so later steps,
+fights and kills come out otherwise. `STATE_VERSION` and the database's
+`SCHEMA_VERSION` don't catch that, as neither the state's shape nor the
+tables change. So replays (or exports) will need a version of their own,
+a rules version bumped with every change to how the game plays out and
+kept with each game; or the map version reorganised to be that, covering
+map and rules together. A replay of another version then needs that
+version's core, or isn't offered.
+
 ### Further off
 
 Units' dice in place of a single kill chance; bots and balance ("much

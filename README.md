@@ -95,6 +95,9 @@ Run `npm start` and open http://127.0.0.1:2567.
     no farm is left, of the players who are here (he leaves those away
     alone, see the clock below); it turns on any building that strikes
     it, and on the nearest one when its way is blocked, whoever's it is.
+    Half-way between waves he looks for a manned tower that can strike his
+    lair; if he has 15 dark metal (from the raiders he kills), he spends
+    it on an ogre more, sent at that tower, even past 24.
     Bringing one down yields 2 dark
     metal (a ghoul) or 6 (an ogre). With more than two players he grows:
     his lair's and his horde's hit points by players / 2 (four times at
@@ -173,10 +176,15 @@ Run `npm start` and open http://127.0.0.1:2567.
   skills: breeding, ranged attack, close combat, building (which covers
   repairing and digging), farming and running. Work trains the skill it
   uses, and the unit's level with it: every skill at the same pace (a
-  strike trains ranged or close combat five times as much as a tick of
+  strike trains ranged or close combat ten times as much as a tick of
   other work, since units strike only once a second), the
   level faster the fiercer the work (breeding least, then running, farming,
-  building, ranged and close combat, and a killing blow most). A skill
+  building, ranged and close combat; a killing blow most, and bringing down
+  a building, one of the horde or a raider twice that). Every skill level
+  takes the same work; levels take more each time. Walking
+  trains running; units in a band train it as the band marches, given
+  every 10 seconds, as much as walking the way would (in a wagon, not at
+  all). A skill
   can't pass the unit's level; it climbs faster than the level, then waits
   for it. Each level takes 1.1 times the work of the one before, so the
   last ones are all but out of reach. About one unit in ten, the first

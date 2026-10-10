@@ -7,7 +7,7 @@ import {
   depthOf, endWinner, fullMeal, sharesStock, isRising, killChance, maxHp, pointsOf, quickWin, scoreOf, seatsOf, starveChance, ROOM_COMMANDS, teamOfSeat, workFor,
 } from '../src/core/game.js';
 import {
-  BUILDING_TYPES, COMBAT_PERIOD, DARK_LORD, TICKS_PER_SECOND, HORDE_PERIOD, HORDE_START, RAIDERS, RAID_PERIOD, RAID_PER_PLAYER, SALVAGE, SIDES, FOOD_PER_UNIT, FOOD_PERIOD, KILL_XP, LEVEL_RATE, RANGED_DAMAGE, LEVEL_XP, MAX_HUNGER, MAX_LEVEL, SKILL_RATE, SKILL_XP, START_UNITS, UNIT_LIMIT, WAGON_PATIENCE,
+  BAND_TRAINING, BUILDING_TYPES, COMBAT_PERIOD, DARK_LORD, FELL_XP, OGRE_CALL, TICKS_PER_SECOND, HORDE_PERIOD, HORDE_START, RAIDERS, RAID_PERIOD, RAID_PER_PLAYER, SALVAGE, SIDES, FOOD_PER_UNIT, FOOD_PERIOD, KILL_XP, LEVEL_RATE, RANGED_DAMAGE, LEVEL_XP, MAX_HUNGER, MAX_LEVEL, SKILL_RATE, SKILL_XP, START_UNITS, UNIT_LIMIT, WAGON_PATIENCE,
   WALK_TICKS, WORK_BASE,
 } from '../src/core/rules.js';
 import { distance } from '../src/core/hex.js';
@@ -597,14 +597,15 @@ test('a building going up can be given up: its crew, inside or on the way, goes 
   runUntil(board, state, () => crew.every((id) => state.units[id].in === 'b1'));
 });
 
-test('a strike that brings a building down earns a killing blow; its units are left outside', () => {
+test('a strike that brings a building down earns FELL_XP, twice a killing blow; its units are left outside', () => {
   const board = openBoard(4);
   const state = stateWith([{ id: 'b1', q: 0, r: 0 }, { id: 'b2', owner: 1, q: 1, r: 0, hp: 1 }], [
     ...unitsIn('b1', 1, 10), { id: 'u20', owner: 1, in: 'b2' },
   ]);
   run(board, state, COMBAT_PERIOD);
   assert.equal(state.buildings.b2, undefined);
-  assert.ok(state.units.u10.xp >= KILL_XP, 'a killing blow');
+  // A close-combat strike, and the building: a level's worth, and a little over.
+  assert.deepEqual([state.units.u10.level, state.units.u10.xp], [2, FELL_XP + LEVEL_RATE.melee - LEVEL_XP]);
   assert.deepEqual([state.units.u20.q, state.units.u20.r, state.units.u20.in], [1, 0, undefined], 'left standing');
 });
 
@@ -795,6 +796,32 @@ test('in two teams, the first half of the ring plays the second, which gets the 
     assert.equal(endWinner(game, players - 1), 0);
   }
   assert.equal(teamOfSeat('ffa', 3, 4), 3, 'in free for all, each seat a team of its own');
+});
+
+test('between waves the Dark Lord spends OGRE_CALL dark metal on an ogre more, sent at a manned tower that reaches his lair', () => {
+  /**
+   * @param {number} crew Units in the tower, five cells from the lair.
+   * @param {number} metal The Dark Lord's.
+   */
+  const play = (crew, metal) => {
+    const board = openBoard(9);
+    const game = stateWith(
+      [{ id: 'b1', type: 'castle', q: -8, r: 0 }, { id: 'b2', owner: 1, type: 'lair', q: 3, r: 0 }, { id: 'b3', type: 'tower', q: -3, r: 0 }],
+      unitsIn('b3', crew, 10),
+    );
+    game.mode = 'coop';
+    game.players[1].side = DARK_LORD;
+    game.players[1].metal = metal;
+    game.buildings.b2.hp = maxHp(game, game.buildings.b2);
+    run(board, game, HORDE_START + HORDE_PERIOD / 2 - 1);
+    const before = Object.values(game.buildings).filter((b) => b.type === 'ogre').length;
+    run(board, game, 1);
+    const ogres = Object.values(game.buildings).filter((b) => b.type === 'ogre');
+    return { called: ogres.length - before, target: ogres.at(-1)?.target, metal: game.players[1].metal };
+  };
+  assert.deepEqual(play(5, OGRE_CALL), { called: 1, target: 'b3', metal: 0 });
+  assert.deepEqual(play(0, OGRE_CALL), { called: 0, target: undefined, metal: OGRE_CALL }, 'an empty tower strikes nothing');
+  assert.deepEqual(play(5, OGRE_CALL - 1), { called: 0, target: undefined, metal: OGRE_CALL - 1 }, 'not without the metal');
 });
 
 test('in Shared Easy Lord the team lives off one stock, kept by its first side, against an easy Lord', () => {
@@ -1115,6 +1142,28 @@ test('a band goes at its slowest member\'s pace', () => {
   assert.deepEqual(applyCommand(board, state, 0, { type: 'move', building: 'b1', q: 2, r: 0 }), OK);
   const tick = runUntil(board, state, () => !state.buildings.b1.path);
   assert.equal(tick, 1 + 2 * WALK_TICKS, 'as slow as the one who never ran');
+});
+
+test('a band\'s units train their running as it marches, as if they walked, every BAND_TRAINING', () => {
+  const board = openBoard(8);
+  const state = stateWith([{ id: 'b1', type: 'band', q: 0, r: 0 }], [{ id: 'u10', in: 'b1' }, { id: 'u11', in: 'b1' }]);
+  const alone = stateWith([], [{ id: 'u10', q: 0, r: 0 }]);
+  assert.deepEqual(applyCommand(board, state, 0, { type: 'move', building: 'b1', q: 3, r: 0 }), OK);
+  run(board, state, BAND_TRAINING - 1);
+  assert.equal(state.buildings.b1.walked, 3 * WALK_TICKS, 'counted as it goes');
+  assert.equal(publicView(state).buildings.b1.walked, undefined, 'and kept from players');
+  assert.equal(state.units.u10.practice.running, 0, 'but not given yet');
+  run(board, state, 1);
+  assert.equal(state.buildings.b1.walked, undefined);
+  // As much as one who walked the same way, by the same time.
+  const walker = /** @type {any} */ (alone.units.u10);
+  walker.path = [[1, 0], [2, 0], [3, 0]];
+  walker.since = 0;
+  walker.until = WALK_TICKS;
+  run(board, alone, BAND_TRAINING);
+  for (const id of ['u10', 'u11']) {
+    assert.deepEqual([state.units[id].practice.running, state.units[id].xp], [alone.units.u10.practice.running, alone.units.u10.xp], id);
+  }
 });
 
 test('units and bands cross pits, anyone\'s; wagons go around them', () => {

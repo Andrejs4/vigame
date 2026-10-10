@@ -41,7 +41,7 @@ import { tileAt } from './board.js';
 import { gameName, unitName } from './names.js';
 import { GAME_NAME_MAX, cleanGameName } from './player.js';
 import {
-  BREEDING, BUILDING_TYPES, BUILD_RANGE, DARK_LORD, HERO_LEVEL_GROWTH, HERO_LEVEL_XP, HERO_SHARE, LORD_HP, LORD_PLAYERS_MAX, SHARED_STOCK, HORDE_MAX, HORDE_PERIOD, HORDE_START, POINTS, QUICK_WIN, RAIDERS, SALVAGE, SEAT_SIDES, RAID_CHANCE, RAID_CLEAR, RAID_PER_PLAYER, RAID_PERIOD, RAID_ROAM, START_METAL, DEFAULT_BREEDING, DEFAULT_MODE, MAX_PLAYERS, MODES, COMBAT_PERIOD, DEPART_GAP, FOOD_PER_UNIT, KILL_EVEN, KILL_MAX, KILL_STEP, KILL_XP, MELEE_DAMAGE, MELEE_RANGE,
+  BAND_TRAINING, BREEDING, BUILDING_TYPES, BUILD_RANGE, DARK_LORD, HERO_LEVEL_GROWTH, HERO_LEVEL_XP, HERO_SHARE, LORD_HP, LORD_PLAYERS_MAX, SHARED_STOCK, HORDE_MAX, HORDE_PERIOD, HORDE_START, OGRE_CALL, POINTS, QUICK_WIN, RAIDERS, SALVAGE, SEAT_SIDES, RAID_CHANCE, RAID_CLEAR, RAID_PER_PLAYER, RAID_PERIOD, RAID_ROAM, START_METAL, DEFAULT_BREEDING, DEFAULT_MODE, MAX_PLAYERS, MODES, COMBAT_PERIOD, DEPART_GAP, FELL_XP, FOOD_PER_UNIT, KILL_EVEN, KILL_MAX, KILL_STEP, KILL_XP, MELEE_DAMAGE, MELEE_RANGE,
   RANGED_DAMAGE, RANGED_RANGE, REPAIR_WORK, FOOD_PERIOD, FOOD_STORE, HUNGER_PULL, LEVEL_GROWTH,
   LEVEL_RATE, LEVEL_XP, MAX_HUNGER, MAX_LEVEL, SIDES, SKILLS, SKILL_RATE, SKILL_XP, START_STONE, START_UNITS, STARVE_CHANCE,
   UNIT_LIMIT, WAGON_PATIENCE, WALK_TICKS, WORK_BASE,
@@ -73,6 +73,8 @@ import {
  * @property {number} [since] While it rolls to path[0]: the tick it set off,
  * @property {number} [until] and the tick it gets there. It holds both cells meanwhile.
  * @property {number} [waiting] The tick it found its next cell taken.
+ * @property {number} [walked] A band's ticks of marching not yet trained
+ *   into its units' running (BAND_TRAINING).
  */
 
 /**
@@ -1340,6 +1342,7 @@ export function advance(board, state) {
   settle(state);
   if (state.tick % RAID_PERIOD === 0) raid(board, state);
   if (state.tick >= HORDE_START && (state.tick - HORDE_START) % HORDE_PERIOD === 0) summon(board, state);
+  if (state.tick >= HORDE_START && (state.tick - HORDE_START) % HORDE_PERIOD === HORDE_PERIOD / 2) callOgre(board, state);
   if (state.tick % FOOD_PERIOD === 0) {
     harvest(state);
     for (const p of state.players) if (purseOf(state, p.id) === p) eat(state, p);
@@ -1359,6 +1362,27 @@ export function advance(board, state) {
   work(board, state, occ);
   rollWagons(board, state, occ);
   marchUnits(board, state, occ);
+  if (state.tick % BAND_TRAINING === 0) trainBands(state);
+}
+
+/**
+ * Each unit in a band gets running practice for the ticks the band has
+ * marched since the last time, as if it had walked them itself.
+ * @param {GameState} state
+ */
+function trainBands(state) {
+  /** @type {Map<string, number>} */
+  const walked = new Map();
+  for (const b of Object.values(state.buildings)) {
+    if (b.walked === undefined) continue;
+    walked.set(b.id, b.walked);
+    delete b.walked;
+  }
+  if (!walked.size) return;
+  for (const u of Object.values(state.units)) {
+    const ticks = u.in === undefined ? 0 : walked.get(u.in) ?? 0;
+    for (let i = 0; i < ticks; i++) practise(u, 'running');
+  }
 }
 
 /**
@@ -1488,7 +1512,8 @@ function fight(board, state, occ) {
    * @param {number} damage
    * @param {number} skill
    * @param {string} [from] The building striking, or whose units strike.
-   * @returns {boolean} Whether it brought a building down or killed.
+   * @returns {number} The experience it earns: FELL_XP for bringing a
+   *   building down, KILL_XP for a kill, else none.
    */
   const strike = ({ t }, owner, damage, skill, from) => {
     const hit = t.building;
@@ -1502,20 +1527,19 @@ function fight(board, state, occ) {
       tally.damage += Math.min(damage, /** @type {number} */ (hit.hp));
       hit.hp = Math.max(0, /** @type {number} */ (hit.hp) - damage);
       if (from !== undefined && from !== hit.target && BUILDING_TYPES[hit.type].hunts) turnTo(hit, from);
-      if (hit.hp > 0) return false;
+      if (hit.hp > 0) return 0;
       const { loot, metal = 0, life } = BUILDING_TYPES[hit.type];
       purseOf(state, owner).metal += loot ?? Math.floor(metal * SALVAGE);
       if (life) tally.castles += 1;
       else tally.felled += 1;
-      return true;
+      return FELL_XP;
     }
     const foe = hit ? state.units[sheltered[Math.floor(random(state) * sheltered.length)]] : /** @type {Unit} */ (t.unit);
     const killed = random(state) * 100 < killChance(skill, foe.level);
-    if (killed) {
-      delete state.units[foe.id];
-      tally.kills += 1;
-    }
-    return killed;
+    if (!killed) return 0;
+    delete state.units[foe.id];
+    tally.kills += 1;
+    return KILL_XP;
   };
 
   /**
@@ -1530,8 +1554,8 @@ function fight(board, state, occ) {
     if (!target) return false;
     const melee = target.d <= MELEE_RANGE;
     const skill = melee ? 'melee' : 'ranged';
-    const killed = strike(target, u.owner, (melee ? MELEE_DAMAGE : RANGED_DAMAGE) + u.skills[skill], u.skills[skill], from);
-    practise(u, skill, killed ? KILL_XP : 0);
+    const earned = strike(target, u.owner, (melee ? MELEE_DAMAGE : RANGED_DAMAGE) + u.skills[skill], u.skills[skill], from);
+    practise(u, skill, earned);
     return true;
   };
 
@@ -1659,17 +1683,63 @@ function summon(board, state) {
   const out = Object.values(state.buildings).filter((b) => b.owner === lord.id && BUILDING_TYPES[b.type].hunts).length;
   const kinds = [...Array(more(Math.ceil(wave / 2))).fill('ghoul'), ...Array(more(Math.floor(wave / 3))).fill('ogre')]
     .slice(0, Math.max(0, more(HORDE_MAX) - out));
+  const free = aroundLair(board, state, lair);
+  for (const kind of kinds) if (!spawn(state, free, lord.id, kind)) return;
+}
+
+/**
+ * Open cells two or three from the lair, where the horde comes out.
+ * @param {Board} board
+ * @param {GameState} state
+ * @param {Building} lair
+ */
+function aroundLair(board, state, lair) {
   const taken = occupancy(state).buildingAt;
-  const free = board.list.filter((t) => t.passable && !taken.has(key(t.q, t.r)) && distance(t, lair) >= 2 && distance(t, lair) <= 3);
-  for (const kind of kinds) {
-    if (!free.length) return;
-    const [cell] = free.splice(Math.floor(random(state) * free.length), 1);
-    const id = newId(state, 'b');
-    /** @type {Building} */
-    const b = { id, owner: lord.id, type: kind, grade: 1, q: cell.q, r: cell.r, hp: 0 };
-    b.hp = maxHp(state, b);
-    state.buildings[id] = b;
-  }
+  return board.list.filter((t) => t.passable && !taken.has(key(t.q, t.r)) && distance(t, lair) >= 2 && distance(t, lair) <= 3);
+}
+
+/**
+ * One of the horde, on one of these cells picked by the dice (taken from the list).
+ * @param {GameState} state
+ * @param {Axial[]} free
+ * @param {number} owner
+ * @param {string} kind
+ * @returns {Building | null} None when no cell is free.
+ */
+function spawn(state, free, owner, kind) {
+  if (!free.length) return null;
+  const [cell] = free.splice(Math.floor(random(state) * free.length), 1);
+  const id = newId(state, 'b');
+  /** @type {Building} */
+  const b = { id, owner, type: kind, grade: 1, q: cell.q, r: cell.r, hp: 0 };
+  b.hp = maxHp(state, b);
+  state.buildings[id] = b;
+  return b;
+}
+
+/**
+ * Between waves the Dark Lord answers a manned tower that can strike his
+ * lair (the nearest, of a player not away): for OGRE_CALL dark metal, an
+ * ogre more, sent at it.
+ * @param {Board} board
+ * @param {GameState} state
+ */
+function callOgre(board, state) {
+  const lord = state.players.find((p) => p.side === DARK_LORD && p.lost === undefined);
+  const lair = lord && Object.values(state.buildings).find((b) => b.owner === lord.id && b.type === 'lair');
+  if (!lord || !lair || purseOf(state, lord.id).metal < OGRE_CALL) return;
+  const occ = occupancy(state);
+  const cells = footprint(lair.type, lair.q, lair.r);
+  const tower = Object.values(state.buildings)
+    .filter((b) => b.type === 'tower' && !allied(state, b.owner, lord.id) && !state.players[b.owner]?.away && (occ.inside.get(b.id)?.length ?? 0) > 0)
+    .map((b) => ({ b, d: Math.min(...cells.map((c) => distance(c, b))) }))
+    .filter(({ b, d }) => d <= crewReach(b))
+    .sort((x, y) => x.d - y.d)[0]?.b;
+  if (!tower) return;
+  const ogre = spawn(state, aroundLair(board, state, lair), lord.id, 'ogre');
+  if (!ogre) return;
+  purseOf(state, lord.id).metal -= OGRE_CALL;
+  turnTo(ogre, tower.id);
 }
 
 /**
@@ -1950,6 +2020,7 @@ function rollWagons(board, state, occ) {
     if (b.until !== undefined) {
       if (state.tick < b.until) continue;
       if (!band) occ.buildingAt.delete(key(b.q, b.r));
+      else b.walked = (b.walked ?? 0) + b.until - /** @type {number} */ (b.since);
       [b.q, b.r] = /** @type {Cell} */ (b.path.shift());
       delete b.since;
       delete b.until;
@@ -2134,6 +2205,7 @@ export function checkState(board, raw) {
     if (!Number.isInteger(b.grade) || b.grade < 1 || b.grade > type.grades) fail(`building ${id}: bad grade`);
     if (b.type === 'castle') castles[b.owner] += 1;
     if (type.work === undefined ? b.work !== undefined : !isCount(b.work, /** @type {number} */ (workFor(state, b.type)))) fail(`building ${id}: bad work`);
+    if (b.walked !== undefined && !(type.band && Number.isSafeInteger(b.walked) && b.walked > 0)) fail(`building ${id}: bad walked`);
     const deepest = /** @type {number} */ (type.depth) * /** @type {number} */ (type.perDepth);
     if (type.depth === undefined ? b.dug !== undefined : !isCount(b.dug, deepest + 1)) fail(`building ${id}: bad dug`);
     if (b.raised !== undefined && !(type.raise && isCount(b.raised, type.raise))) fail(`building ${id}: bad raised`);
@@ -2246,7 +2318,8 @@ export function publicView(state) {
     tick: state.tick,
     // Tallies change all game long, and are for the end: kept back till then.
     players: state.over === undefined ? state.players.map(({ tally: _tally, ...shown }) => shown) : state.players,
-    buildings: Object.fromEntries(Object.entries(state.buildings).map(([id, b]) => [id, cut(b)])),
+    // What a band has marched is for its units' training, not for players.
+    buildings: Object.fromEntries(Object.entries(state.buildings).map(([id, { walked: _walked, ...b }]) => [id, cut(b)])),
     units: Object.fromEntries(units.map((u) => [u.id, u])),
   };
 }
