@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 
 import { BOARD_OPTIONS, createBoard } from '../src/core/board.js';
 import { distance } from '../src/core/hex.js';
-import { advance, applyCommand, checkState, publicView } from '../src/core/game.js';
+import { advance, applyCommand, boardOf as mapOf, checkState, publicView } from '../src/core/game.js';
+import { boardSize } from '../src/core/board.js';
 import { COMBAT_PERIOD, MAX_HUNGER, START_STONE, START_UNITS, TICKS_PER_SECOND } from '../src/core/rules.js';
 import { openBoard, stateWith, unitsIn } from './helpers.js';
 import { ACT_WORDS, storyTip } from '../src/client/story/story.js';
@@ -267,9 +268,11 @@ test('the last act, Clearing the lair: the Easy Lord, camps round his lair, raid
   assert.equal(ACTS[3].id, 'clearing-lair');
   assert.equal(ACTS.at(-1)?.id, 'clearing-lair', 'the last');
   const { seed, state } = newStoryGame(3);
-  const board = boardOf(seed);
+  const board = mapOf(state, 1);
   assert.deepEqual(checkState(board, state), []);
-  assert.deepEqual(state.story, { act: 'clearing-lair', builds: ['pit', 'farm', 'tower', 'band', 'wagon'], final: true }, 'no time limit');
+  const width = Math.round(boardSize(1).width * 1.5);
+  assert.deepEqual(state.story, { act: 'clearing-lair', builds: ['pit', 'farm', 'tower', 'band', 'wagon'], final: true, width }, 'no time limit; a map half as wide again');
+  assert.equal(board.list.length, width * boardSize(1).height, 'as many rows, each longer');
   assert.equal(state.mode, 'easy');
   const of = (/** @type {string} */ type) => Object.values(state.buildings).filter((b) => b.type === type);
   const [castle] = of('castle');

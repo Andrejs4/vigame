@@ -7,7 +7,7 @@
 import { axialToPixel, bounds, distance, key, pixelToAxial } from '../core/hex.js';
 import { BOARD_OPTIONS, createBoard, tileAt } from '../core/board.js';
 import {
-  buildCost, capacityOf, castleOf, crewOf, depthOf, endWinner, foodStore, fullMeal, inBuildRange, isDugOut, isRising, maxHp, occupancy, purseOf, quickWin, scoreOf,
+  boardOf, buildCost, capacityOf, castleOf, crewOf, depthOf, endWinner, foodStore, fullMeal, inBuildRange, isDugOut, isRising, maxHp, occupancy, purseOf, quickWin, scoreOf,
   raiseWork, seatsOf, sharesStock, shortOf, sideOf, upgradeCost, workFor,
 } from '../core/game.js';
 import { GAME_NAME_MAX, cleanGameName } from '../core/player.js';
@@ -260,6 +260,8 @@ export async function startGame(net, me) {
 
   let board = createBoard({ ...BOARD_OPTIONS, seed: 0 });
   let boardPlayers = 0;
+  /** The map's width, when a story act has it wider than usual (0: as usual). */
+  let boardWidth = 0;
   const camera = new Camera();
   // The pictures arrive after the first draws; each one redraws the board.
   const tokens = new Tokens(() => { needsDraw = true; });
@@ -364,9 +366,11 @@ export async function startGame(net, me) {
    */
   function onState(next) {
     const players = seatsOf(next);
-    if (next.seed !== board.seed || players !== boardPlayers) {
+    const width = next.story?.width ?? 0;
+    if (next.seed !== board.seed || players !== boardPlayers || width !== boardWidth) {
       boardPlayers = players;
-      board = createBoard({ ...BOARD_OPTIONS, seed: next.seed, players });
+      boardWidth = width;
+      board = boardOf(next, players);
       renderer = new BoardRenderer(canvas, board, tokens, ground);
       renderer.showCoords = showCoords;
       minimap = new Minimap(mapCanvas, mapFrame, board, mapHome);

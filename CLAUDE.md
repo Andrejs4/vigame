@@ -238,7 +238,9 @@ drawing during play). Read it before art or graphics work.
   director runs after each tick (its waves: plain data, no dice), and an
   `opening` that places things as it opens (Clearing the woods' camps,
   Clearing the lair's camps and raiders); an act without `minutes` has
-  no time limit (`story.until` left out). The last act won, the page
+  no time limit (`story.until` left out), and one with `wider` a wider
+  map (`story.width`): every board is built by `boardOf` in game.js, from
+  the seed, the seats and that width, so the room and the page agree. The last act won, the page
   congratulates first and shows the points once the player goes on.
   Its monsters guard: a horde member with `home` (GUARD_SIGHT and
   GUARD_LEASH in rules.js) keeps near that cell instead of hunting, a

@@ -213,8 +213,9 @@ Run `npm start` and open http://127.0.0.1:2567.
     and a half into the last wave; bands of 12 to 20 fall short; bands of
     30 clear the map in that wave's wake (13:24); with the first two acts'
     heroes, bands of 12 or more clear it there too.
-  - **Clearing the lair**, the last: a fresh castle on another map, in an
-    Easy Lord game (his lair 11 cells away, his waves from 2:00), with
+  - **Clearing the lair**, the last: a fresh castle on another map, half
+    as wide again as usual (44 cells by 20), in an Easy Lord game (his lair
+    16 cells away, his waves from 2:00), with
     everything allowed, wagons too, and no time limit. Three small camps
     of three ghouls guard the lair, 4 cells from it and at least 9 from the
     castle, and three raiders start 7 cells round the castle. Won once the

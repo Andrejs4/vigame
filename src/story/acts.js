@@ -10,8 +10,8 @@
  * none of it: what it shows comes with the game's `story`.
  */
 
-import { BOARD_OPTIONS, createBoard } from '../core/board.js';
-import { fullMeal, maxHp, newGame, occupancy } from '../core/game.js';
+import { boardSize } from '../core/board.js';
+import { boardOf, fullMeal, maxHp, newGame, occupancy } from '../core/game.js';
 import { distance, key } from '../core/hex.js';
 import { BUILDING_TYPES, DARK_LORD, MAX_HUNGER, SIDES, TICKS_PER_SECOND } from '../core/rules.js';
 
@@ -25,6 +25,7 @@ import { BUILDING_TYPES, DARK_LORD, MAX_HUNGER, SIDES, TICKS_PER_SECOND } from '
  * @property {string} name Its game's name, in English (the page shows its own word).
  * @property {number} seed Its map's: the same for every player.
  * @property {number} [minutes] Its time limit, if it has one.
+ * @property {number} [wider] How much wider than usual its map is.
  * @property {string} [mode] Its game's mode (`MODES` in rules.js): one side
  *   alone if not given.
  * @property {string[]} builds What may be built in it.
@@ -351,6 +352,7 @@ export const ACTS = [
     id: 'clearing-lair',
     name: 'Clearing the lair',
     seed: 9191,
+    wider: 1.5,
     mode: 'easy',
     builds: ['pit', 'farm', 'tower', 'band', 'wagon'],
     setup() {},
@@ -414,12 +416,14 @@ export function actOf(id) {
  */
 export function newStoryGame(index, heroes = []) {
   const act = ACTS[index];
-  const board = createBoard({ ...BOARD_OPTIONS, seed: act.seed, players: 1 });
+  const width = act.wider ? Math.round(boardSize(1).width * act.wider) : undefined;
+  const board = boardOf({ seed: act.seed, ...(width ? { story: { width } } : {}) }, 1);
   // One side, and the raiders, unless the act has a mode of its own.
   const state = newGame(board, { mode: act.mode ?? 'ffa' });
   state.name = act.name;
   state.story = {
     act: act.id, builds: [...act.builds], ...(act.minutes ? { until: act.minutes * 60 * TICKS_PER_SECOND } : {}),
+    ...(width ? { width } : {}),
     ...(index === ACTS.length - 1 ? { final: /** @type {true} */ (true) } : {}),
   };
   act.setup(state);

@@ -37,7 +37,7 @@
  */
 
 import { distance, key, neighbors, parseKey } from './hex.js';
-import { tileAt } from './board.js';
+import { BOARD_OPTIONS, createBoard, tileAt } from './board.js';
 import { gameName, unitName } from './names.js';
 import { GAME_NAME_MAX, cleanGameName } from './player.js';
 import {
@@ -151,6 +151,8 @@ import {
  * @property {string[]} builds The kinds of building it allows.
  * @property {number} [until] The tick its time runs out, if it does.
  * @property {true} [final] The story's last act.
+ * @property {number} [width] Its map's width in cells, when wider than
+ *   usual (`boardOf`).
  * @property {string} [result] How it came out, once it has (`direct`).
  * @property {Veteran[]} [heroes] The player's heroes from earlier acts not
  *   yet born again in this one: each hero born takes the next one's place
@@ -2231,7 +2233,8 @@ export function checkState(board, raw) {
     const fits = s !== null && typeof s === 'object' && typeof s.act === 'string' && (s.until === undefined || Number.isSafeInteger(s.until))
       && Array.isArray(s.builds) && s.builds.every((k) => typeof k === 'string' && BUILDING_TYPES[k]?.build === true)
       && (s.result === undefined || typeof s.result === 'string') && (s.final === undefined || s.final === true)
-      && (s.heroes === undefined || (Array.isArray(s.heroes) && s.heroes.length > 0));
+      && (s.heroes === undefined || (Array.isArray(s.heroes) && s.heroes.length > 0))
+      && (s.width === undefined || (Number.isInteger(s.width) && s.width > 0 && s.width <= 200));
     if (!fits) fail('bad story');
   }
   if (state.over !== undefined && !isCount(state.over, Infinity)) fail('bad over');
@@ -2361,6 +2364,18 @@ export function checkState(board, raw) {
 /** @param {unknown} v */
 function isRecord(v) {
   return Boolean(v) && typeof v === 'object' && !Array.isArray(v);
+}
+
+/**
+ * The map a game is played on: the usual one for its seed and number of
+ * seats, or as wide as its story act has it (`story.width`). The game
+ * server, the page and story mode all build it here, so they agree.
+ * @param {{ seed: number, story?: { width?: number } }} game
+ * @param {number} players Its number of seats.
+ */
+export function boardOf(game, players) {
+  const width = game.story?.width;
+  return createBoard({ ...BOARD_OPTIONS, seed: game.seed, players, ...(width ? { width } : {}) });
 }
 
 /**
