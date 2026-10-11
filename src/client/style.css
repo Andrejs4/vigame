@@ -125,11 +125,12 @@ button[aria-pressed="true"] { background: rgba(255, 216, 77, 0.18); border-color
   border-color: rgba(255, 216, 77, 0.45); background: rgba(255, 216, 77, 0.08);
 }
 .story-button .laurel {
-  /* The heroes' laurels, 8% wider than tall, to read less like horns. */
-  display: inline-block; width: 19.5px; height: 18px; margin: 0 10px; vertical-align: -4px;
+  /* The heroes' laurels, a fifth wider, as on the Heroes button. */
+  display: inline-block; width: 18px; height: 18px; margin: 0 12px; vertical-align: -4px;
   background: var(--amber);
-  -webkit-mask: url(art/heroes.svg) center / 100% 100% no-repeat;
-  mask: url(art/heroes.svg) center / 100% 100% no-repeat;
+  -webkit-mask: url(art/heroes.svg) center / contain no-repeat;
+  mask: url(art/heroes.svg) center / contain no-repeat;
+  transform: scaleX(1.2);
 }
 
 /* A checkbox before its words, on one line. */
@@ -342,6 +343,8 @@ dl { margin: 0; }
 #upgrade { --icon: url(art/upgrade.svg); }
 #crew-button { --icon: url(art/crew.svg); }
 #heroes-button { --icon: url(art/heroes.svg); }
+/* The laurels a fifth wider than drawn, rounder: as a wreath, not horns. */
+#heroes-button::before { transform: scaleX(1.2); }
 #return-button { --icon: url(art/return.svg); }
 #abort-button { --icon: url(art/abort.svg); }
 #attack-button { --icon: url(art/attack.svg); }
