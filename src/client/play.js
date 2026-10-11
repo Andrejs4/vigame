@@ -19,6 +19,7 @@ import { Effects, fallenHeroes, fallenHeroesNote } from './effects.js';
 import { Minimap } from './minimap.js';
 import { BoardRenderer, COUNT_ZOOM, levelTier, pickAt } from './render.js';
 import { storyLine, storyOutcome } from './story/story.js';
+import { createTip } from './tip.js';
 import { autoLanguage, browserLanguages, chosenLanguage, keyCandidates } from './language.js';
 import { Sounds, soundsFor } from './sounds.js';
 import { Ground } from './ground.js';
@@ -128,6 +129,9 @@ function tierMark(level, keep = false) {
   return mark;
 }
 
+/** A story act this young is beginning: its opening message shows. */
+const OPENING_TICKS = 3 * TICKS_PER_SECOND;
+
 /** @typedef {import('../core/game.js').Building} Building */
 
 /**
@@ -205,6 +209,9 @@ export async function startGame(net, me) {
   const seatButton = /** @type {HTMLButtonElement} */ (document.getElementById('seat-button'));
   // For the game's creator, while it waits for players: go on without them.
   const storyGoal = /** @type {HTMLElement} */ (document.getElementById('story-goal'));
+  const tip = createTip(/** @type {HTMLElement} */ (document.getElementById('tip')));
+  /** Whether this page has shown the story act's opening message. */
+  let opened = false;
   const startButton = /** @type {HTMLButtonElement} */ (document.getElementById('start-button'));
   startButton.title = word('startNowTitle');
   // For a player in the game: end it for everyone (its creator at any time).
@@ -619,6 +626,19 @@ export async function startGame(net, me) {
   /** Whether the next meal falls short (`fullMeal`), checked once a game second. */
   let meal = { second: -1, seat: /** @type {number | null} */ (null), short: false };
 
+  /**
+   * A story act, as it begins: its name and goal in the middle of the
+   * screen, the clock held until the player's first click or key.
+   */
+  function openStory() {
+    if (opened || !view?.story || view.over !== undefined || view.tick > OPENING_TICKS || net.seat() === null) return;
+    opened = true;
+    const line = storyLine(view, word, formatTime);
+    if (!line) return;
+    net.hold(true);
+    tip.show({ title: line.name, text: `${line.goal} ${word('tipGoOn')}`, ms: Infinity, onClose: () => net.hold(false) });
+  }
+
   /** A story act's line under the game's details: the act, its goal, and the time left. */
   function showStory() {
     const line = view ? storyLine(view, word, formatTime) : null;
@@ -752,6 +772,7 @@ export async function startGame(net, me) {
       if (button.title !== title) button.title = title;
     }
     showStory();
+    openStory();
     const b = selected ? view?.buildings[selected] : null;
     const mine = Boolean(can && b && isMine(selected));
     const upgradable = Boolean(mine && b && !isRising(b) && b.upgrading === undefined && b.grade < BUILDING_TYPES[b.type].grades);

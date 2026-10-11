@@ -335,6 +335,9 @@
 <div id="stage" hidden>
   <canvas id="board"></canvas>
 
+  <!-- A message in the middle, faint, which takes no clicks (tip.js). -->
+  <div class="tip" id="tip" role="status" aria-live="polite" hidden><p class="tip-title"></p><p class="tip-text"></p></div>
+
   <div class="hud" id="status">
     <!-- Folds the panel to this header, and unfolds it; this browser keeps the choice. -->
     <button class="masthead" id="status-toggle" aria-expanded="true" aria-controls="status-body" title="Hide the game's details">

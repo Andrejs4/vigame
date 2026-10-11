@@ -233,7 +233,11 @@ drawing during play). Read it before art or graphics work.
   rules, so a story game rebuilt from its log alone wouldn't end the same:
   the author gave replays up for story mode. A new act: an entry in
   `ACTS`, its words in `ACT_WORDS` (story.js) and words.js, and its
-  outcomes in `RESULT_WORDS`.
+  outcomes in `RESULT_WORDS`. A message in the middle of the screen is
+  `tip.js`: it takes no clicks (`pointer-events: none`), and goes at the
+  player's first click or key without stopping it. Its caller may hold
+  the clock meanwhile (`net.hold`), which the room allows only a story
+  act's player; a page that held it and went releases it on rejoining.
 - Commands are flat objects of short strings, numbers and short lists of
   short strings (such as a crew's unit ids); the room rejects
   anything else before the core sees it (`flatCommand`).

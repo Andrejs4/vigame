@@ -369,6 +369,27 @@ dl { margin: 0; }
 .zoom-row #mute-button { flex: 1.6; font-size: 13px; white-space: nowrap; }
 #controls .zoom-row #mute-button::before { margin-right: 5px; }
 
+/* A message in the middle of the screen (tip.js): faint, and through to
+   the board, which gets every click; it fades in and out. */
+.tip {
+  position: fixed; left: 50%; top: 33%; z-index: 5; /* above the middle, where Home puts your castle */
+  transform: translate(-50%, -50%);
+  width: max-content; max-width: min(440px, calc(100vw - 48px));
+  padding: 14px 22px; border-radius: 12px;
+  background: rgba(16, 21, 18, 0.42);
+  border: 1px solid rgba(233, 237, 231, 0.10);
+  -webkit-backdrop-filter: blur(1.5px); backdrop-filter: blur(1.5px);
+  text-align: center; color: var(--ink);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+  pointer-events: none; user-select: none;
+  opacity: 0; transition: opacity 400ms ease;
+}
+.tip.shown { opacity: 0.92; }
+.tip p { margin: 0; }
+.tip-title { font: 600 18px var(--sans); color: var(--amber); margin-bottom: 4px !important; }
+.tip-text { font: 15px/1.45 var(--sans); }
+@media (prefers-reduced-motion: reduce) { .tip { transition: none; } }
+
 /* A story act's name, goal and time left, under the game's details. */
 .story-goal {
   margin: 8px 0 0; padding-top: 7px; max-width: 240px;

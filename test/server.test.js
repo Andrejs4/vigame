@@ -871,6 +871,14 @@ test('story mode: one story a player, started or gone back to from the lobby; gi
   await until(() => seatOf(b, c) === -1);
   assert.equal(seatOf(b, b), 0);
   assert.equal(await refusal(c.request('claimSeat')), 'no free seat');
+  // Its player may hold the clock, as while reading a message; a watcher may not let it go.
+  b.send('hold', { on: true });
+  await until(() => b.state.running === false);
+  c.send('hold', { on: false });
+  await sleep(100);
+  assert.equal(b.state.running, false, 'a watcher has no say');
+  b.send('hold', { on: false });
+  await until(() => b.state.running === true);
   await b.request('releaseSeat');
   await sleep(100);
   assert.equal(seatOf(c, b), 0, 'its player keeps the seat');

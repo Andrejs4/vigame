@@ -159,8 +159,12 @@ Run `npm start` and open http://127.0.0.1:2567.
   starts it (**Start story: Starving village**) or goes back to the act
   under way (**Continue story**); each player has one story. An act's
   game pauses while its player is away, like any game, and appears in no
-  list; nobody else can take its seat, and it keeps no high scores. Its
-  name, goal and time left are under the game's details; buildings it
+  list; nobody else can take its seat, and it keeps no high scores. As an
+  act begins, its name and goal show in the middle of the screen, faint,
+  and its clock waits until your first click or key, which still does what
+  it would (the message takes no clicks, so they reach the board); then it
+  fades. Its
+  name, goal and time left stay under the game's details; buildings it
   doesn't allow are greyed out. **End** abandons it. Lost (or abandoned),
   the story starts again from the first act; won, it goes on to the next;
   once the last is won, the button says **Story complete**, between
@@ -525,6 +529,7 @@ have one, install it with `npx playwright install chromium`.
 | `src/client/play.js` | The game view: input, HUD, controls. |
 | `src/client/net.js` | The connection to a game on the server. |
 | `src/client/story/story.js` | Story mode on the page: each act's words, its goal line, and how it came out. |
+| `src/client/tip.js` | A message in the middle of the screen, faint and taking no clicks, that fades after its time or at the player's first click or key. |
 | `src/client/camera.js`, `render.js` | Pan and zoom, and the canvas renderer: terrain, buildings, marching units between cells, picks, hover. |
 | `src/client/minimap.js` | The minimap: a few pixels a cell, repainted at most twice a second and only when a pixel changes. |
 | `src/client/effects.js` | Hits, falls and deaths, worked out from each update and the one before, for the renderer to play. |

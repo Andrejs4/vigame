@@ -30,6 +30,8 @@
  *                   missing; resolves to { ok } or { ok: false, reason }
  *   endGame()       end the game for everyone (its creator at any time, any
  *                   seated player after an hour); { ok } or { ok: false, reason }
+ *   hold(on)        in a story act, its player stops the clock (true) or lets
+ *                   it go on (false), as while reading a message
  *   viewers()       number of people currently viewing
  *   connected()     boolean
  *   leave()
@@ -310,6 +312,8 @@ export async function createServerNet({ client, gameId, token, now = () => perfo
       () => ({ ok: true }),
       (/** @type {any} */ e) => ({ ok: false, reason: String(e?.reason ?? e?.message ?? e) }),
     ),
+    /** @param {boolean} on */
+    hold: (on) => room.send('hold', { on }),
     viewers: () => viewerCount,
     connected: () => isConnected,
     /** Leave the game, for tests and page teardown. */

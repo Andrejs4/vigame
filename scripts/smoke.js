@@ -385,6 +385,20 @@ async function story(browser, url) {
   await waitText(page, '#lobby-story', 'Start story: Starving village');
   await page.click('#lobby-story');
   await inGame(page);
+  // As it begins, its name and goal in the middle, faint, and the clock
+  // held until the first click, which still reaches the board.
+  await page.waitForSelector('#tip.shown');
+  assert.equal(await text(page, '#tip .tip-title'), 'Starving village');
+  assert.equal(await text(page, '#tip .tip-text'), 'Save the village from starvation. Click anywhere, or press a key, to begin.');
+  assert.equal(await page.locator('#tip').evaluate((el) => getComputedStyle(el).pointerEvents), 'none');
+  await waitText(page, '#time', '0:00 · paused');
+  await page.waitForTimeout(500); // faded in
+  await page.screenshot({ path: join(OUT, 'story-tip.png') });
+  const box = /** @type {{ x: number, y: number, width: number, height: number }} */ (await page.locator('#tip').boundingBox());
+  assert.equal(await page.evaluate(({ x, y }) => document.elementFromPoint(x, y)?.id, { x: box.x + box.width / 2, y: box.y + box.height / 2 }),
+    'board', 'a click on the message lands on the board');
+  await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+  await page.waitForSelector('#tip', { state: 'hidden' });
   await waitMatch(page, '#story-goal', /^Starving village · Save the village from starvation\. · (10:00|9:\d\d) left$/);
   assert.match(await page.getAttribute('#story-goal', 'title') ?? '', /^Won as soon as hunger is gone/);
   await waitMatch(page, '#time', /^0:0[1-9]$/);

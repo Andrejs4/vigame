@@ -247,6 +247,8 @@ export class GameRoom extends Room {
      * @type {Map<number, import('../src/core/npc.js').NpcMemory>}
      */
     this.npcMemory = new Map();
+    /** A story act's player has stopped the clock (`hold`), as while reading a message. */
+    this.held = false;
 
     const state = new GameState();
     state.creator = this.creator ?? '';
@@ -262,6 +264,10 @@ export class GameRoom extends Room {
       return seat === null ? ctx?.reject('no free seat') : seat;
     });
     this.onMessage('releaseSeat', (client) => { this.releaseSeat(client.auth.pid); });
+    // A story act's player holds the clock, as while reading a message.
+    this.onMessage('hold', (client, message) => {
+      if (this.game.story && client.auth.pid === this.creator) this.held = fields(message).on === true;
+    });
     this.onMessage('startNow', (client, _message, ctx) => {
       const why = this.startNow(client.auth.pid);
       return why === null ? true : ctx?.reject(why);
@@ -316,6 +322,7 @@ export class GameRoom extends Room {
    */
   clockRuns() {
     if (this.game.over !== undefined) return false; // the game is over
+    if (this.held) return false; // a story act's player is reading
     const here = this.here();
     const present = (/** @type {string | null} */ pid) => pid !== null && here.has(pid);
     if (this.soloClock) return this.seats.some(present);
@@ -651,6 +658,8 @@ export class GameRoom extends Room {
    */
   onJoin(client) {
     const { pid, name } = client.auth;
+    // A page that held the clock and went is gone; a new one asks again.
+    if (pid === this.creator) this.held = false;
     const seat = this.takeSeat(pid);
     this.state.viewers.set(client.sessionId, new ViewerState({ pid, name, seat: seat ?? -1 }));
     this.welcomeBack();
