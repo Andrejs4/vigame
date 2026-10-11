@@ -49,6 +49,12 @@ attributes (Firefox draws an SVG on a canvas only with them), one colour
 (the page recolours it), and no scripts or outside references. Update the
 table.
 
+## Drawn for Vigame
+
+| File | What it shows |
+| --- | --- |
+| `level.svg` | the diamond before a unit's level from 20 on: two flat pieces, drawn for Vigame, under the code's licence (GPL-2.0-or-later) |
+
 ## Pictures generated with AI
 
 | File | What it shows |

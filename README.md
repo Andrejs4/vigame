@@ -193,6 +193,9 @@ Run `npm start` and open http://127.0.0.1:2567.
   stands about three times as high, 58 when an ordinary unit is 20, and
   reaches 100 about when an ordinary one would be 34. The crew chooser
   shows a hero's face and its age in gold (the rest have a silhouette).
+  From level 20 a unit's level, there and in the Heroes list, has a small
+  diamond before it: gray from 20, bronze from 40, silver from 60, gold
+  from 80, and diamond blue at 100.
   Select your castle and press **Heroes…**
   (in Crew's place, as the castle has no crew) for yours alive now, highest
   level first, each with its face, where it is (after a small picture of

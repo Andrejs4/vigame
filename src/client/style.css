@@ -441,6 +441,18 @@ button.inline:hover:not(:disabled) { background: none; color: var(--amber); }
   mask: var(--icon) center / contain no-repeat;
 }
 .crew-list .stats .hero { color: var(--amber); font-weight: 600; }
+/* A unit's level from 20 has a diamond before it, its tier's colour. */
+.tier {
+  display: inline-block; width: 0.8em; height: 0.8em; margin-right: 1px; vertical-align: -0.05em;
+  background: var(--tier, transparent);
+  -webkit-mask: url(art/level.svg) center / contain no-repeat;
+  mask: url(art/level.svg) center / contain no-repeat;
+}
+.tier-0 { --tier: #8d969c; }
+.tier-1 { --tier: #c9824a; }
+.tier-2 { --tier: #dfe5ea; }
+.tier-3 { --tier: #f3c74c; }
+.tier-4 { --tier: #7fd8ff; }
 .crew-list label:has(input:disabled) { opacity: 0.5; cursor: not-allowed; }
 /* The heroes list: the crew chooser's rows, to read rather than tick, with every skill. */
 .heroes-list li {

@@ -116,6 +116,17 @@ function tokenHexes(type, rolling) {
 /** Zoomed out past this, buildings don't show how many units are inside. */
 export const COUNT_ZOOM = 0.45;
 
+/** The levels from which a unit's level shows a diamond, each tier its colour: gray, bronze, silver, gold, diamond blue. */
+export const LEVEL_TIERS = [20, 40, 60, 80, 100];
+
+/**
+ * A level's tier, 0 to 4 (LEVEL_TIERS), or -1 below the first.
+ * @param {number} level
+ */
+export function levelTier(level) {
+  return LEVEL_TIERS.findLastIndex((from) => level >= from);
+}
+
 /**
  * The count on a building's corner: how many are inside. A castle full, which
  * stops it breeding, shows its room too: 40/40, or 65/60.
