@@ -203,12 +203,13 @@ Run `npm start` and open http://127.0.0.1:2567.
     its home, gives up one more than 8 away, and goes back home. Instead
     of waves, the smaller camps set off for the castle (farms first) one at
     a time, the nearest first, at 2:30, 4:30, 6:30 and 8:30, unless cleared
-    before. Won as soon as every monster is dead. At
+    before (the act's tooltip doesn't say). Won as soon as every monster is dead. At
     10:00, a last wave of six ghouls and two ogres comes, and every
     monster left goes for the castle (the status says **the last wave**):
     won if they all die; lost if the castle falls or every unit dies. Tips
-    at 0:08 ("Clear all monsters on the map"), 2:00 (bands), 3:30 (higher
-    levels are sturdier) and 9:00 (good luck). Tried: keeping everyone
+    at 0:08 ("Clear all monsters on the map before they come for you"),
+    2:00 (bands, attacking from a distance), 3:30 (higher levels are
+    sturdier) and 9:00 ("Soon all monsters will come for you"). Tried: keeping everyone
     home, the castle kills the smaller camps unharmed but falls a minute
     and a half into the last wave; bands of 12 to 20 fall short; bands of
     30 clear the map in that wave's wake (13:24); with the first two acts'
