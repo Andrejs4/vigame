@@ -849,6 +849,58 @@ test('a game of NPCs alone runs while someone watches; its creator may end it fr
   await leaveAll(a, c);
 });
 
+test('story mode: one story a player, started or gone back to from the lobby; given up, it starts again', async () => {
+  const status = async (/** @type {string} */ token) => (await post('/api/story/status', { token })).json();
+  assert.equal((await post('/api/story/status', { token: 'x'.repeat(32) })).status, 401);
+  assert.deepEqual(await status(TOKENS.b), { act: 'dying-village', first: true, playing: false, complete: false });
+  const started = await post('/api/story', { token: TOKENS.b });
+  assert.equal(started.status, 201);
+  const { id } = await started.json();
+  assert.deepEqual(await status(TOKENS.b), { act: 'dying-village', first: true, playing: true, complete: false });
+  assert.equal((await (await post('/api/story', { token: TOKENS.b })).json()).id, id, 'one story: the same game again');
+  const game = await (await fetch(`${base}/api/games/${id}`)).json();
+  assert.equal(game.state.story.act, 'dying-village');
+  assert.deepEqual(game.seats, [playerId(TOKENS.b)]);
+  assert.ok(!(await (await fetch(`${base}/api/games`)).json()).some((/** @type {any} */ g) => g.id === id), 'no lobby list shows it');
+
+  // Its player plays it; anyone else only watches, and can't take the seat.
+  const b = await join(id, TOKENS.b);
+  const c = await join(id, TOKENS.c);
+  await until(() => b.state.running === true);
+  const seatOf = (/** @type {any} */ room, /** @type {any} */ who) => room.state.toJSON().viewers[who.sessionId]?.seat;
+  await until(() => seatOf(b, c) === -1);
+  assert.equal(seatOf(b, b), 0);
+  assert.equal(await refusal(c.request('claimSeat')), 'no free seat');
+  await b.request('releaseSeat');
+  await sleep(100);
+  assert.equal(seatOf(c, b), 0, 'its player keeps the seat');
+  // Given up from the End button, it is lost: the story starts again.
+  assert.equal(await b.request('endGame'), true);
+  await until(() => seen(b).over !== undefined);
+  assert.equal(seen(b).winner, undefined);
+  assert.deepEqual(await status(TOKENS.b), { act: 'dying-village', first: true, playing: false, complete: false });
+  const again = await (await post('/api/story', { token: TOKENS.b })).json();
+  assert.notEqual(again.id, id, 'a new game of the first act');
+  await leaveAll(b, c);
+});
+
+test('story mode: the director ends an act once won, and the story moves on; past the last act it is complete', async () => {
+  const pid = playerId(TOKENS.c);
+  const id = /** @type {string} */ ((await (await post('/api/story', { token: TOKENS.c })).json()).id);
+  // A moment in, with hunger gone.
+  const saved = /** @type {any} */ (server.storage.loadGame(id));
+  const state = { ...saved.state, tick: 1, players: saved.state.players.map((/** @type {any} */ p, /** @type {number} */ i) => (i === 0 ? { ...p, hunger: 0 } : p)) };
+  server.storage.saveSnapshot(id, { state, seq: saved.seq });
+  const c = await join(id, TOKENS.c);
+  await until(() => seen(c).over !== undefined);
+  assert.deepEqual([seen(c).winner, seen(c).story.result], [0, 'fed']);
+  await until(() => server.storage.storyOf(pid).complete);
+  assert.deepEqual(server.storage.storyOf(pid), { act: 0, gameId: null, complete: true }, 'one act so far: the story is complete');
+  assert.equal((await post('/api/story', { token: TOKENS.c })).status, 409);
+  assert.equal((await server.storage.scoresOf(id)).length, 0, 'a story act keeps no scores');
+  await leaveAll(c);
+});
+
 test('selections are shared, but only for hexes on the board', async () => {
   const id = await startGame();
   const a = await join(id, TOKENS.a);

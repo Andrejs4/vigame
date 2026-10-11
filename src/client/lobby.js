@@ -13,6 +13,7 @@ import { hasLord, teamOfSeat } from '../core/game.js';
 import { MODES, SEAT_SIDES, SIDES, TICKS_PER_SECOND } from '../core/rules.js';
 import { getJson, post, reason } from './api.js';
 import { autoLanguage, browserLanguages, chosenLanguage } from './language.js';
+import { actName } from './story/story.js';
 import { WORDS, isWord, say, shortPoints, translate } from './words.js';
 
 /** @typedef {import('./language.js').PageLanguage} PageLanguage */
@@ -326,6 +327,46 @@ export function showLobby(token, me, { notice } = {}) {
     } catch (e) {
       tell({ word: 'notStarted', values: { why: /** @type {Error} */ (e).message } });
       newButton.disabled = false;
+    }
+  };
+  showStoryButton(token, language, tell);
+}
+
+/**
+ * The story's button: start it, or go back to it, at the act the player is
+ * on; once its last act is won, a still one saying it is complete, between
+ * laurels.
+ * @param {string} token
+ * @param {PageLanguage} language
+ * @param {(said?: import('./words.js').Said) => void} tell
+ */
+async function showStoryButton(token, language, tell) {
+  const button = /** @type {HTMLButtonElement} */ (document.getElementById('lobby-story'));
+  const word = (/** @type {Word} */ w, /** @type {Record<string, string | number>} */ values = {}) => say(language, { word: w, values });
+  try {
+    const res = await post('api/story/status', { token });
+    if (!res.ok) return;
+    const { act, first, playing, complete } = await res.json();
+    button.classList.toggle('complete', complete);
+    button.disabled = complete;
+    if (complete) {
+      const laurel = () => Object.assign(document.createElement('span'), { className: 'laurel' });
+      button.replaceChildren(laurel(), word('storyComplete'), laurel());
+    } else {
+      button.textContent = word(playing || !first ? 'storyContinue' : 'storyStart', { act: actName(act, word) });
+    }
+    button.hidden = false;
+  } catch { /* no story button this time */ }
+  button.onclick = async () => {
+    button.disabled = true;
+    try {
+      const res = await post('api/story', { token });
+      if (!res.ok) throw new Error(await reason(res));
+      const { id } = await res.json();
+      location.search = gameHref(id);
+    } catch (e) {
+      tell({ word: 'notStarted', values: { why: /** @type {Error} */ (e).message } });
+      button.disabled = false;
     }
   };
 }

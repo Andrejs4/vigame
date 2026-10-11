@@ -119,6 +119,8 @@
     <label class="check"><input type="checkbox" id="lobby-npcs"> <span data-word="npcsChoice">NPCs play free seats</span></label>
     </div>
     <button id="lobby-new" class="primary" data-word="newGame">New game</button>
+    <!-- Story mode: start it, or go back to it; once its last act is won, complete (story/story.js). -->
+    <button id="lobby-story" class="story-button" type="button" hidden></button>
     <div id="lobby-limit" hidden>
       <p class="error" id="lobby-limit-text" role="alert"></p>
       <ul class="games" id="lobby-limit-games"></ul>
@@ -347,6 +349,8 @@
       <div class="row"><dt data-word="statusTile">Tile</dt><dd id="tile">&mdash;</dd></div>
       <div class="row"><dt data-word="statusObservers">Observers</dt><dd id="observers">0</dd></div>
     </dl>
+    <!-- A story act's name, goal and time left (story/story.js). -->
+    <p class="story-goal" id="story-goal" hidden></p>
     <p class="notice" id="message" role="status" hidden></p>
   </div>
 

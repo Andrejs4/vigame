@@ -18,6 +18,7 @@ import { Camera } from './camera.js';
 import { Effects, fallenHeroes, fallenHeroesNote } from './effects.js';
 import { Minimap } from './minimap.js';
 import { BoardRenderer, COUNT_ZOOM, levelTier, pickAt } from './render.js';
+import { storyLine, storyOutcome } from './story/story.js';
 import { autoLanguage, browserLanguages, chosenLanguage, keyCandidates } from './language.js';
 import { Sounds, soundsFor } from './sounds.js';
 import { Ground } from './ground.js';
@@ -203,6 +204,7 @@ export async function startGame(net, me) {
   };
   const seatButton = /** @type {HTMLButtonElement} */ (document.getElementById('seat-button'));
   // For the game's creator, while it waits for players: go on without them.
+  const storyGoal = /** @type {HTMLElement} */ (document.getElementById('story-goal'));
   const startButton = /** @type {HTMLButtonElement} */ (document.getElementById('start-button'));
   startButton.title = word('startNowTitle');
   // For a player in the game: end it for everyone (its creator at any time).
@@ -448,12 +450,15 @@ export async function startGame(net, me) {
     const { players, winner } = view;
     const seat = net.seat();
     const winners = players.filter((p) => p.team === winner && !sideOf(view, p.id).wild);
-    /** @type {HTMLElement} */ (document.getElementById('scores-title')).textContent = word(winner === undefined || seat === null
-      ? 'scoresGameOver' : players[seat]?.team === winner ? 'scoresYouWon' : 'scoresYouLost');
+    // A story act is won or lost by its player, and says what comes next.
+    const story = view.story;
+    /** @type {HTMLElement} */ (document.getElementById('scores-title')).textContent = word(story
+      ? (winner === undefined ? 'scoresYouLost' : 'scoresYouWon')
+      : winner === undefined || seat === null ? 'scoresGameOver' : players[seat]?.team === winner ? 'scoresYouWon' : 'scoresYouLost');
     const times = quickWin(view.over);
     const number = new Intl.NumberFormat(language);
     const time = formatTime(view.over);
-    /** @type {HTMLElement} */ (document.getElementById('scores-outcome')).textContent = [
+    /** @type {HTMLElement} */ (document.getElementById('scores-outcome')).textContent = story ? `${time} · ${storyOutcome(view, word)}` : [
       winner === undefined ? word('scoresNobody', { time }) : word('scoresWon', { time, sides: winners.map((p) => sideName(view, p.id)).join(', ') }),
       winner !== undefined && times > 1 ? word('quickWinNote', { times: number.format(times) }) : '',
     ].filter(Boolean).join(' · ');
@@ -614,6 +619,20 @@ export async function startGame(net, me) {
   /** Whether the next meal falls short (`fullMeal`), checked once a game second. */
   let meal = { second: -1, seat: /** @type {number | null} */ (null), short: false };
 
+  /** A story act's line under the game's details: the act, its goal, and the time left. */
+  function showStory() {
+    const line = view ? storyLine(view, word, formatTime) : null;
+    storyGoal.hidden = !line;
+    if (!line) return;
+    const shown = [line.name, line.goal, line.left].join('|');
+    if (storyGoal.dataset.shown === shown) return;
+    storyGoal.dataset.shown = shown;
+    const name = document.createElement('strong');
+    name.textContent = line.name;
+    storyGoal.replaceChildren(name, ` · ${line.goal}`, ...(line.left ? [' · ', line.left] : []));
+    storyGoal.title = word('storyLoseTitle');
+  }
+
   function updateHud() {
     const seat = net.seat();
     const paused = !net.running();
@@ -626,7 +645,8 @@ export async function startGame(net, me) {
       const over = view?.over !== undefined;
       const winners = view?.winner;
       const names = players.filter((p) => p.team === winners).map((p) => sideName({ players }, p.id)).join(', ');
-      const outcome = !over ? '' : winners === undefined ? word('nobodyWon') : seat === null
+      const outcome = !over ? '' : view?.story ? word(winners === undefined ? 'overYouLost' : 'overYouWon')
+        : winners === undefined ? word('nobodyWon') : seat === null
         ? word('overSideWon', { side: names })
         : word(players[seat]?.team === winners ? 'overYouWon' : 'overYouLost');
       hud.time.textContent = [formatTime(view?.tick ?? 0), paused && !over ? word('paused') : '', outcome].filter(Boolean).join(' · ');
@@ -712,7 +732,8 @@ export async function startGame(net, me) {
 
     // Once it is over, a seat keeps its holder's name in the table of points.
     const over = view?.over !== undefined;
-    seatButton.hidden = over || (seat === null && !net.canClaimSeat());
+    // A story act's player keeps their seat.
+    seatButton.hidden = over || Boolean(view?.story) || (seat === null && !net.canClaimSeat());
     scoresButton.hidden = !over;
     // Once your castle has fallen, a free one to play on, while there is one.
     const moving = seat !== null && net.canClaimSeat();
@@ -721,10 +742,16 @@ export async function startGame(net, me) {
     seatButton.title = moving ? word('newBaseTitle') : '';
 
     const can = canCommand();
+    // A story act allows only some buildings.
+    const builds = view?.story?.builds;
     for (const button of buildButtons) {
-      button.disabled = !can;
+      const allowed = !builds || builds.includes(button.dataset.kind ?? '');
+      button.disabled = !can || !allowed;
       button.setAttribute('aria-pressed', String(placing === button.dataset.kind));
+      const title = allowed ? button.dataset.help ?? '' : word('storyNotYet');
+      if (button.title !== title) button.title = title;
     }
+    showStory();
     const b = selected ? view?.buildings[selected] : null;
     const mine = Boolean(can && b && isMine(selected));
     const upgradable = Boolean(mine && b && !isRising(b) && b.upgrading === undefined && b.grade < BUILDING_TYPES[b.type].grades);
@@ -1395,7 +1422,7 @@ export async function startGame(net, me) {
     keyLabel(button, label, cost ? String(cost) : metal ? `${metal}◆` : hunger ? `${hunger}%` : '');
     // What it is for, in a line of play help, then its price.
     const help = /** @type {import('./words.js').Word} */ (`help${kind[0].toUpperCase()}${kind.slice(1)}`);
-    button.title = word('buildTitle', {
+    button.title = button.dataset.help = word('buildTitle', {
       name: label,
       key: keysOf(button)[0] ?? '',
       help: word(help, { n: capacity, reach: RANGED_RANGE + reach }),
@@ -1531,7 +1558,8 @@ export async function startGame(net, me) {
     const team = seat === null ? endWinner(view, 0, true) : endWinner(view, seat);
     const winners = players.filter((p) => p.team === team);
     const watching = seat === null && net.isCreator() && view.npcs && !abandoned();
-    const ask = watching ? word(team === undefined ? 'askEndNpcs' : 'askEndNpcsLord')
+    const ask = view.story ? word('askEndStory')
+      : watching ? word(team === undefined ? 'askEndNpcs' : 'askEndNpcsLord')
       : seat === null ? word(team === undefined ? 'askEndIdle' : 'askEndIdleLord')
       : team === undefined ? word('askEndNobody')
       : winners.some((p) => sideOf(view, p.id)?.npc) ? word('askEndLord')

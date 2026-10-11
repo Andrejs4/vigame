@@ -27,8 +27,10 @@ import { ErrorCode, Room, ServerError, logger } from '@colyseus/core';
 import { BOARD_OPTIONS, createBoard, tileAt } from '../src/core/board.js';
 import { ROOM_COMMANDS, advance, applyCommand, checkState, fallenMayMove, newGame, publicView } from '../src/core/game.js';
 import { npcMemory, npcMove, npcRefused } from '../src/core/npc.js';
+import { direct } from '../src/story/director.js';
 import { BREEDING, BUILDING_TYPES, DEFAULT_BREEDING, DEFAULT_MODE, END_ANYONE_TICKS, END_IDLE_MS, MODES, NPC, TICKS_PER_SECOND } from '../src/core/rules.js';
 import { GameState, ViewerState, syncGame, syncSeats } from './schema.js';
+import { storyEnded } from './story/progress.js';
 
 /** What a player token must look like: long, random, URL-safe. */
 const TOKEN = /^[\w-]{16,128}$/;
@@ -376,11 +378,20 @@ export class GameRoom extends Room {
   /**
    * The game is over: save it at once, so the lobby lists it finished, and
    * keep each player's score in the high scores (once; a failed write is
-   * logged, and the game is over all the same).
+   * logged, and the game is over all the same). A story act's game keeps no
+   * scores: its player moves on in the story, or starts it again.
    */
   finish() {
     this.snapshot();
     if (this.deleted) return;
+    if (this.game.story) {
+      try {
+        if (this.creator !== null) storyEnded(this.storage, this.creator, this.gameId, this.game);
+      } catch (e) {
+        logger.error(`game ${this.gameId}: moving its story on failed`, e);
+      }
+      return;
+    }
     try {
       // A side's score goes to its holder, else to whoever last held it.
       this.storage.recordScores({ ...this.game, id: this.gameId, seats: this.storage.namedSeats(this.gameId) });
@@ -412,6 +423,8 @@ export class GameRoom extends Room {
     if (this.state.running !== running) this.state.running = running;
     if (!running) return;
     advance(this.board, this.game);
+    // A story act ends by its own rules (src/story/director.js).
+    if (this.game.story) direct(this.game);
     if (this.game.over === undefined) this.playNpcs();
     if (this.game.over !== undefined) this.finish();
     else if (this.game.tick - this.snapshotAt >= SNAPSHOT_TICKS) this.snapshot();
@@ -546,12 +559,13 @@ export class GameRoom extends Room {
   }
 
   /**
-   * Whether a player may not take another seat: in a game of player
-   * against player with NPCs, one whose castle fell (holding its seat or
-   * the last to leave it) may only watch.
+   * Whether a player may not take another seat: in a story act, anyone but
+   * its player; in a game of player against player with NPCs, one whose
+   * castle fell (holding its seat or the last to leave it) may only watch.
    * @param {string} pid
    */
   barred(pid) {
+    if (this.game.story) return pid !== this.creator;
     if (fallenMayMove(this.game)) return false;
     return this.storage.namedSeats(this.gameId).some((holder, seat) => holder === pid && !this.standing(seat));
   }
@@ -593,9 +607,12 @@ export class GameRoom extends Room {
     this.disconnect().catch((/** @type {unknown} */ e) => logger.error(`game ${this.gameId}: closing failed`, e));
   }
 
-  /** @param {string} pid */
+  /**
+   * A player gives up their seat; in a story act, its player keeps theirs.
+   * @param {string} pid
+   */
   releaseSeat(pid) {
-    if (this.seatOf(pid) === null) return;
+    if (this.seatOf(pid) === null || this.game.story) return;
     this.saveSeats(this.seats.map((holder) => (holder === pid ? null : holder)));
   }
 

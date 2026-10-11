@@ -117,6 +117,19 @@ button[aria-pressed="true"] { background: rgba(255, 216, 77, 0.18); border-color
   .card .new-game #lobby-mode { grid-column: 1 / -1; margin-top: -4px; }
   .card .new-game #lobby-players { width: 100%; }
 }
+/* The story's button, under New game; complete, still and golden between laurels. */
+.card > .story-button { width: 100%; margin-top: 8px; text-align: center; }
+.card > .story-button.complete:disabled {
+  opacity: 1; cursor: default; color: var(--amber); font-weight: 600;
+  border-color: rgba(255, 216, 77, 0.45); background: rgba(255, 216, 77, 0.08);
+}
+.story-button .laurel {
+  display: inline-block; width: 18px; height: 18px; margin: 0 10px; vertical-align: -4px;
+  background: var(--amber);
+  -webkit-mask: url(art/heroes.svg) center / contain no-repeat;
+  mask: url(art/heroes.svg) center / contain no-repeat;
+}
+
 /* A checkbox before its words, on one line. */
 .card label.check { display: flex; align-items: center; gap: 8px; color: var(--ink); font-size: 14px; cursor: pointer; }
 .card label.check input { display: inline-block; width: auto; margin: 0; accent-color: var(--amber); }
@@ -350,6 +363,15 @@ dl { margin: 0; }
 .zoom-row button { flex: 1; text-align: center; font-size: 15px; padding: 5px 0; }
 .zoom-row #mute-button { flex: 1.6; font-size: 13px; white-space: nowrap; }
 #controls .zoom-row #mute-button::before { margin-right: 5px; }
+
+/* A story act's name, goal and time left, under the game's details. */
+.story-goal {
+  margin: 8px 0 0; padding-top: 7px; max-width: 240px;
+  border-top: 1px solid var(--panel-edge);
+  font-size: 12px; line-height: 1.4; color: var(--ink);
+}
+.story-goal strong { color: var(--amber); font-weight: 600; }
+#status.folded .story-goal { margin-top: 7px; }
 
 .notice {
   margin: 8px 0 0; padding-top: 7px; max-width: 240px;

@@ -1,0 +1,63 @@
+/**
+ * Story mode on the page: each act's words, its line under the game's
+ * details (the act, its goal, the time left), and how it came out. All of
+ * it from the game's `story` (`Story` in game.js), so the page needs none
+ * of src/story/.
+ */
+
+/** @typedef {import('../words.js').Word} Word */
+/** @typedef {(word: Word, values?: Record<string, string | number>) => string} Say */
+
+/** Each act's words, by its id (ACTS in src/story/acts.js). */
+export const ACT_WORDS = /** @type {Record<string, { name: Word, goal: Word }>} */ ({
+  'dying-village': { name: 'actDyingVillage', goal: 'goalDyingVillage' },
+});
+
+/** How an act came out, by its `result`; one given up has none. */
+const RESULT_WORDS = /** @type {Record<string, Word>} */ ({
+  fed: 'storyFed', time: 'storyTime', empty: 'storyEmpty', fallen: 'storyFallen',
+});
+
+/**
+ * An act's name in the player's language.
+ * @param {string} act
+ * @param {Say} word
+ */
+export function actName(act, word) {
+  const words = ACT_WORDS[act];
+  return words ? word(words.name) : act;
+}
+
+/**
+ * What the status panel says of an act: its name, its goal, and while it
+ * goes on, the time left.
+ * @param {{ tick: number, over?: number, story?: import('../../core/game.js').Story }} view
+ * @param {Say} word
+ * @param {(tick: number) => string} time
+ * @returns {{ name: string, goal: string, left: string } | null}
+ */
+export function storyLine(view, word, time) {
+  const story = view.story;
+  if (!story) return null;
+  const words = ACT_WORDS[story.act];
+  return {
+    name: actName(story.act, word),
+    goal: words ? word(words.goal) : '',
+    left: view.over === undefined ? word('storyLeft', { time: time(Math.max(0, story.until - view.tick)) }) : '',
+  };
+}
+
+/**
+ * How an act came out, and what comes next: the next act, the story
+ * complete, or the story again from the first act.
+ * @param {{ winner?: number, story?: import('../../core/game.js').Story }} view
+ * @param {Say} word
+ */
+export function storyOutcome(view, word) {
+  const story = view.story;
+  if (!story) return '';
+  const won = view.winner !== undefined;
+  const result = story.result !== undefined && RESULT_WORDS[story.result] ? word(RESULT_WORDS[story.result]) : word('storyAbandoned');
+  const next = !won ? word('storyRestart') : story.final ? word('storyDone') : word('storyNext');
+  return `${result} ${next}`;
+}

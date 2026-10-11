@@ -153,6 +153,24 @@ Run `npm start` and open http://127.0.0.1:2567.
   play every side; its clock runs while anyone watches, and its creator
   may end it from the stands. Such a game counts among your three waiting
   for a player.
+- **Story mode**, also a tutorial: a campaign of acts, played alone, on
+  maps the same for every player. The lobby's button, under New game,
+  starts it (**Start story: Dying village**) or goes back to the act
+  under way (**Continue story**); each player has one story. An act's
+  game pauses while its player is away, like any game, and appears in no
+  list; nobody else can take its seat, and it keeps no high scores. Its
+  name, goal and time left are under the game's details; buildings it
+  doesn't allow are greyed out. **End** abandons it. Lost (or abandoned),
+  the story starts again from the first act; won, it goes on to the next;
+  once the last is won, the button says **Story complete**, between
+  laurels, and does nothing. So far there is one act:
+  - **Dying village**: your castle alone, with the usual 200 stone and 12
+    units and normal unit production, but starving: hunger at 100% and no
+    food. Only pits and farms may be built, and nobody comes but the
+    raiders. Won once hunger is down to 0%; lost if every unit dies, the
+    castle falls, or 15 minutes pass. Hunger moves a quarter of the way
+    to the shortfall at each meal, a minute apart, so from 100% it takes
+    14 full meals in a row to reach 0%: from the first meal on.
 - **The game clock** runs only while every player is here. (`npm run dev`
   runs it with one, for trying things alone.) While it waits, the player
   who started the game has **Start** beside the count of players (**Go on**
@@ -493,6 +511,7 @@ have one, install it with `npx playwright install chromium`.
 | `src/core/rules.js` | The numbers: tick rate, sides and modes, skills and experience, food and hunger, fighting, raiders, the Dark Lord's horde, building types. |
 | `src/core/names.js` | Medieval names for units, and which face goes with a name (`portraitOf`). |
 | `src/core/npc.js` | NPC players: the next command for a seat an NPC plays, worked out from the game as it is. |
+| `src/story/` | Story mode, pure like the core: its acts (`acts.js`: map, opening, what may be built, time, how won or lost) and the director that ends an act (`director.js`). |
 | `src/core/game.js` | The game core: the state as plain JSON, `applyCommand`, `advance` (one tick), `occupancy`, `checkState`, `publicView`. Deterministic. |
 | `src/core/player.js` | Player-name rules and the languages a player may choose, checked on the page and on the server. |
 | `src/client/` | The page, served as it is. |
@@ -503,6 +522,7 @@ have one, install it with `npx playwright install chromium`.
 | `src/client/language.js`, `words.js` | Which language Auto stands for, from the player's name and the browser; and the page's words in each language (so far the login and settings pages'). |
 | `src/client/play.js` | The game view: input, HUD, controls. |
 | `src/client/net.js` | The connection to a game on the server. |
+| `src/client/story/story.js` | Story mode on the page: each act's words, its goal line, and how it came out. |
 | `src/client/camera.js`, `render.js` | Pan and zoom, and the canvas renderer: terrain, buildings, marching units between cells, picks, hover. |
 | `src/client/minimap.js` | The minimap: a few pixels a cell, repainted at most twice a second and only when a pixel changes. |
 | `src/client/effects.js` | Hits, falls and deaths, worked out from each update and the one before, for the renderer to play. |
@@ -512,6 +532,7 @@ have one, install it with `npx playwright install chromium`.
 | `server/room.js` | `GameRoom`, one per game: runs the core's clock, logs and applies commands, snapshots. |
 | `server/schema.js` | The room state Colyseus syncs: a generic mirror of the core's view. |
 | `server/storage.js` | All database access (SQLite). |
+| `server/story/progress.js` | Story mode on the server: each player's place in the story, starting or going back to an act, moving on when one ends. |
 | `server/challenge.js` | The sign-in sums. |
 | `server/main.js` | Command-line entry point (`npm start`, `npm run dev`). |
 | `deploy/` | Running it on a Debian server: a systemd unit, an install script, an nginx block. |
@@ -669,8 +690,10 @@ HTTP API:
 | `GET /api/games/:id` | One game: its seed, latest snapshot and seats. |
 | `GET /api/games/:id/commands` | Its command log, with each command's tick. |
 | `GET /api/games/:id/seats` | Who holds each seat: `{ pid, name }`, or `null` for a free one. |
+| `POST /api/story/status` | `{ token }`: where a signed-in player is in the story, `{ act, first, playing, complete }` (the act's id, whether it is the first, whether its game is under way, whether the story is complete). |
+| `POST /api/story` | `{ token }`: starts the act the player is on, or goes back to its game under way: `201 { id }`; `409` once the story is complete. |
 
-The database has four tables: `games` (each game's seed, seats, each
+The database has five tables: `games` (each game's seed, seats, each
 seat's former holder (whoever last left it), who
 started it and when (neither shown to players), and a snapshot of its
 state, saved every ten seconds, when it ends and when its room closes),
@@ -679,8 +702,10 @@ state, saved every ten seconds, when it ends and when its room closes),
 the token) and `scores` (when a game ends, each seated player's total, as
 its table of points counts it, with their name then, the game's name and
 mode, and the details: their side, the quick-win bonus, when it ended and
-their whole tally, such as the units born). Games may be cleared when the
-rules or the format change; the scores stay.
+their whole tally, such as the units born), and `stories` (each player's
+place in the story: the act, its game while one is under way, and whether
+the story is complete). Games may be cleared when the
+rules or the format change; the scores and stories stay.
 A room reopening a game loads its snapshot and replays the commands logged
 after it; if the snapshot is unreadable, it replays the whole log from the
 opening position.

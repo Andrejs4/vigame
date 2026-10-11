@@ -218,6 +218,22 @@ drawing during play). Read it before art or graphics work.
   of player against player with NPCs a fallen player may not take another
   seat (`fallenMayMove`, `barred`). test/npc.test.js plays games of NPCs
   alone, which is also the way to try balance.
+- Story mode lives apart: `src/story/` (its acts and the director, pure
+  like the core), `server/story/` (each player's place in the story, the
+  `stories` table, its routes) and `src/client/story/` (its words and
+  goal line). The usual game knows it only through small hooks: a game's
+  optional `story` (`Story` in game.js: the act, what may be built, the
+  time it runs out, how it came out), which `build` checks and the page
+  reads; the room calls `direct` after each tick of a story game, gives
+  its seat to its player alone, keeps no scores for it and moves the story
+  on in `finish` (`storyEnded`); story games are left out of the lobby's
+  lists and the game limit. An act is built from `newGame` and changed as
+  plain data (`newStoryGame`); its map is the usual one from a fixed seed,
+  so every player gets the same. The director works outside the core's
+  rules, so a story game rebuilt from its log alone wouldn't end the same:
+  the author gave replays up for story mode. A new act: an entry in
+  `ACTS`, its words in `ACT_WORDS` (story.js) and words.js, and its
+  outcomes in `RESULT_WORDS`.
 - Commands are flat objects of short strings, numbers and short lists of
   short strings (such as a crew's unit ids); the room rejects
   anything else before the core sees it (`flatCommand`).
@@ -239,7 +255,8 @@ drawing during play). Read it before art or graphics work.
   add a `migrate()` step that deletes games and commands (as versions 23
   and 26 did), rather than code that carries old games along. The high scores
   live apart (`scores`, written once by `finish` in the room when a game
-  ends) and stay; players stay too.
+  ends) and stay; players and their stories (`stories`) stay too. A
+  story whose act's game is deleted simply starts that act again.
 
 ## The old claude.ai version
 

@@ -106,6 +106,9 @@ import {
  * @property {string} breeding How fast castles raise units: a key of BREEDING.
  * @property {true} [npcs] NPCs play the seats nobody holds (npc.js; the game
  *   server runs them, and logs their commands as a player's).
+ * @property {Story} [story] An act of story mode (src/story/): which, what
+ *   may be built in it, and how it came out. The core only refuses what the
+ *   act doesn't allow; the act's director (src/story/director.js) ends it.
  * @property {string} name What the lobby calls it: one of GAME_NAMES (in
  *   names.js) at first, then whatever its players rename it (cleanGameName).
  * @property {number} [over] The tick the game ended: once only one team (or
@@ -139,6 +142,15 @@ import {
  */
 
 /** @typedef {Record<keyof typeof POINTS, number>} Tally */
+
+/**
+ * @typedef {object} Story An act of story mode, as its game keeps it.
+ * @property {string} act Which act (ACTS in src/story/acts.js).
+ * @property {string[]} builds The kinds of building it allows.
+ * @property {number} until The tick its time runs out.
+ * @property {true} [final] The story's last act.
+ * @property {string} [result] How it came out, once it has (`direct`).
+ */
 
 /**
  * @typedef {{ type: 'build', kind: string, q: number, r: number, units?: string[] }
@@ -1177,6 +1189,7 @@ function aim(state, player, cmd) {
 function build(board, state, occ, player, cmd) {
   const kind = typeof cmd.kind === 'string' && Object.hasOwn(BUILDING_TYPES, cmd.kind) ? cmd.kind : null;
   if (!kind || !BUILDING_TYPES[kind].build) return refuse('cannot build that');
+  if (state.story && !state.story.builds.includes(kind)) return refuse('not in this act');
   const at = commandCell(cmd);
   if (!at) return refuse('bad cell');
   const type = BUILDING_TYPES[kind];
@@ -2168,6 +2181,13 @@ export function checkState(board, raw) {
   if (!Object.hasOwn(MODES, state.mode)) fail('bad mode');
   if (!Object.hasOwn(BREEDING, state.breeding)) fail('bad breeding');
   if (state.npcs !== undefined && state.npcs !== true) fail('bad npcs');
+  if (state.story !== undefined) {
+    const s = state.story;
+    const fits = s !== null && typeof s === 'object' && typeof s.act === 'string' && Number.isSafeInteger(s.until)
+      && Array.isArray(s.builds) && s.builds.every((k) => typeof k === 'string' && BUILDING_TYPES[k]?.build === true)
+      && (s.result === undefined || typeof s.result === 'string') && (s.final === undefined || s.final === true);
+    if (!fits) fail('bad story');
+  }
   if (state.over !== undefined && !isCount(state.over, Infinity)) fail('bad over');
   if (state.winner !== undefined && (state.over === undefined || !Number.isInteger(state.winner))) fail('bad winner');
   state.players.forEach((p, i) => {
@@ -2311,6 +2331,7 @@ export function publicView(state) {
     mode: state.mode,
     breeding: state.breeding,
     ...(state.npcs ? { npcs: state.npcs } : {}),
+    ...(state.story ? { story: state.story } : {}),
     name: state.name,
     ...(state.over !== undefined ? { over: state.over } : {}),
     ...(state.winner !== undefined ? { winner: state.winner } : {}),
