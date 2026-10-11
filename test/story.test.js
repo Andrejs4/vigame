@@ -7,7 +7,7 @@ import { advance, applyCommand, checkState, publicView } from '../src/core/game.
 import { COMBAT_PERIOD, MAX_HUNGER, START_STONE, START_UNITS, TICKS_PER_SECOND } from '../src/core/rules.js';
 import { openBoard, stateWith, unitsIn } from './helpers.js';
 import { ACT_WORDS, storyTip } from '../src/client/story/story.js';
-import { ACTS, CAMPS, WAVES, actOf, campCentres, newStoryGame, veteransOf } from '../src/story/acts.js';
+import { ACTS, CAMPS, LAIR, WAVES, actOf, campCentres, newStoryGame, veteransOf } from '../src/story/acts.js';
 import { direct } from '../src/story/director.js';
 
 /** @param {number} seed */
@@ -183,7 +183,7 @@ test('the third act, Clearing the woods: camps of guards across the map; cleared
   const { seed, state } = newStoryGame(2);
   const board = boardOf(seed);
   assert.deepEqual(checkState(board, state), []);
-  assert.deepEqual(state.story, { act: 'clearing-woods', builds: ['pit', 'farm', 'tower', 'band'], until: 10 * 60 * 10, final: true });
+  assert.deepEqual(state.story, { act: 'clearing-woods', builds: ['pit', 'farm', 'tower', 'band'], until: 10 * 60 * 10 });
   assert.deepEqual(newStoryGame(2), { seed, state }, 'the same for every player');
   const castle = /** @type {any} */ (Object.values(state.buildings).find((b) => b.type === 'castle'));
   const monsters = () => Object.values(state.buildings).filter((b) => b.owner === 1);
@@ -261,4 +261,43 @@ test('a guard goes for an enemy near its home, gives up one too far, and goes ba
   ticks(COMBAT_PERIOD);
   assert.equal(state.buildings.b2.target, undefined, 'the castle is 10 from its home, past GUARD_LEASH');
   assert.deepEqual(checkState(board, { ...state, buildings: { ...state.buildings, b1: { ...state.buildings.b1, home: [0, 0] } } }), ['building b1: bad home']);
+});
+
+test('the last act, Clearing the lair: the Easy Lord, camps round his lair, raiders round the castle; won once the lair falls', () => {
+  assert.equal(ACTS[3].id, 'clearing-lair');
+  assert.equal(ACTS.at(-1)?.id, 'clearing-lair', 'the last');
+  const { seed, state } = newStoryGame(3);
+  const board = boardOf(seed);
+  assert.deepEqual(checkState(board, state), []);
+  assert.deepEqual(state.story, { act: 'clearing-lair', builds: ['pit', 'farm', 'tower', 'band', 'wagon'], final: true }, 'no time limit');
+  assert.equal(state.mode, 'easy');
+  const of = (/** @type {string} */ type) => Object.values(state.buildings).filter((b) => b.type === type);
+  const [castle] = of('castle');
+  const [lair] = of('lair');
+  assert.ok(lair, 'the lair stands');
+  assert.equal(of('ghoul').length, LAIR.camps * LAIR.camp.length);
+  assert.ok(of('ghoul').every((b) => b.home && distance(b, lair) <= LAIR.ring + 1), 'guarding round the lair');
+  assert.ok(of('ghoul').every((b) => distance(b, castle) >= LAIR.clear - 1), 'out of sight of the castle');
+  assert.equal(of('raider').length, LAIR.raiders);
+  assert.ok(of('raider').every((b) => distance(b, castle) === LAIR.near));
+  assert.deepEqual(newStoryGame(3), { seed, state }, 'the same for every player');
+  // The guards stay home a while; the castle stands.
+  const quiet = structuredClone(state);
+  for (let i = 0; i < 30 * TICKS_PER_SECOND; i++) {
+    advance(board, quiet);
+    direct(board, quiet);
+  }
+  assert.equal(quiet.over, undefined);
+  assert.equal(quiet.buildings[castle.id].hp, state.buildings[castle.id].hp, 'nothing came for the castle');
+  // The lair brought down: won, though the core ended the game.
+  const end = (/** @type {(s: any) => void} */ change) => {
+    const s = newStoryGame(3).state;
+    change(s);
+    advance(board, s);
+    direct(board, s);
+    return [s.story?.result, s.over, s.winner];
+  };
+  assert.deepEqual(end((s) => { s.buildings[lair.id].hp = 0; }), ['slain', 1, 0]);
+  assert.deepEqual(end((s) => { s.buildings[castle.id].hp = 0; }), ['fallen', 1, undefined]);
+  assert.deepEqual(end(() => {}), [undefined, undefined, undefined]);
 });

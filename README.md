@@ -175,8 +175,7 @@ Run `npm start` and open http://127.0.0.1:2567.
   came through the acts before come too: each hero born in the new act
   (those it starts with too) is one of them, the best first, with all
   their levels and skills; once they are all back, new heroes are born as
-  usual. Lost, the story starts again without them. So far there are three
-  acts:
+  usual. Lost, the story starts again without them. There are four acts:
   - **Starving village**: your castle alone, with the usual 200 stone and
     12 units and normal unit production, but starving: hunger at 100% and
     no food. Only pits and farms may be built, and nobody comes but the
@@ -214,6 +213,19 @@ Run `npm start` and open http://127.0.0.1:2567.
     and a half into the last wave; bands of 12 to 20 fall short; bands of
     30 clear the map in that wave's wake (13:24); with the first two acts'
     heroes, bands of 12 or more clear it there too.
+  - **Clearing the lair**, the last: a fresh castle on another map, in an
+    Easy Lord game (his lair 11 cells away, his waves from 2:00), with
+    everything allowed, wagons too, and no time limit. Three small camps
+    of three ghouls guard the lair, 4 cells from it and at least 9 from the
+    castle, and three raiders start 7 cells round the castle. Won once the
+    lair falls: congratulations in the middle of the screen, the game held,
+    and the points once the player clicks or presses a key. Lost if the
+    castle falls or every unit dies. Tips at 0:08 (defeat the lair), 5:00
+    (wagons, as mobile cover, about when 15 dark metal is in), 7:30
+    (upgrading wagons) and 8:00 (good luck). Tried: keeping everyone home,
+    the castle holds for 40 minutes and the lair stands; the NPC stand-in,
+    and bands of 30 sent at the camps and the lair, lose the castle within
+    ten minutes, heroes or not.
 - **The game clock** runs only while every player is here. (`npm run dev`
   runs it with one, for trying things alone.) While it waits, the player
   who started the game has **Start** beside the count of players (**Go on**

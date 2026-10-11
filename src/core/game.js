@@ -149,7 +149,7 @@ import {
  * @typedef {object} Story An act of story mode, as its game keeps it.
  * @property {string} act Which act (ACTS in src/story/acts.js).
  * @property {string[]} builds The kinds of building it allows.
- * @property {number} until The tick its time runs out.
+ * @property {number} [until] The tick its time runs out, if it does.
  * @property {true} [final] The story's last act.
  * @property {string} [result] How it came out, once it has (`direct`).
  * @property {Veteran[]} [heroes] The player's heroes from earlier acts not
@@ -2228,7 +2228,7 @@ export function checkState(board, raw) {
   if (state.npcs !== undefined && state.npcs !== true) fail('bad npcs');
   if (state.story !== undefined) {
     const s = state.story;
-    const fits = s !== null && typeof s === 'object' && typeof s.act === 'string' && Number.isSafeInteger(s.until)
+    const fits = s !== null && typeof s === 'object' && typeof s.act === 'string' && (s.until === undefined || Number.isSafeInteger(s.until))
       && Array.isArray(s.builds) && s.builds.every((k) => typeof k === 'string' && BUILDING_TYPES[k]?.build === true)
       && (s.result === undefined || typeof s.result === 'string') && (s.final === undefined || s.final === true)
       && (s.heroes === undefined || (Array.isArray(s.heroes) && s.heroes.length > 0));

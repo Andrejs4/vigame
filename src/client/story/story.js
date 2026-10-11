@@ -25,6 +25,13 @@ export const ACT_WORDS = /** @type {Record<string, { name: Word, goal: Word, rul
     // The first wave comes at 1:00 and is gone by about 1:35.
     tips: [[8, 'tipDefenceShield'], [100, 'tipDefenceTowers'], [150, 'tipDefenceLuck']],
   },
+  'clearing-lair': {
+    name: 'actClearingLair', goal: 'goalClearingLair', rules: 'rulesClearingLair',
+    // Wagons once there is likely dark metal enough for one (15, from the
+    // raiders and the horde's first waves: about 5:00), upgrades two and a
+    // half minutes later, then luck.
+    tips: [[8, 'tipLairDefeat'], [300, 'tipLairWagons'], [450, 'tipLairUpgrade'], [480, 'tipLairLuck']],
+  },
   'clearing-woods': {
     name: 'actClearingWoods', goal: 'goalClearingWoods', rules: 'rulesClearingWoods',
     // Bands once there are units to spare (about 25 at home by 2:00).
@@ -53,7 +60,7 @@ export function storyTip(view, after) {
 
 /** How an act came out, by its `result`; one given up has none. */
 const RESULT_WORDS = /** @type {Record<string, Word>} */ ({
-  fed: 'storyFed', supplied: 'storySupplied', held: 'storyHeld', cleared: 'storyCleared', time: 'storyTime', empty: 'storyEmpty', fallen: 'storyFallen',
+  fed: 'storyFed', supplied: 'storySupplied', held: 'storyHeld', cleared: 'storyCleared', slain: 'storySlain', time: 'storyTime', empty: 'storyEmpty', fallen: 'storyFallen',
 });
 
 /**
@@ -81,7 +88,8 @@ export function storyLine(view, word, time) {
   return {
     name: actName(story.act, word),
     goal: words ? word(words.goal) : '',
-    left: view.over !== undefined ? '' : view.tick >= story.until ? word('storyLastWave') : word('storyLeft', { time: time(story.until - view.tick) }),
+    left: view.over !== undefined || story.until === undefined ? ''
+      : view.tick >= story.until ? word('storyLastWave') : word('storyLeft', { time: time(story.until - view.tick) }),
     rules: words ? word(words.rules) : '',
   };
 }

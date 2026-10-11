@@ -13,7 +13,7 @@
 import { BOARD_OPTIONS, createBoard } from '../core/board.js';
 import { fullMeal, maxHp, newGame, occupancy } from '../core/game.js';
 import { distance, key } from '../core/hex.js';
-import { DARK_LORD, MAX_HUNGER, TICKS_PER_SECOND } from '../core/rules.js';
+import { BUILDING_TYPES, DARK_LORD, MAX_HUNGER, SIDES, TICKS_PER_SECOND } from '../core/rules.js';
 
 /** @typedef {import('../core/game.js').GameState} GameState */
 /** @typedef {import('../core/game.js').Veteran} Veteran */
@@ -24,7 +24,7 @@ import { DARK_LORD, MAX_HUNGER, TICKS_PER_SECOND } from '../core/rules.js';
  * @property {string} id Kept in its games (`story.act`), and a key of the page's words for it.
  * @property {string} name Its game's name, in English (the page shows its own word).
  * @property {number} seed Its map's: the same for every player.
- * @property {number} minutes Its time limit.
+ * @property {number} [minutes] Its time limit, if it has one.
  * @property {string} [mode] Its game's mode (`MODES` in rules.js): one side
  *   alone if not given.
  * @property {string[]} builds What may be built in it.
@@ -197,6 +197,70 @@ function lastWave(board, state) {
 }
 
 /**
+ * Clearing the lair's additions to the Easy Lord's opening: LAIR.camps
+ * small camps guarding the lair, the first on its far side from the
+ * castle, the rest spread round it; and LAIR.raiders raiders spread round
+ * the castle, the first on its far side from the lair.
+ */
+export const LAIR = Object.freeze({
+  camps: 3,
+  camp: Object.freeze(['ghoul', 'ghoul', 'ghoul']),
+  /** How far from the lair's centre the camps are. */
+  ring: 4,
+  /** How near the castle a camp may be: out of a guard's sight of it,
+   * and of buildings put close by. */
+  clear: 9,
+  raiders: 3,
+  /** How far from the castle the raiders start. */
+  near: 7,
+});
+
+/**
+ * Cells at this distance from `centre`, `n` of them spread as far apart as
+ * can be, the first the nearest to `toward`.
+ * @param {Board} board
+ * @param {GameState} state
+ * @param {import('../core/hex.js').Axial} centre
+ * @param {number} ring
+ * @param {number} n
+ * @param {import('../core/hex.js').Axial} toward
+ * @param {(t: import('../core/hex.js').Axial) => boolean} [may] Which cells may be picked.
+ */
+function spreadOnRing(board, state, centre, ring, n, toward, may = () => true) {
+  const taken = occupancy(state).buildingAt;
+  const room = board.list.filter((t) => t.passable && !taken.has(key(t.q, t.r)) && distance(t, centre) === ring && may(t))
+    .sort((a, b) => distance(a, toward) - distance(b, toward) || a.q - b.q || a.r - b.r);
+  /** @type {import('../core/hex.js').Axial[]} */
+  const picked = room.slice(0, 1);
+  while (picked.length < n && picked.length < room.length) {
+    const spread = (/** @type {import('../core/hex.js').Axial} */ t) => Math.min(...picked.map((c) => distance(t, c)));
+    picked.push(room.reduce((a, b) => (spread(b) > spread(a) ? b : a)));
+  }
+  return picked;
+}
+
+/**
+ * Clearing the lair as it opens: camps round the lair, raiders round the castle.
+ * @param {Board} board
+ * @param {GameState} state
+ */
+function lairOpening(board, state) {
+  const at = sides(board, state);
+  const lair = Object.values(state.buildings).find((b) => b.type === 'lair');
+  const wild = state.players.find((p) => SIDES[p.side]?.wild);
+  if (!at || !lair || !wild) return;
+  const away = (/** @type {import('../core/hex.js').Axial} */ from, /** @type {import('../core/hex.js').Axial} */ of) => ({ q: 2 * of.q - from.q, r: 2 * of.r - from.r });
+  const clear = (/** @type {import('../core/hex.js').Axial} */ t) => distance(t, at.castle) >= LAIR.clear;
+  for (const c of spreadOnRing(board, state, lair, LAIR.ring, LAIR.camps, away(at.castle, lair), clear)) {
+    placeMonsters(board, state, at.lord.id, [...LAIR.camp], c, true);
+  }
+  for (const c of spreadOnRing(board, state, at.castle, LAIR.near, LAIR.raiders, away(lair, at.castle))) {
+    const id = `b${state.nextId++}`;
+    state.buildings[id] = { id, owner: wild.id, type: 'raider', grade: 1, q: c.q, r: c.r, hp: BUILDING_TYPES.raider.hp };
+  }
+}
+
+/**
  * The Dark Lord's monsters on the map.
  * @param {GameState} state
  */
@@ -280,6 +344,25 @@ export const ACTS = [
     },
     wins: ['cleared'],
   },
+  {
+    // The Easy Lord's game, lair and waves and all, with small camps
+    // guarding the lair and a few raiders about the castle from the start;
+    // wagons allowed. Won once the lair falls; no time limit.
+    id: 'clearing-lair',
+    name: 'Clearing the lair',
+    seed: 9191,
+    mode: 'easy',
+    builds: ['pit', 'farm', 'tower', 'band', 'wagon'],
+    setup() {},
+    opening: lairOpening,
+    outcome(state) {
+      const you = state.players[YOU];
+      if (you.lost !== undefined) return 'fallen';
+      if (nobodyLeft(state)) return 'empty';
+      return state.players.find((p) => p.side === DARK_LORD)?.lost !== undefined ? 'slain' : null;
+    },
+    wins: ['slain'],
+  },
 ];
 
 /**
@@ -336,7 +419,7 @@ export function newStoryGame(index, heroes = []) {
   const state = newGame(board, { mode: act.mode ?? 'ffa' });
   state.name = act.name;
   state.story = {
-    act: act.id, builds: [...act.builds], until: act.minutes * 60 * TICKS_PER_SECOND,
+    act: act.id, builds: [...act.builds], ...(act.minutes ? { until: act.minutes * 60 * TICKS_PER_SECOND } : {}),
     ...(index === ACTS.length - 1 ? { final: /** @type {true} */ (true) } : {}),
   };
   act.setup(state);

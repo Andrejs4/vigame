@@ -399,10 +399,18 @@ export async function startGame(net, me) {
       heroesAgain = false;
       showHeroes();
     }
-    // The table of points, once, when the game is over (or opens over).
+    // The table of points, once, when the game is over (or opens over);
+    // the story's last act won, congratulations first, the game held.
     if (next.over !== undefined && !scoresSeen) {
       scoresSeen = true;
-      showScores();
+      const seat = net.seat();
+      const finished = next.story?.final && seat !== null && next.winner !== undefined && next.winner === next.players[seat]?.team;
+      if (finished) {
+        tip.show({ title: word('congratsTitle'), text: word('congratsText'), ms: Infinity, onClose: () => { showScores(); } });
+        sounds.play('tip');
+      } else {
+        showScores();
+      }
     }
   }
 
@@ -649,7 +657,8 @@ export async function startGame(net, me) {
     const due = storyTip(view, tipped);
     if (!due) return;
     tipped = due.second;
-    tip.show({ text: word(due.word, { cost: BUILDING_TYPES.farm.cost, tower: BUILDING_TYPES.tower.cost }), stays: true });
+    const { farm, tower, wagon } = BUILDING_TYPES;
+    tip.show({ text: word(due.word, { cost: farm.cost, tower: tower.cost, wagon: wagon.metal ?? 0, hp: wagon.hpPerGrade ?? 0 }), stays: true });
     sounds.play('tip');
   }
 

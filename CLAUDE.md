@@ -236,7 +236,10 @@ drawing during play). Read it before art or graphics work.
   words.js, and its outcomes in `RESULT_WORDS`. An act may have a mode
   (Village defence is Easy Lord with its lair removed) and a `tick` the
   director runs after each tick (its waves: plain data, no dice), and an
-  `opening` that places things as it opens (Clearing the woods' camps).
+  `opening` that places things as it opens (Clearing the woods' camps,
+  Clearing the lair's camps and raiders); an act without `minutes` has
+  no time limit (`story.until` left out). The last act won, the page
+  congratulates first and shows the points once the player goes on.
   Its monsters guard: a horde member with `home` (GUARD_SIGHT and
   GUARD_LEASH in rules.js) keeps near that cell instead of hunting, a
   rule of the core that only story acts use. When

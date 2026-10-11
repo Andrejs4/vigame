@@ -18,7 +18,7 @@ import { advance, castleOf, checkState, nearStanding, newGame, occupancy, public
 import { key } from '../src/core/hex.js';
 import { GAME_NAMES } from '../src/core/names.js';
 import { createServerNet } from '../src/client/net.js';
-import { BUILDING_TYPES, END_ANYONE_TICKS, END_IDLE_MS, NPC, TICKS_PER_SECOND } from '../src/core/rules.js';
+import { BUILDING_TYPES, DARK_LORD, END_ANYONE_TICKS, END_IDLE_MS, NPC, TICKS_PER_SECOND } from '../src/core/rules.js';
 import { ACTS } from '../src/story/acts.js';
 
 /** @type {Awaited<ReturnType<typeof startGameServer>>} */
@@ -934,7 +934,15 @@ test('story mode: the director ends an act once won, and the story moves on; pas
   // Its monsters all gone.
   const third = await play((s) => ({ ...s, tick: 1, buildings: Object.fromEntries(Object.entries(s.buildings).filter(([, b]) => /** @type {any} */ (b).owner === 0)) }));
   assert.deepEqual(third, { id: third.id, winner: 0, act: 'clearing-woods', result: 'cleared' });
-  const id = third.id;
+  await until(() => server.storage.storyOf(pid).act === 3);
+  // Its lair brought down a moment ago.
+  const fourth = await play((s) => ({
+    ...s, tick: 1,
+    buildings: Object.fromEntries(Object.entries(s.buildings).filter(([, b]) => /** @type {any} */ (b).type !== 'lair')),
+    players: s.players.map((/** @type {any} */ p) => (p.side === DARK_LORD ? { ...p, lost: 1 } : p)),
+  }));
+  assert.deepEqual(fourth, { id: fourth.id, winner: 0, act: 'clearing-lair', result: 'slain' });
+  const id = fourth.id;
   await until(() => server.storage.storyOf(pid).act === ACTS.length);
   assert.deepEqual({ ...server.storage.storyOf(pid), heroes: [] }, { act: ACTS.length, gameId: null, heroes: [] }, 'past the last act');
   // Later acts' heroes born at their start are act one's, or they wait to be; all go on.

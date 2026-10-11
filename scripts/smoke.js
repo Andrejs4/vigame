@@ -18,6 +18,7 @@ import { chromium } from 'playwright';
 
 import { startGameServer } from '../server/app.js';
 import { playerId } from '../server/room.js';
+import { playStory } from '../server/story/progress.js';
 import { BOARD_OPTIONS, createBoard } from '../src/core/board.js';
 import { checkState, newGame } from '../src/core/game.js';
 import { axialToPixel, distance } from '../src/core/hex.js';
@@ -490,6 +491,39 @@ async function story(browser, url) {
   await page.keyboard.press('-');
   await page.waitForTimeout(500);
   await page.screenshot({ path: join(OUT, 'story-woods.png') });
+  await page.goto(url);
+  await inLobby(page);
+
+  // The last act, its lair brought down a moment ago: congratulations, in
+  // the middle, the game held, and the points once the player goes on.
+  const pid = playerId(/** @type {string} */ (token));
+  games.storage.saveStory(pid, { act: ACTS.length - 1, gameId: null });
+  const lastId = /** @type {string} */ (playStory(games.storage, pid));
+  const saved = /** @type {any} */ (games.storage.loadGame(lastId));
+  assert.equal(saved.state.story.act, 'clearing-lair');
+  games.storage.saveSnapshot(lastId, {
+    seq: saved.seq,
+    state: {
+      // Past its opening message, which would hold the clock.
+      ...saved.state, tick: 50,
+      buildings: Object.fromEntries(Object.entries(saved.state.buildings).filter(([, b]) => /** @type {any} */ (b).type !== 'lair')),
+      players: saved.state.players.map((/** @type {any} */ p) => (p.side === 8 ? { ...p, lost: 50 } : p)),
+    },
+  });
+  await page.reload();
+  await inLobby(page);
+  await waitText(page, '#lobby-story', 'Continue story: Clearing the lair');
+  await page.click('#lobby-story');
+  await inGame(page);
+  await page.waitForSelector('#tip.shown');
+  assert.equal(await text(page, '#tip .tip-title'), 'Congratulations!');
+  assert.equal(await page.locator('#scores').evaluate((d) => /** @type {HTMLDialogElement} */ (d).open), false, 'the points wait');
+  await page.waitForTimeout(500);
+  await page.screenshot({ path: join(OUT, 'story-congratulations.png') });
+  await page.keyboard.press('Shift');
+  await page.waitForSelector('#scores[open]');
+  assert.equal(await text(page, '#scores-title'), 'You won');
+  assert.match(await text(page, '#scores-outcome') ?? '', /The lair has fallen\. The story is complete\.$/);
   await page.goto(url);
   await inLobby(page);
 
