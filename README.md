@@ -175,7 +175,7 @@ Run `npm start` and open http://127.0.0.1:2567.
   came through the acts before come too: each hero born in the new act
   (those it starts with too) is one of them, the best first, with all
   their levels and skills; once they are all back, new heroes are born as
-  usual. Lost, the story starts again without them. So far there are two
+  usual. Lost, the story starts again without them. So far there are three
   acts:
   - **Starving village**: your castle alone, with the usual 200 stone and
     12 units and normal unit production, but starving: hunger at 100% and
@@ -195,6 +195,20 @@ Run `npm start` and open http://127.0.0.1:2567.
     buildings in their way), 1:40 (towers) and 2:30 (good luck). Won if
     the castle stands when the 10 minutes run out; lost if it falls or
     every unit dies.
+  - **Clearing the woods**: a fresh castle on another map, bands allowed
+    too, and the far side of the map crawling with the Easy Lord's horde:
+    five camps of three ghouls and an ogre, more than enough to bring the
+    castle down all at once. They guard their camps: each goes for an
+    enemy building within 5 cells of its home, gives up one more than 8
+    away, and goes back home. Won as soon as every monster is dead. At
+    10:00, a last wave of six ghouls and two ogres comes, and every
+    monster left goes for the castle (the status says **the last wave**):
+    won if they all die; lost if the castle falls or every unit dies. Tips
+    at 0:08 (clear them out), 2:00 (bands), 3:30 (higher levels are
+    sturdier) and 9:00 (good luck). Tried: keeping everyone home, the
+    castle falls a minute into the last wave; bands of 30 clear the map
+    as that wave ends; with the first two acts' heroes, a band of 20
+    clears it by 6:00.
 - **The game clock** runs only while every player is here. (`npm run dev`
   runs it with one, for trying things alone.) While it waits, the player
   who started the game has **Start** beside the count of players (**Go on**

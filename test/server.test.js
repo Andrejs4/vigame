@@ -926,10 +926,14 @@ test('story mode: the director ends an act once won, and the story moves on; pas
   // A tick before its time runs out, the castle standing.
   const second = await play((s) => ({ ...s, tick: s.story.until - 1 }));
   assert.deepEqual(second, { id: second.id, winner: 0, act: 'village-defence', result: 'held' });
-  const id = second.id;
+  await until(() => server.storage.storyOf(pid).act === 2);
+  // Its monsters all gone.
+  const third = await play((s) => ({ ...s, tick: 1, buildings: Object.fromEntries(Object.entries(s.buildings).filter(([, b]) => /** @type {any} */ (b).owner === 0)) }));
+  assert.deepEqual(third, { id: third.id, winner: 0, act: 'clearing-woods', result: 'cleared' });
+  const id = third.id;
   await until(() => server.storage.storyOf(pid).act === ACTS.length);
   assert.deepEqual({ ...server.storage.storyOf(pid), heroes: [] }, { act: ACTS.length, gameId: null, heroes: [] }, 'past the last act');
-  // Act two's heroes born at its start are act one's, or they wait to be; all go on.
+  // Later acts' heroes born at their start are act one's, or they wait to be; all go on.
   const after = server.storage.storyOf(pid).heroes.map((h) => h.name);
   for (const name of carried.map((h) => h.name)) assert.ok(after.includes(name), `${name} goes on`);
   const status = async () => (await post('/api/story/status', { token: TOKENS.c })).json();

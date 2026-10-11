@@ -4,9 +4,10 @@ import assert from 'node:assert/strict';
 import { BOARD_OPTIONS, createBoard } from '../src/core/board.js';
 import { distance } from '../src/core/hex.js';
 import { advance, applyCommand, checkState, publicView } from '../src/core/game.js';
-import { MAX_HUNGER, START_STONE, START_UNITS, TICKS_PER_SECOND } from '../src/core/rules.js';
+import { COMBAT_PERIOD, MAX_HUNGER, START_STONE, START_UNITS, TICKS_PER_SECOND } from '../src/core/rules.js';
+import { openBoard, stateWith, unitsIn } from './helpers.js';
 import { ACT_WORDS, storyTip } from '../src/client/story/story.js';
-import { ACTS, WAVES, actOf, newStoryGame, veteransOf } from '../src/story/acts.js';
+import { ACTS, CAMPS, WAVES, actOf, newStoryGame, veteransOf } from '../src/story/acts.js';
 import { direct } from '../src/story/director.js';
 
 /** @param {number} seed */
@@ -93,7 +94,7 @@ test('the second act, Village defence: a fresh castle on a fresh map, waves from
   const board = boardOf(seed);
   assert.notEqual(seed, newStoryGame(0).seed, 'another map');
   assert.deepEqual(checkState(board, state), []);
-  assert.deepEqual(state.story, { act: 'village-defence', builds: ['pit', 'farm', 'tower'], until: 10 * 60 * 10, final: true });
+  assert.deepEqual(state.story, { act: 'village-defence', builds: ['pit', 'farm', 'tower'], until: 10 * 60 * 10 });
   assert.equal(state.name, 'Village defence');
   assert.deepEqual(Object.values(state.buildings).map((b) => b.type), ['castle'], 'the Dark Lord has no lair');
   assert.deepEqual([state.players[0].hunger, state.players[0].food, state.players[0].stone], [0, 0, START_STONE]);
@@ -175,4 +176,75 @@ test("an act's heroes go on to the next: each hero born there takes one's place,
   assert.deepEqual(checkState(nextBoard, next.state), []);
   assert.deepEqual(checkState(board, { ...state, story: { ...state.story, heroes: [{ ...pool[0], level: 0 }] } }), ['bad story hero']);
   assert.deepEqual(checkState(board, { ...state, story: { ...state.story, heroes: [] } }), ['bad story']);
+});
+
+test('the third act, Clearing the woods: camps of guards across the map; cleared, it is won; at ten minutes, all come with a last wave', () => {
+  assert.equal(ACTS[2].id, 'clearing-woods');
+  const { seed, state } = newStoryGame(2);
+  const board = boardOf(seed);
+  assert.deepEqual(checkState(board, state), []);
+  assert.deepEqual(state.story, { act: 'clearing-woods', builds: ['pit', 'farm', 'tower', 'band'], until: 10 * 60 * 10, final: true });
+  assert.deepEqual(newStoryGame(2), { seed, state }, 'the same for every player');
+  const castle = /** @type {any} */ (Object.values(state.buildings).find((b) => b.type === 'castle'));
+  const monsters = () => Object.values(state.buildings).filter((b) => b.owner === 1);
+  assert.equal(monsters().length, CAMPS.count * CAMPS.camp.length);
+  assert.ok(monsters().every((b) => b.home && b.home[0] === b.q && b.home[1] === b.r), 'each guards its cell');
+  assert.ok(monsters().every((b) => distance(b, castle) >= CAMPS.far - 1), 'far from the castle');
+  assert.ok(!Object.values(state.buildings).some((b) => b.type === 'lair'));
+  // Left alone, they stay home for the ten minutes.
+  const step = (/** @type {any} */ s, /** @type {number} */ n) => {
+    for (let i = 0; i < n; i++) {
+      advance(board, s);
+      direct(board, s);
+    }
+  };
+  const quiet = structuredClone(state);
+  for (const u of Object.values(quiet.units)) u.in = castle.id;
+  step(quiet, 60 * TICKS_PER_SECOND);
+  const homes = (/** @type {any} */ s) => Object.values(s.buildings).filter((b) => /** @type {any} */ (b).owner === 1)
+    .map((b) => /** @type {any} */ (b)).filter((b) => b.home && distance(b, { q: b.home[0], r: b.home[1] }) > 0).length;
+  assert.equal(homes(quiet), 0, 'none wandered off');
+  // At its time, a last wave, and none guards any more.
+  const late = structuredClone(state);
+  late.tick = /** @type {number} */ (late.story?.until) - 1;
+  step(late, 1);
+  const lord = Object.values(late.buildings).filter((b) => b.owner === 1);
+  assert.equal(lord.length, CAMPS.count * CAMPS.camp.length + CAMPS.last.length);
+  assert.ok(lord.every((b) => b.home === undefined), 'all come for the castle');
+  assert.deepEqual(checkState(board, late), []);
+  // Cleared, won; the castle fallen, lost.
+  const end = (/** @type {(s: any) => void} */ change) => {
+    const s = newStoryGame(2).state;
+    change(s);
+    step(s, 1);
+    return [s.story?.result, s.over, s.winner];
+  };
+  const clear = (/** @type {any} */ s) => { for (const b of Object.values(s.buildings)) if (/** @type {any} */ (b).owner === 1) delete s.buildings[/** @type {any} */ (b).id]; };
+  assert.deepEqual(end(clear), ['cleared', 1, 0]);
+  assert.deepEqual(end(() => {}), [undefined, undefined, undefined]);
+  assert.deepEqual(end((s) => { Object.values(s.buildings)[0].hp = 0; }), ['fallen', 1, undefined]);
+});
+
+test('a guard goes for an enemy near its home, gives up one too far, and goes back home', () => {
+  const board = openBoard(14);
+  const state = stateWith(
+    [{ id: 'b1', type: 'castle', q: 0, r: 0 }, { id: 'b2', type: 'ghoul', owner: 1, q: 9, r: 0 }, { id: 'b3', type: 'farm', q: 5, r: 0 }],
+    unitsIn('b1', 5, 1),
+  );
+  state.buildings.b2.home = [9, 0];
+  const ticks = (/** @type {number} */ n) => { for (let i = 0; i < n; i++) advance(board, state); };
+  ticks(COMBAT_PERIOD);
+  assert.equal(state.buildings.b2.target, 'b3', 'the farm, 4 from its home');
+  assert.deepEqual(checkState(board, state), []);
+  // The farm gone, the castle is too far: it goes home.
+  delete state.buildings.b3;
+  ticks(30 * TICKS_PER_SECOND);
+  assert.equal(state.buildings.b2.target, undefined);
+  assert.deepEqual([state.buildings.b2.q, state.buildings.b2.r], [9, 0], 'back home');
+  // Led off too far (say, struck from afar), it gives up and comes back.
+  state.buildings.b2.home = [11, 0];
+  state.buildings.b2.target = 'b1';
+  ticks(COMBAT_PERIOD);
+  assert.equal(state.buildings.b2.target, undefined, 'the castle is 10 from its home, past GUARD_LEASH');
+  assert.deepEqual(checkState(board, { ...state, buildings: { ...state.buildings, b1: { ...state.buildings.b1, home: [0, 0] } } }), ['building b1: bad home']);
 });

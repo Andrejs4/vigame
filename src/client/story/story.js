@@ -25,6 +25,11 @@ export const ACT_WORDS = /** @type {Record<string, { name: Word, goal: Word, rul
     // The first wave comes at 1:00 and is gone by about 1:35.
     tips: [[8, 'tipDefenceShield'], [100, 'tipDefenceTowers'], [150, 'tipDefenceLuck']],
   },
+  'clearing-woods': {
+    name: 'actClearingWoods', goal: 'goalClearingWoods', rules: 'rulesClearingWoods',
+    // Bands once there are units to spare (about 25 at home by 2:00).
+    tips: [[8, 'tipWoodsClear'], [120, 'tipWoodsBands'], [210, 'tipWoodsLevels'], [540, 'tipWoodsLuck']],
+  },
 });
 
 /** How late a tip may still show: a page that comes later (reloaded, say) skips it. */
@@ -48,7 +53,7 @@ export function storyTip(view, after) {
 
 /** How an act came out, by its `result`; one given up has none. */
 const RESULT_WORDS = /** @type {Record<string, Word>} */ ({
-  fed: 'storyFed', supplied: 'storySupplied', held: 'storyHeld', time: 'storyTime', empty: 'storyEmpty', fallen: 'storyFallen',
+  fed: 'storyFed', supplied: 'storySupplied', held: 'storyHeld', cleared: 'storyCleared', time: 'storyTime', empty: 'storyEmpty', fallen: 'storyFallen',
 });
 
 /**
@@ -76,7 +81,7 @@ export function storyLine(view, word, time) {
   return {
     name: actName(story.act, word),
     goal: words ? word(words.goal) : '',
-    left: view.over === undefined ? word('storyLeft', { time: time(Math.max(0, story.until - view.tick)) }) : '',
+    left: view.over !== undefined ? '' : view.tick >= story.until ? word('storyLastWave') : word('storyLeft', { time: time(story.until - view.tick) }),
     rules: words ? word(words.rules) : '',
   };
 }

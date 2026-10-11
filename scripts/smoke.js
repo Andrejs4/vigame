@@ -471,6 +471,27 @@ async function story(browser, url) {
   await page.goto(url);
   await inLobby(page);
 
+  // The third act: monsters' camps over the far side of the map.
+  games.storage.saveStory(playerId(/** @type {string} */ (token)), { act: 2, gameId: null });
+  await page.reload();
+  await inLobby(page);
+  await waitText(page, '#lobby-story', 'Continue story: Clearing the woods');
+  await page.click('#lobby-story');
+  await inGame(page);
+  await page.waitForSelector('#tip.shown');
+  assert.equal(await text(page, '#tip .tip-title'), 'Clearing the woods');
+  await page.keyboard.press('Shift');
+  await page.waitForSelector('#tip', { state: 'hidden' });
+  assert.equal(await page.locator('#build-band').isDisabled(), false, 'bands in this act');
+  await page.waitForFunction(() => document.querySelector('#tip.shown .tip-text')?.textContent?.startsWith('Monsters crawl over the far side'),
+    undefined, { timeout: 15000 });
+  await page.keyboard.press('-');
+  await page.keyboard.press('-');
+  await page.waitForTimeout(500);
+  await page.screenshot({ path: join(OUT, 'story-woods.png') });
+  await page.goto(url);
+  await inLobby(page);
+
   // Its last act won: complete.
   games.storage.saveStory(playerId(/** @type {string} */ (token)), { act: ACTS.length, gameId: null });
   await page.reload();

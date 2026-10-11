@@ -235,7 +235,11 @@ drawing during play). Read it before art or graphics work.
   `ACTS`, its words and its timed tips in `ACT_WORDS` (story.js) and
   words.js, and its outcomes in `RESULT_WORDS`. An act may have a mode
   (Village defence is Easy Lord with its lair removed) and a `tick` the
-  director runs after each tick (its waves: plain data, no dice). When
+  director runs after each tick (its waves: plain data, no dice), and an
+  `opening` that places things as it opens (Clearing the woods' camps).
+  Its monsters guard: a horde member with `home` (GUARD_SIGHT and
+  GUARD_LEASH in rules.js) keeps near that cell instead of hunting, a
+  rule of the core that only story acts use. When
   the core ends an act's game itself (the castle fell with the Dark Lord
   standing), the director still gives it its outcome, and the story counts
   as won only for the player's own team. Heroes go on from act to act:
