@@ -630,7 +630,7 @@ export async function startGame(net, me) {
     const name = document.createElement('strong');
     name.textContent = line.name;
     storyGoal.replaceChildren(name, ` · ${line.goal}`, ...(line.left ? [' · ', line.left] : []));
-    storyGoal.title = word('storyLoseTitle');
+    storyGoal.title = line.rules;
   }
 
   function updateHud() {

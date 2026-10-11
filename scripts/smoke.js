@@ -372,7 +372,7 @@ async function newPlayer(browser, url, label, name, options, expectedError) {
 // --- scenarios ---------------------------------------------------------------
 
 /**
- * Story mode: the lobby starts it at the first act, Dying village, a castle
+ * Story mode: the lobby starts it at the first act, Starving village, a castle
  * alone and starving, where only pits and farms may be built; given up
  * from End, it is lost and starts again. Once its last act is won, the
  * lobby's button says the story is complete.
@@ -382,10 +382,11 @@ async function newPlayer(browser, url, label, name, options, expectedError) {
 async function story(browser, url) {
   const page = await newPlayer(browser, url, 'story', 'Sage');
   await inLobby(page);
-  await waitText(page, '#lobby-story', 'Start story: Dying village');
+  await waitText(page, '#lobby-story', 'Start story: Starving village');
   await page.click('#lobby-story');
   await inGame(page);
-  await waitMatch(page, '#story-goal', /^Dying village · Feed the village: bring hunger down to 0%\. · 1[45]:\d\d left$/);
+  await waitMatch(page, '#story-goal', /^Starving village · Save the village from starvation\. · (10:00|9:\d\d) left$/);
+  assert.match(await page.getAttribute('#story-goal', 'title') ?? '', /^Won as soon as hunger is gone/);
   await waitMatch(page, '#time', /^0:0[1-9]$/);
   assert.equal(await text(page, '#hunger'), ' · hunger 100%');
   assert.equal(await page.locator('#build-tower').isDisabled(), true, 'no towers in this act');
@@ -398,7 +399,7 @@ async function story(browser, url) {
   const lobby = await page.context().newPage();
   await lobby.goto(url);
   await inLobby(lobby);
-  await waitText(lobby, '#lobby-story', 'Continue story: Dying village');
+  await waitText(lobby, '#lobby-story', 'Continue story: Starving village');
   await lobby.close();
 
   const asked = new Promise((res) => page.once('dialog', (d) => { res(d.message()); d.accept(); }));
@@ -410,7 +411,7 @@ async function story(browser, url) {
   await page.screenshot({ path: join(OUT, 'story-lost.png') });
   await page.goto(url);
   await inLobby(page);
-  await waitText(page, '#lobby-story', 'Start story: Dying village');
+  await waitText(page, '#lobby-story', 'Start story: Starving village');
 
   // Its last act won: complete.
   const token = await page.evaluate(() => localStorage.getItem('vigame.token'));

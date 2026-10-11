@@ -155,7 +155,7 @@ Run `npm start` and open http://127.0.0.1:2567.
   for a player.
 - **Story mode**, also a tutorial: a campaign of acts, played alone, on
   maps the same for every player. The lobby's button, under New game,
-  starts it (**Start story: Dying village**) or goes back to the act
+  starts it (**Start story: Starving village**) or goes back to the act
   under way (**Continue story**); each player has one story. An act's
   game pauses while its player is away, like any game, and appears in no
   list; nobody else can take its seat, and it keeps no high scores. Its
@@ -164,12 +164,14 @@ Run `npm start` and open http://127.0.0.1:2567.
   the story starts again from the first act; won, it goes on to the next;
   once the last is won, the button says **Story complete**, between
   laurels, and does nothing. So far there is one act:
-  - **Dying village**: your castle alone, with the usual 200 stone and 12
-    units and normal unit production, but starving: hunger at 100% and no
-    food. Only pits and farms may be built, and nobody comes but the
-    raiders. Won once hunger is down to 0%; lost if every unit dies, the
-    castle falls, or 15 minutes pass. From 100%, 9 full meals in a row
-    (one a minute) bring hunger to 0%.
+  - **Starving village**: your castle alone, with the usual 200 stone and
+    12 units and normal unit production, but starving: hunger at 100% and
+    no food. Only pits and farms may be built, and nobody comes but the
+    raiders. The goal says only "Save the village from starvation"; its
+    tooltip tells the rest. Won at once when hunger is down to 0% (9 full
+    meals in a row, one a minute), or when the 10 minutes run out if the
+    meal then feeds everyone; lost if every unit dies, the castle falls,
+    or that meal falls short.
 - **The game clock** runs only while every player is here. (`npm run dev`
   runs it with one, for trying things alone.) While it waits, the player
   who started the game has **Start** beside the count of players (**Go on**

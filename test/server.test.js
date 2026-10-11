@@ -852,14 +852,14 @@ test('a game of NPCs alone runs while someone watches; its creator may end it fr
 test('story mode: one story a player, started or gone back to from the lobby; given up, it starts again', async () => {
   const status = async (/** @type {string} */ token) => (await post('/api/story/status', { token })).json();
   assert.equal((await post('/api/story/status', { token: 'x'.repeat(32) })).status, 401);
-  assert.deepEqual(await status(TOKENS.b), { act: 'dying-village', first: true, playing: false, complete: false });
+  assert.deepEqual(await status(TOKENS.b), { act: 'starving-village', first: true, playing: false, complete: false });
   const started = await post('/api/story', { token: TOKENS.b });
   assert.equal(started.status, 201);
   const { id } = await started.json();
-  assert.deepEqual(await status(TOKENS.b), { act: 'dying-village', first: true, playing: true, complete: false });
+  assert.deepEqual(await status(TOKENS.b), { act: 'starving-village', first: true, playing: true, complete: false });
   assert.equal((await (await post('/api/story', { token: TOKENS.b })).json()).id, id, 'one story: the same game again');
   const game = await (await fetch(`${base}/api/games/${id}`)).json();
-  assert.equal(game.state.story.act, 'dying-village');
+  assert.equal(game.state.story.act, 'starving-village');
   assert.deepEqual(game.seats, [playerId(TOKENS.b)]);
   assert.ok(!(await (await fetch(`${base}/api/games`)).json()).some((/** @type {any} */ g) => g.id === id), 'no lobby list shows it');
 
@@ -878,7 +878,7 @@ test('story mode: one story a player, started or gone back to from the lobby; gi
   assert.equal(await b.request('endGame'), true);
   await until(() => seen(b).over !== undefined);
   assert.equal(seen(b).winner, undefined);
-  assert.deepEqual(await status(TOKENS.b), { act: 'dying-village', first: true, playing: false, complete: false });
+  assert.deepEqual(await status(TOKENS.b), { act: 'starving-village', first: true, playing: false, complete: false });
   const again = await (await post('/api/story', { token: TOKENS.b })).json();
   assert.notEqual(again.id, id, 'a new game of the first act');
   await leaveAll(b, c);

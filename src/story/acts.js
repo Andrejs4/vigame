@@ -11,7 +11,7 @@
  */
 
 import { BOARD_OPTIONS, createBoard } from '../core/board.js';
-import { newGame } from '../core/game.js';
+import { fullMeal, newGame } from '../core/game.js';
 import { MAX_HUNGER, TICKS_PER_SECOND } from '../core/rules.js';
 
 /** @typedef {import('../core/game.js').GameState} GameState */
@@ -41,13 +41,14 @@ const nobodyLeft = (state) => !Object.values(state.units).some((u) => u.owner ==
 /** @type {Act[]} */
 export const ACTS = [
   {
-    // Your castle alone, starving: no enemy but the usual raiders. Feed the
-    // village (farms grow food, pits dig the stone farms cost) until hunger
-    // is gone, within fifteen minutes.
-    id: 'dying-village',
-    name: 'Dying village',
+    // Your castle alone, starving: no enemy but the usual raiders. Save the
+    // village from starvation (farms grow food, pits dig the stone farms
+    // cost): won at once when hunger is gone, or after ten minutes if there
+    // is food for everyone at the next meal.
+    id: 'starving-village',
+    name: 'Starving village',
     seed: 3407,
-    minutes: 15,
+    minutes: 10,
     builds: ['pit', 'farm'],
     setup(state) {
       const you = state.players[YOU];
@@ -59,10 +60,13 @@ export const ACTS = [
       if (you.lost !== undefined) return 'fallen';
       if (nobodyLeft(state)) return 'empty';
       if (state.tick > 0 && you.hunger === 0) return 'fed';
-      if (state.tick >= (state.story?.until ?? Infinity)) return 'time';
-      return null;
+      // Time runs out with a meal (ten minutes, a meal a minute): won if
+      // that meal feeds everyone, so looked at the tick before it.
+      const until = state.story?.until ?? Infinity;
+      if (state.tick === until - 1 && fullMeal(state, YOU)) return 'supplied';
+      return state.tick >= until ? 'time' : null;
     },
-    wins: ['fed'],
+    wins: ['fed', 'supplied'],
   },
 ];
 

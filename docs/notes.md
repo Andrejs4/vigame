@@ -520,7 +520,7 @@ reusing the game but stepping outside it often, so kept in its own
 folders (CLAUDE.md, "Story mode lives apart"). Built so far: one story a
 player, started or continued from the lobby, abandoned from End, lost
 back to the first act, won on to the next, and complete after the last;
-one act, Dying village. What it will need next, as he named it:
+one act, Starving village (first called Dying village). What it will need next, as he named it:
 
 - Hand-drawn maps: today an act's map is the usual one from a fixed
   seed. A preset map needs one helper, "the board of this game", in the
@@ -538,13 +538,18 @@ one act, Dying village. What it will need next, as he named it:
   the usual game's rules, without its story; with replays given up for
   story mode, it could simply be started again instead.
 
-Dying village as first built was tight: hunger moved a quarter of the way
+The first act as first built (Dying village, 15 minutes, won only at 0%
+hunger) was tight: hunger moved a quarter of the way
 at each meal, so from 100% every meal from the first had to be full to
 reach 0% at 14:00, a minute before the limit, and an NPC playing it
 reached 5% at 15:00 and lost. The author then made hunger move faster
 everywhere (HUNGER_PULL 0.4): 9 full meals now, from 100% to 0%. The
 NPC still loses it (1% at 15:00): it lets its village grow past its food
-(over a hundred units), which a player can hold back.
+(over a hundred units), which a player can hold back. The author then made the
+goal vaguer ("Save the village from starvation"), the act ten minutes, and
+won also with full supply when time runs out: the meal then feeds
+everyone, looked at the tick before it is served (the store is empty just
+after). The NPC wins it that way, at 9:59, with 94 units and 16% hunger.
 
 ### Game exports with a map version
 

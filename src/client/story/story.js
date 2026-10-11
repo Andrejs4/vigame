@@ -8,14 +8,14 @@
 /** @typedef {import('../words.js').Word} Word */
 /** @typedef {(word: Word, values?: Record<string, string | number>) => string} Say */
 
-/** Each act's words, by its id (ACTS in src/story/acts.js). */
-export const ACT_WORDS = /** @type {Record<string, { name: Word, goal: Word }>} */ ({
-  'dying-village': { name: 'actDyingVillage', goal: 'goalDyingVillage' },
+/** Each act's words, by its id (ACTS in src/story/acts.js): its name, goal, and how it is won or lost. */
+export const ACT_WORDS = /** @type {Record<string, { name: Word, goal: Word, rules: Word }>} */ ({
+  'starving-village': { name: 'actStarvingVillage', goal: 'goalStarvingVillage', rules: 'rulesStarvingVillage' },
 });
 
 /** How an act came out, by its `result`; one given up has none. */
 const RESULT_WORDS = /** @type {Record<string, Word>} */ ({
-  fed: 'storyFed', time: 'storyTime', empty: 'storyEmpty', fallen: 'storyFallen',
+  fed: 'storyFed', supplied: 'storySupplied', time: 'storyTime', empty: 'storyEmpty', fallen: 'storyFallen',
 });
 
 /**
@@ -30,11 +30,11 @@ export function actName(act, word) {
 
 /**
  * What the status panel says of an act: its name, its goal, and while it
- * goes on, the time left.
+ * goes on, the time left; and how it is won or lost, for its tooltip.
  * @param {{ tick: number, over?: number, story?: import('../../core/game.js').Story }} view
  * @param {Say} word
  * @param {(tick: number) => string} time
- * @returns {{ name: string, goal: string, left: string } | null}
+ * @returns {{ name: string, goal: string, left: string, rules: string } | null}
  */
 export function storyLine(view, word, time) {
   const story = view.story;
@@ -44,6 +44,7 @@ export function storyLine(view, word, time) {
     name: actName(story.act, word),
     goal: words ? word(words.goal) : '',
     left: view.over === undefined ? word('storyLeft', { time: time(Math.max(0, story.until - view.tick)) }) : '',
+    rules: words ? word(words.rules) : '',
   };
 }
 

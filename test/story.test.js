@@ -10,13 +10,13 @@ import { direct } from '../src/story/director.js';
 /** @param {number} seed */
 const boardOf = (seed) => createBoard({ ...BOARD_OPTIONS, seed, players: 1 });
 
-test('the first act, Dying village: your castle alone, starving, the same for every player', () => {
-  assert.equal(ACTS[0].id, 'dying-village');
+test('the first act, Starving village: your castle alone, starving, the same for every player', () => {
+  assert.equal(ACTS[0].id, 'starving-village');
   const { seed, state } = newStoryGame(0);
   assert.deepEqual(checkState(boardOf(seed), state), []);
   assert.deepEqual(newStoryGame(0), { seed, state }, 'the same map and opening every time');
-  assert.equal(state.name, 'Dying village');
-  assert.deepEqual(state.story, { act: 'dying-village', builds: ['pit', 'farm'], until: 15 * 60 * 10, final: true });
+  assert.equal(state.name, 'Starving village');
+  assert.deepEqual(state.story, { act: 'starving-village', builds: ['pit', 'farm'], until: 10 * 60 * 10, final: true });
   const you = state.players[0];
   assert.deepEqual([you.hunger, you.food, you.stone], [MAX_HUNGER, 0, START_STONE], 'starving, with the usual stone');
   assert.equal(Object.keys(state.units).length, START_UNITS);
@@ -40,7 +40,7 @@ test('an act allows only its buildings', () => {
   assert.deepEqual(checkState(board, { ...state, story: { ...state.story, builds: ['lair'] } }), ['bad story']);
 });
 
-test('the director ends Dying village: won once hunger is gone; lost with nobody left, the castle fallen, or time up', () => {
+test('the director ends Starving village: won once hunger is gone, or at the time with food for all; lost with nobody left, the castle fallen, or food short', () => {
   const play = (/** @type {(s: any) => void} */ change) => {
     const { seed, state } = newStoryGame(0);
     advance(boardOf(seed), state);
@@ -53,7 +53,15 @@ test('the director ends Dying village: won once hunger is gone; lost with nobody
   assert.deepEqual(play((s) => { s.units = {}; }), ['empty', 1, undefined]);
   assert.deepEqual(play((s) => { s.players[0].lost = 1; }), ['fallen', 1, undefined]);
   const until = /** @type {number} */ (newStoryGame(0).state.story?.until);
-  assert.deepEqual(play((s) => { s.tick = s.story.until; }), ['time', until, undefined]);
+  // The meal as time runs out, looked at the tick before: 12 units, and
+  // the castle's harvest feeds 20; with 20 more, it falls short.
+  assert.deepEqual(play((s) => { s.tick = s.story.until - 1; }), ['supplied', until - 1, 0], 'food for everyone at that meal');
+  const crowd = (/** @type {any} */ s) => {
+    const one = Object.values(s.units)[0];
+    for (let i = 0; i < 20; i++) s.units[`x${i}`] = { ...one, id: `x${i}` };
+  };
+  assert.deepEqual(play((s) => { s.tick = s.story.until - 1; crowd(s); }), [undefined, undefined, undefined], 'food short for 32: not yet');
+  assert.deepEqual(play((s) => { s.tick = s.story.until; crowd(s); }), ['time', until, undefined], 'and then lost');
   // Won is won: a game already over is left alone.
   const { state } = newStoryGame(0);
   state.over = 5;
