@@ -54,7 +54,7 @@ const liveGames = new Map();
 /**
  * The live room of a game, if it has one in this process.
  * @param {string} gameId
- * @returns {{ releaseSeat(pid: string): void, abandon(): void } | null}
+ * @returns {{ game: import('../src/core/game.js').GameState, releaseSeat(pid: string): void, abandon(): void } | null}
  */
 export function liveRoom(gameId) {
   return liveGames.get(gameId) ?? null;

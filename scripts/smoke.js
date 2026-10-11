@@ -386,6 +386,7 @@ async function story(browser, url) {
   await inLobby(page);
   await waitText(page, '#lobby-story', 'Start story: Starving village');
   assert.equal(await text(page, '#lobby-story-or'), 'or');
+  assert.equal(await page.locator('#lobby-story-reset').isVisible(), false, 'nothing to reset yet');
   assert.match(await page.getAttribute('#lobby-story', 'title') ?? '', /^Players past the first act: \d+; finished the story: \d+\.$/);
   await page.locator('#lobby .card').screenshot({ path: join(OUT, 'lobby-story.png') });
   await page.click('#lobby-story');
@@ -427,6 +428,8 @@ async function story(browser, url) {
   await lobby.goto(url);
   await inLobby(lobby);
   await waitText(lobby, '#lobby-story', 'Continue story: Starving village');
+  assert.equal(await lobby.locator('#lobby-story-reset').isVisible(), true, 'an act under way may be reset');
+  await lobby.locator('#lobby .card').screenshot({ path: join(OUT, 'lobby-story-reset.png') });
   await lobby.close();
 
   const asked = new Promise((res) => page.once('dialog', (d) => { res(d.message()); d.accept(); }));
@@ -537,6 +540,13 @@ async function story(browser, url) {
   assert.equal(await page.locator('#lobby-story-or').isVisible(), false, 'no "or" once complete');
   assert.match(await page.getAttribute('#lobby-story', 'title') ?? '', /finished the story: [1-9]\d*\.$/, 'this player among them');
   await page.locator('#lobby .card').screenshot({ path: join(OUT, 'lobby-story-complete.png') });
+  // Reset, it starts again from the first act.
+  assert.equal(await page.locator('#lobby-story-reset').isVisible(), true);
+  const resetAsked = new Promise((res) => page.once('dialog', (d) => { res(d.message()); d.accept(); }));
+  await page.click('#lobby-story-reset');
+  assert.match(String(await resetAsked), /^Reset the story\? It starts again from the first act/);
+  await waitText(page, '#lobby-story', 'Start story: Starving village');
+  assert.equal(await page.locator('#lobby-story-reset').isVisible(), false);
   await page.context().close();
 }
 

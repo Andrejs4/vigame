@@ -253,7 +253,10 @@ drawing during play). Read it before art or graphics work.
   `publicView` leaves out), and `welcomeHeroes` gives each hero born there
   (at its opening too) one's name, levels and skills. A player's place
   (`stories.act`) is the act to play next, past the last once all are
-  won, so a story complete now goes on to an act added later. A message in the middle of the screen is
+  won, so a story complete now goes on to an act added later. The
+  lobby's Reset story (`resetStory`) sends it back to the first act by
+  choice, keeping the heroes alive (from the live room's game, if open,
+  newer than its snapshot) and deleting an act under way. A message in the middle of the screen is
   `tip.js`: it takes no clicks (`pointer-events: none`), and goes at the
   player's first click or key without stopping it. Its caller may hold
   the clock meanwhile (`net.hold`), which the room allows only a story

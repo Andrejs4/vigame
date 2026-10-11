@@ -171,6 +171,11 @@ Run `npm start` and open http://127.0.0.1:2567.
   the story starts again from the first act; won, it goes on to the next;
   once the last is won, the button says **Story complete**, between
   laurels, and does nothing (until an act is added, which is then next).
+  **Reset story**, a quiet link under the button while there is anything
+  to reset (an act past the first, one under way, or the story complete),
+  asks first, then starts the story again from the first act: an act
+  under way is deleted, and the heroes alive in it (or, with none under
+  way, those kept from the acts won) come along.
   Each act begins with a fresh castle on its own map, but the heroes who
   came through the acts before come too: each hero born in the new act
   (those it starts with too) is one of them, the best first, with all
@@ -749,6 +754,7 @@ HTTP API:
 | `GET /api/games/:id/commands` | Its command log, with each command's tick. |
 | `GET /api/games/:id/seats` | Who holds each seat: `{ pid, name }`, or `null` for a free one. |
 | `POST /api/story/status` | `{ token }`: where a signed-in player is in the story, `{ act, first, playing, complete, players }` (the act's id, whether it is the first, whether its game is under way, whether the story is complete, and `{ past, done }`: how many players are past the first act and have finished the story, which the lobby's button shows as its tooltip). |
+| `POST /api/story/reset` | `{ token }`: starts the player's story again from the first act, keeping the heroes alive now; an act's game under way is deleted (its room closes). |
 | `POST /api/story` | `{ token }`: starts the act the player is on, or goes back to its game under way: `201 { id }`; `409` once the story is complete. |
 
 The database has five tables: `games` (each game's seed, seats, each

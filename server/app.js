@@ -229,7 +229,7 @@ export async function startGameServer({
         res.json({ pid: player.pid, name: clean, language: lang });
       });
 
-      storyRoutes(app, storage, { signedIn, playerId });
+      storyRoutes(app, storage, { signedIn, playerId, liveRoom });
 
       app.post('/api/games', (req, res) => {
         if (!signedIn(storage, req.body?.token)) return void res.status(401).json({ error: 'sign in first' });

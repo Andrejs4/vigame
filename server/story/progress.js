@@ -67,12 +67,36 @@ export function storyEnded(storage, pid, gameId, game) {
 export const complete = (progress) => progress.act >= ACTS.length;
 
 /**
- * The story's routes: where the player is in it, and playing on.
+ * Start the story again from the first act, by the player's choice: an
+ * act's game under way is deleted (its room, if open, closes), and the
+ * heroes alive in it, and those still waiting, come along; with none
+ * under way, those kept from the acts won do.
+ * @param {import('../storage.js').Storage} storage
+ * @param {string} pid
+ * @param {(gameId: string) => { game: import('../../src/core/game.js').GameState, abandon(): void } | null} live
+ *   A game's live room, if it has one: its game is newer than the last snapshot.
+ */
+export function resetStory(storage, pid, live) {
+  const progress = progressOf(storage, pid);
+  let heroes = progress.heroes;
+  if (progress.gameId !== null) {
+    const room = live(progress.gameId);
+    const game = room?.game ?? /** @type {any} */ (storage.loadGame(progress.gameId))?.state;
+    if (game?.story) heroes = veteransOf(game);
+    room?.abandon();
+    storage.deleteGame(progress.gameId);
+  }
+  storage.saveStory(pid, { act: 0, gameId: null, heroes });
+}
+
+/**
+ * The story's routes: where the player is in it, playing on, and starting again.
  * @param {import('express').Express} app
  * @param {import('../storage.js').Storage} storage
- * @param {{ signedIn: (storage: any, token: unknown) => boolean, playerId: (token: string) => string }} auth
+ * @param {{ signedIn: (storage: any, token: unknown) => boolean, playerId: (token: string) => string,
+ *   liveRoom: (gameId: string) => any }} deps
  */
-export function storyRoutes(app, storage, { signedIn, playerId }) {
+export function storyRoutes(app, storage, { signedIn, playerId, liveRoom }) {
   // `{ act, first, playing, complete, players }`: the act's id, whether it
   // is the first, whether its game is under way, and how many players are
   // past the first act and have finished the story (`{ past, done }`).
@@ -95,5 +119,12 @@ export function storyRoutes(app, storage, { signedIn, playerId }) {
     const id = playStory(storage, playerId(token));
     if (id === null) return void res.status(409).json({ error: 'the story is complete' });
     res.status(201).json({ id });
+  });
+  // Start the story again from the first act, with the heroes alive now.
+  app.post('/api/story/reset', (req, res) => {
+    const token = req.body?.token;
+    if (!signedIn(storage, token)) return void res.status(401).json({ error: 'sign in first' });
+    resetStory(storage, playerId(token), liveRoom);
+    res.json({ ok: true });
   });
 }

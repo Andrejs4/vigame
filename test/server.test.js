@@ -981,6 +981,30 @@ test('story mode: Village defence given up is lost, though the Dark Lord is left
   await leaveAll(a);
 });
 
+test('story mode: reset, the story starts again from the first act, with the heroes alive now', async () => {
+  const pid = playerId(TOKENS.a);
+  const skills = { breeding: 3, ranged: 3, melee: 3, build: 3, farming: 3, running: 3 };
+  const veteran = { name: 'Everard Bywater', level: 9, xp: 0, skills, practice: { ...skills, ranged: 0 } };
+  // An act under way, its room open, with a hero of level 9 born again in it.
+  server.storage.saveStory(pid, { act: 2, gameId: null, heroes: [veteran] });
+  const id = /** @type {string} */ ((await (await post('/api/story', { token: TOKENS.a })).json()).id);
+  const a = await join(id, TOKENS.a);
+  assert.ok(Object.values(seen(a).units).some((/** @type {any} */ u) => u.name === 'Everard Bywater' && u.level === 9), 'born again');
+  assert.equal((await post('/api/story/reset', { token: 'x'.repeat(32) })).status, 401);
+  const closed = new Promise((res) => a.onLeave(res));
+  assert.equal((await post('/api/story/reset', { token: TOKENS.a })).status, 200);
+  await closed;
+  assert.equal(server.storage.loadGame(id), null, 'the act\'s game is gone');
+  const after = server.storage.storyOf(pid);
+  assert.deepEqual([after.act, after.gameId], [0, null]);
+  assert.ok(after.heroes.some((h) => h.name === 'Everard Bywater' && h.level >= 9), 'the hero comes along');
+  // Complete, the same: from the first act, the heroes kept.
+  server.storage.saveStory(pid, { act: ACTS.length, gameId: null, heroes: [veteran] });
+  await post('/api/story/reset', { token: TOKENS.a });
+  assert.deepEqual(server.storage.storyOf(pid), { act: 0, gameId: null, heroes: [veteran] });
+  server.storage.saveStory(pid, { act: 0, gameId: null });
+});
+
 test('selections are shared, but only for hexes on the board', async () => {
   const id = await startGame();
   const a = await join(id, TOKENS.a);

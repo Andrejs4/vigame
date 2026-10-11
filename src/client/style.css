@@ -120,9 +120,18 @@ button[aria-pressed="true"] { background: rgba(255, 216, 77, 0.18); border-color
 /* The story's button, above the new game's choices, a little apart from
    them, yellow as New game (.primary); complete, still and golden between
    laurels. */
-.card > .story-button { width: 100%; margin-bottom: 18px; text-align: center; }
+.card > .story-button { width: 100%; margin-bottom: 0; text-align: center; }
+.card > .story-button.complete { margin-bottom: 18px; }
+.card > .story-button.complete:has(~ .story-reset:not([hidden])) { margin-bottom: 0; }
+/* Reset story: a quiet link under it, to the right. */
+.card > .story-reset {
+  display: block; margin: 4px 0 0 auto; padding: 0; border: none; background: none;
+  color: var(--ink-dim); font-size: 12px; text-decoration: underline; text-align: right;
+}
+.card > .story-reset:hover:not(:disabled) { background: none; color: var(--amber); }
+.card > .story-reset[hidden] { display: none; }
+.card > .story-button.complete ~ .story-reset { margin-bottom: 14px; }
 /* While it may be played: "or", between lines, under it. */
-.card > .story-button:not(.complete) { margin-bottom: 0; }
 .story-or {
   display: flex; align-items: center; gap: 10px; margin: 8px 0 10px;
   color: var(--ink-dim); font-size: 13px;

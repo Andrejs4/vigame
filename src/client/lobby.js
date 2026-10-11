@@ -343,6 +343,7 @@ export function showLobby(token, me, { notice } = {}) {
 async function showStoryButton(token, language, tell) {
   const button = /** @type {HTMLButtonElement} */ (document.getElementById('lobby-story'));
   const or = /** @type {HTMLElement} */ (document.getElementById('lobby-story-or'));
+  const reset = /** @type {HTMLButtonElement} */ (document.getElementById('lobby-story-reset'));
   const word = (/** @type {Word} */ w, /** @type {Record<string, string | number>} */ values = {}) => say(language, { word: w, values });
   try {
     const res = await post('api/story/status', { token });
@@ -352,6 +353,8 @@ async function showStoryButton(token, language, tell) {
     button.classList.toggle('complete', complete);
     button.disabled = complete;
     or.hidden = complete;
+    // Something to reset: an act past the first, one under way, or the story complete.
+    reset.hidden = first && !playing && !complete;
     if (complete) {
       const laurel = () => Object.assign(document.createElement('span'), { className: 'laurel' });
       button.replaceChildren(laurel(), word('storyComplete'), laurel());
@@ -360,6 +363,18 @@ async function showStoryButton(token, language, tell) {
     }
     button.hidden = false;
   } catch { /* no story button this time */ }
+  reset.onclick = async () => {
+    if (!confirm(word('askResetStory'))) return;
+    reset.disabled = true;
+    try {
+      const res = await post('api/story/reset', { token });
+      if (!res.ok) throw new Error(await reason(res));
+      await showStoryButton(token, language, tell);
+    } catch (e) {
+      tell({ word: 'storyNotReset', values: { why: /** @type {Error} */ (e).message } });
+    }
+    reset.disabled = false;
+  };
   button.onclick = async () => {
     button.disabled = true;
     try {
