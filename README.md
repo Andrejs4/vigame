@@ -154,7 +154,8 @@ Run `npm start` and open http://127.0.0.1:2567.
   may end it from the stands. Such a game counts among your three waiting
   for a player.
 - **Story mode**, also a tutorial: a campaign of acts, played alone, on
-  maps the same for every player. The lobby's button, under New game,
+  maps the same for every player. The lobby's button, above the new
+  game's choices,
   starts it (**Start story: Starving village**) or goes back to the act
   under way (**Continue story**); each player has one story. An act's
   game pauses while its player is away, like any game, and appears in no
