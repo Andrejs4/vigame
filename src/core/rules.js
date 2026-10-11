@@ -70,7 +70,7 @@ export const DEFAULT_PLAYERS = 1;
 export const MODES = {
   coop: 'Cooperation', easy: 'Easy Lord', shared: 'Shared Easy Lord', teams: 'Two teams', ffa: 'Free for all',
 };
-export const DEFAULT_MODE = 'coop';
+export const DEFAULT_MODE = 'easy';
 
 /**
  * The modes with a Dark Lord, and his buildings' hit points in each (his

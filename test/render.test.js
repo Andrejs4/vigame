@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { countLabel, drawOrder, heading, pickAt, pipsOf } from '../src/client/render.js';
+import { countLabel, drawOrder, heading, levelTier, pickAt, pipsOf } from '../src/client/render.js';
 import { BUILDING_TYPES } from '../src/core/rules.js';
 
 test('a building shows a pip for each upgrade, a pit for each grade of depth, a new one none', () => {
@@ -64,4 +64,8 @@ test("a click picks the viewer's band over the building under it; another side's
   assert.equal(pick(0, true), 'b2');
   delete buildings.b2;
   assert.equal(pick(0, true), 'b1', 'then the pit');
+});
+
+test('a level from 20 has a tier: gray, bronze, silver, gold, and at 100 diamond blue', () => {
+  assert.deepEqual([1, 19, 20, 39, 40, 59, 60, 79, 80, 99, 100].map(levelTier), [-1, -1, 0, 0, 1, 1, 2, 2, 3, 3, 4]);
 });

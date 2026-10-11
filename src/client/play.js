@@ -17,7 +17,7 @@ import { getJson, serverBase } from './api.js';
 import { Camera } from './camera.js';
 import { Effects, fallenHeroes, fallenHeroesNote } from './effects.js';
 import { Minimap } from './minimap.js';
-import { BoardRenderer, COUNT_ZOOM, pickAt } from './render.js';
+import { BoardRenderer, COUNT_ZOOM, levelTier, pickAt } from './render.js';
 import { autoLanguage, browserLanguages, chosenLanguage, keyCandidates } from './language.js';
 import { Sounds, soundsFor } from './sounds.js';
 import { Ground } from './ground.js';
@@ -109,6 +109,22 @@ function keyLabel(button, label, price = '') {
     parts.push(priced);
   }
   button.replaceChildren(...parts.filter((part) => part !== ''));
+}
+
+/**
+ * The diamond before a unit's level, from LEVEL_TIERS on, in its tier's
+ * colour (style.css); with `keep`, an empty one below that, as wide, so
+ * levels line up.
+ * @param {number} level
+ * @param {boolean} [keep]
+ * @returns {HTMLElement | string}
+ */
+function tierMark(level, keep = false) {
+  const tier = levelTier(level);
+  if (tier < 0 && !keep) return '';
+  const mark = document.createElement('span');
+  mark.className = tier < 0 ? 'tier' : `tier tier-${tier}`;
+  return mark;
 }
 
 /** @typedef {import('../core/game.js').Building} Building */
@@ -856,7 +872,8 @@ export async function startGame(net, me) {
       years.textContent = `${minutesOld(u, u.died)}m`;
       const stats = document.createElement('span');
       stats.className = 'stats';
-      stats.append(`${lv(u.level)} · `, years);
+      // Padded before the diamond, so it stays beside the number.
+      stats.append(' '.repeat(3 - String(u.level).length), tierMark(u.level, true), `${u.level} · `, years);
       const where = document.createElement('span');
       where.className = 'where';
       where.textContent = u.died === undefined ? whereIs(u, null) : word(u.how === 'hunger' ? 'diedHunger' : 'diedCombat');
@@ -965,7 +982,7 @@ export async function startGame(net, me) {
         years.className = 'hero';
         years.title = word('heroTitle');
       }
-      stats.append(`Lv ${u.level} · ${skillName(skill)} ${u.skills[skill]} · `, years);
+      stats.append('Lv ', tierMark(u.level), `${u.level} · ${skillName(skill)} ${u.skills[skill]} · `, years);
       const where = document.createElement('span');
       where.className = 'where';
       where.textContent = extra ? `${whereIs(u, target)} · ${skillName(extra)} ${u.skills[extra]}` : whereIs(u, target);

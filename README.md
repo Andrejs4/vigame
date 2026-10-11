@@ -59,7 +59,7 @@ Run `npm start` and open http://127.0.0.1:2567.
   credits. Each section folds away; the lists of others' games under way
   and finished, the high scores, How to play and About start folded, and the browser keeps
   them as you leave them. **New game**
-  starts one for 1 to 16 players (1 by default, against the Dark Lord), on a map that grows with
+  starts one for 1 to 16 players (1 by default, against the Dark Lord in Easy Lord, the mode chosen at first), on a map that grows with
   them (29 × 20 cells for two, 59 × 39 for eight, 83 × 55 for sixteen),
   castles in a ring around the middle, out of reach of the lair and of
   each other. A game's address (`?game=…`) is also the link to send
@@ -193,6 +193,9 @@ Run `npm start` and open http://127.0.0.1:2567.
   stands about three times as high, 58 when an ordinary unit is 20, and
   reaches 100 about when an ordinary one would be 34. The crew chooser
   shows a hero's face and its age in gold (the rest have a silhouette).
+  From level 20 a unit's level, there and in the Heroes list, has a small
+  diamond before it: gray from 20, bronze from 40, silver from 60, gold
+  from 80, and diamond blue at 100.
   Select your castle and press **Heroes…**
   (in Crew's place, as the castle has no crew) for yours alive now, highest
   level first, each with its face, where it is (after a small picture of
@@ -658,7 +661,7 @@ HTTP API:
 | `GET /api/challenge` | A sum to answer when signing in: `{ id, question }`. Each one answers once and lasts 10 minutes. |
 | `POST /api/players` | Signs in: `{ token, name, language, challenge, answer }` gives `{ pid, name, language }`. `400` for a bad token, name or language, `403` for a wrong answer. The login page always sends a language (`auto` at least), so a sign-in without one fails as a wrong answer does, using its sum up: a small check that it came from the page. |
 | `POST /api/settings` | Changes a signed-in player's settings: `{ token, name?, language? }` gives `{ pid, name, language }`; what isn't given stays. `401` if not signed in, `400` for a bad name or language. |
-| `POST /api/games` | Starts a game with a random map: `{ token, mode?, breeding?, players? }` of a signed-in player (`mode` `coop`, `easy`, `shared`, `teams` or `ffa`, `breeding` `normal`, `fast` or `slow`, `npcs` true for NPCs in the free seats, `players` 1 to 16; by default a cooperation game for one, units at the normal pace) gives `201 { id }`; `401` if not signed in, `400` for a bad mode, pace or number; `409 { error, waiting, seated, games }` while the player has too many games on the go (three of theirs waiting for a player, or seats in three under way): why in English, how many of each (0 for one that isn't why, so the page can say it in its own words), and those games as `GET /api/games` lists them, each with `clear`: `'delete'`, `'leave'` or `null`. |
+| `POST /api/games` | Starts a game with a random map: `{ token, mode?, breeding?, players? }` of a signed-in player (`mode` `coop`, `easy`, `shared`, `teams` or `ffa`, `breeding` `normal`, `fast` or `slow`, `npcs` true for NPCs in the free seats, `players` 1 to 16; by default an Easy Lord game for one, units at the normal pace) gives `201 { id }`; `401` if not signed in, `400` for a bad mode, pace or number; `409 { error, waiting, seated, games }` while the player has too many games on the go (three of theirs waiting for a player, or seats in three under way): why in English, how many of each (0 for one that isn't why, so the page can say it in its own words), and those games as `GET /api/games` lists them, each with `clear`: `'delete'`, `'leave'` or `null`. |
 | `POST /api/games/:id/delete` | `{ token }`: deletes a game under way that the player started and nobody else holds a seat in, closing its room if open; `403` if they didn't start it, `409` if someone else plays it or it is over. |
 | `POST /api/games/:id/leave` | `{ token }`: gives up the player's seat in a game under way, through its room if open; `409` if they hold none or it is over. |
 | `GET /api/games` | The 50 most recently active games, for the lobby, with their name, mode, `breeding`, who holds each seat (`{ pid, name }` or `null`) and `fallen`, the seats whose castles have fallen, which nobody can take. |
