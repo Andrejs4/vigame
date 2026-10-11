@@ -220,8 +220,9 @@ Run `npm start` and open http://127.0.0.1:2567.
     castle, and three raiders start 7 cells round the castle. Won once the
     lair falls: congratulations in the middle of the screen, the game held,
     and the points once the player clicks or presses a key. Lost if the
-    castle falls or every unit dies. Tips at 0:08 (defeat the lair), 5:00
-    (wagons, as mobile cover, about when 15 dark metal is in), 7:30
+    castle falls or every unit dies. Tips at 0:08 (slay monsters for metal,
+    build wagons, defeat the lair), 5:00 (wagons are mobile cover: they
+    tank damage and retreat for repairs; about when 15 dark metal is in), 7:30
     (upgrading wagons) and 8:00 (good luck). Tried: keeping everyone home,
     the castle holds for 40 minutes and the lair stands; the NPC stand-in,
     and bands of 30 sent at the camps and the lair, lose the castle within
