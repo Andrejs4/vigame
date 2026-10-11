@@ -118,7 +118,8 @@ button[aria-pressed="true"] { background: rgba(255, 216, 77, 0.18); border-color
   .card .new-game #lobby-players { width: 100%; }
 }
 /* The story's button, above the new game's choices, a little apart from
-   them; complete, still and golden between laurels. */
+   them, yellow as New game (.primary); complete, still and golden between
+   laurels. */
 .card > .story-button { width: 100%; margin-bottom: 18px; text-align: center; }
 .card > .story-button.complete:disabled {
   opacity: 1; cursor: default; color: var(--amber); font-weight: 600;
