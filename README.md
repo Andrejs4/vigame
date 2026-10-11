@@ -163,7 +163,7 @@ Run `npm start` and open http://127.0.0.1:2567.
   act begins, its name and goal show in the middle of the screen, faint,
   and its clock waits until your first click or key, which still does what
   it would (the message takes no clicks, so they reach the board); then it
-  fades. Tips follow at set seconds of the act, the same way but staying
+  fades, with a soft bell (as do the tips). Tips follow at set seconds of the act, the same way but staying
   their time, while the game goes on: in Starving village, farms at 0:08,
   pits at 0:20, keeping units at home and crews at 0:34, good luck at 1:00. Its
   name, goal and time left stay under the game's details; buildings it
@@ -734,7 +734,7 @@ HTTP API:
 | `GET /api/games/:id` | One game: its seed, latest snapshot and seats. |
 | `GET /api/games/:id/commands` | Its command log, with each command's tick. |
 | `GET /api/games/:id/seats` | Who holds each seat: `{ pid, name }`, or `null` for a free one. |
-| `POST /api/story/status` | `{ token }`: where a signed-in player is in the story, `{ act, first, playing, complete }` (the act's id, whether it is the first, whether its game is under way, whether the story is complete). |
+| `POST /api/story/status` | `{ token }`: where a signed-in player is in the story, `{ act, first, playing, complete, players }` (the act's id, whether it is the first, whether its game is under way, whether the story is complete, and `{ past, done }`: how many players are past the first act and have finished the story, which the lobby's button shows as its tooltip). |
 | `POST /api/story` | `{ token }`: starts the act the player is on, or goes back to its game under way: `201 { id }`; `409` once the story is complete. |
 
 The database has five tables: `games` (each game's seed, seats, each

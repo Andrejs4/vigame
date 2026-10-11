@@ -347,7 +347,8 @@ async function showStoryButton(token, language, tell) {
   try {
     const res = await post('api/story/status', { token });
     if (!res.ok) return;
-    const { act, first, playing, complete } = await res.json();
+    const { act, first, playing, complete, players } = await res.json();
+    button.title = word('storyCounts', { past: players?.past ?? 0, done: players?.done ?? 0 });
     button.classList.toggle('complete', complete);
     button.disabled = complete;
     or.hidden = complete;

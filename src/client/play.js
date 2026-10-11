@@ -637,6 +637,7 @@ export async function startGame(net, me) {
     if (!line) return;
     net.hold(true);
     tip.show({ title: line.name, text: `${line.goal} ${word('tipGoOn')}`, ms: Infinity, onClose: () => net.hold(false) });
+    sounds.play('tip');
   }
 
   /** The game second of the last story tip shown. */
@@ -649,6 +650,7 @@ export async function startGame(net, me) {
     if (!due) return;
     tipped = due.second;
     tip.show({ text: word(due.word, { cost: BUILDING_TYPES.farm.cost, tower: BUILDING_TYPES.tower.cost }), stays: true });
+    sounds.play('tip');
   }
 
   /** A story act's line under the game's details: the act, its goal, and the time left. */

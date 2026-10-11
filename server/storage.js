@@ -91,6 +91,7 @@ export function openStorage(file = ':memory:') {
     ON CONFLICT (pid) DO UPDATE SET name = excluded.name, language = excluded.language, updated_at = excluded.updated_at`);
   const selectPlayer = db.prepare('SELECT * FROM players WHERE pid = ?');
   const selectStory = db.prepare('SELECT act, game_id, heroes FROM stories WHERE pid = ?');
+  const countStories = db.prepare('SELECT COUNT(*) FILTER (WHERE act >= 1) AS past, COUNT(*) FILTER (WHERE act >= ?) AS done FROM stories');
   const upsertStory = db.prepare(`
     INSERT INTO stories (pid, act, game_id, heroes, updated_at) VALUES (@pid, @act, @gameId, @heroes, @now)
     ON CONFLICT (pid) DO UPDATE SET act = excluded.act, game_id = excluded.game_id, heroes = excluded.heroes,
@@ -243,6 +244,17 @@ export function openStorage(file = ':memory:') {
       const row = /** @type {any} */ (selectStory.get(pid));
       const heroes = parse(row?.heroes ?? '[]');
       return { act: row?.act ?? 0, gameId: row?.game_id ?? null, heroes: Array.isArray(heroes) ? heroes : [] };
+    },
+
+    /**
+     * How many players are past the story's first act (`past`), and how
+     * many have won its last, the act `last` (`done`).
+     * @param {number} last
+     * @returns {{ past: number, done: number }}
+     */
+    storyCounts(last) {
+      const { past, done } = /** @type {any} */ (countStories.get(last + 1));
+      return { past, done };
     },
 
     /**

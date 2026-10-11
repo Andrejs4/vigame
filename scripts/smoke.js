@@ -385,6 +385,7 @@ async function story(browser, url) {
   await inLobby(page);
   await waitText(page, '#lobby-story', 'Start story: Starving village');
   assert.equal(await text(page, '#lobby-story-or'), 'or');
+  assert.match(await page.getAttribute('#lobby-story', 'title') ?? '', /^Players past the first act: \d+; finished the story: \d+\.$/);
   await page.locator('#lobby .card').screenshot({ path: join(OUT, 'lobby-story.png') });
   await page.click('#lobby-story');
   await inGame(page);
@@ -500,6 +501,7 @@ async function story(browser, url) {
   assert.equal(await page.locator('#lobby-story').isDisabled(), true);
   assert.equal(await page.locator('#lobby-story .laurel').count(), 2);
   assert.equal(await page.locator('#lobby-story-or').isVisible(), false, 'no "or" once complete');
+  assert.match(await page.getAttribute('#lobby-story', 'title') ?? '', /finished the story: [1-9]\d*\.$/, 'this player among them');
   await page.locator('#lobby .card').screenshot({ path: join(OUT, 'lobby-story-complete.png') });
   await page.context().close();
 }

@@ -851,7 +851,11 @@ test('a game of NPCs alone runs while someone watches; its creator may end it fr
 });
 
 test('story mode: one story a player, started or gone back to from the lobby; given up, it starts again', async () => {
-  const status = async (/** @type {string} */ token) => (await post('/api/story/status', { token })).json();
+  // Where the player is; how many players are where is checked below.
+  const status = async (/** @type {string} */ token) => {
+    const { players: _players, ...where } = await (await post('/api/story/status', { token })).json();
+    return where;
+  };
   assert.equal((await post('/api/story/status', { token: 'x'.repeat(32) })).status, 401);
   assert.deepEqual(await status(TOKENS.b), { act: 'starving-village', first: true, playing: false, complete: false });
   const started = await post('/api/story', { token: TOKENS.b });
@@ -938,11 +942,17 @@ test('story mode: the director ends an act once won, and the story moves on; pas
   for (const name of carried.map((h) => h.name)) assert.ok(after.includes(name), `${name} goes on`);
   const status = async () => (await post('/api/story/status', { token: TOKENS.c })).json();
   assert.equal((await status()).complete, true, 'the story is complete');
+  // The lobby's button tells how many are past the first act, and have finished.
+  const counted = server.storage.storyCounts(ACTS.length - 1);
+  assert.deepEqual((await status()).players, counted);
+  assert.ok(counted.past >= 1 && counted.done >= 1);
+  assert.ok(counted.past >= counted.done);
   assert.equal((await post('/api/story', { token: TOKENS.c })).status, 409);
   // An act added later is the next to play.
   ACTS.push({ ...ACTS[0], id: 'later', name: 'Later' });
   try {
-    assert.deepEqual(await status(), { act: 'later', first: false, playing: false, complete: false });
+    const { players: _players, ...later } = await status();
+    assert.deepEqual(later, { act: 'later', first: false, playing: false, complete: false });
     const next = await (await post('/api/story', { token: TOKENS.c })).json();
     assert.equal(/** @type {any} */ (server.storage.loadGame(next.id)).state.story.act, 'later');
   } finally {

@@ -73,8 +73,9 @@ export const complete = (progress) => progress.act >= ACTS.length;
  * @param {{ signedIn: (storage: any, token: unknown) => boolean, playerId: (token: string) => string }} auth
  */
 export function storyRoutes(app, storage, { signedIn, playerId }) {
-  // `{ act, first, playing, complete }`: the act's id, whether it is the
-  // first, and whether its game is under way.
+  // `{ act, first, playing, complete, players }`: the act's id, whether it
+  // is the first, whether its game is under way, and how many players are
+  // past the first act and have finished the story (`{ past, done }`).
   app.post('/api/story/status', (req, res) => {
     const token = req.body?.token;
     if (!signedIn(storage, token)) return void res.status(401).json({ error: 'sign in first' });
@@ -84,6 +85,7 @@ export function storyRoutes(app, storage, { signedIn, playerId }) {
       first: progress.act === 0,
       playing: progress.gameId !== null,
       complete: complete(progress),
+      players: storage.storyCounts(ACTS.length - 1),
     });
   });
   // Start the story, or go back to it: `{ id }` of the act's game.
