@@ -260,7 +260,7 @@ test('new games are stored with a castle per side, and listed; unknown ones are 
 
   const lobby = await (await fetch(`${base}/api/games`)).json();
   assert.deepEqual(lobby.find((g) => g.id === id)?.seats, [null, null]);
-  assert.equal(lobby.find((g) => g.id === id)?.mode, 'coop');
+  assert.equal(lobby.find((g) => g.id === id)?.mode, 'easy');
   const alone = await post('/api/games', { token: TOKENS.a });
   assert.equal(alone.status, 201);
   assert.deepEqual((await (await fetch(`${base}/api/games/${(await alone.json()).id}`)).json()).seats, [null], 'one player by default');

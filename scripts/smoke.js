@@ -724,7 +724,7 @@ async function threeBrowsers(browser, url, { full, label }) {
   await b.locator('#lobby-open li', { hasText: rename }).first().waitFor({ timeout: 10000 });
   if (full) await b.screenshot({ path: join(OUT, 'lobby-games.png') });
   // Its mode, with no word on its units: they come as usual.
-  assert.match(await b.locator('#lobby-open li', { hasText: rename }).first().locator('.when').innerText(), /^Cooperation · \d+:\d\d$/);
+  assert.match(await b.locator('#lobby-open li', { hasText: rename }).first().locator('.when').innerText(), /^Easy Lord · \d+:\d\d$/);
   await openFromLobby(b, 'open', 'Ann & —');
   await waitText(b, '#seat', 'Bella · Crimson');
   // Now the castle Ann has selected says it is Bella's.
@@ -1388,7 +1388,7 @@ async function sixteen(browser, url) {
   const view = await page.evaluate(() => /** @type {any} */ (window).__vigame.view);
   assert.equal(view.players.filter((/** @type {any} */ p) => p.away).length, 14);
   assert.equal(Object.values(view.buildings).filter((/** @type {any} */ b) => b.type === 'castle').length, 16);
-  assert.equal(/** @type {any} */ (Object.values(view.buildings).find((/** @type {any} */ b) => b.type === 'lair')).hp, 4 * BUILDING_TYPES.lair.hp, 'the Dark Lord as strong as for eight');
+  assert.equal(/** @type {any} */ (Object.values(view.buildings).find((/** @type {any} */ b) => b.type === 'lair')).hp, 4 * BUILDING_TYPES.lair.hp / 2, 'the Dark Lord as strong as for eight, and Easy: half that');
   // The whole ring of castles, each side in its own colour.
   for (let i = 0; i < 6; i++) await page.click('#zoom-out');
   await frames(page);

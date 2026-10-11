@@ -26,7 +26,7 @@ test('a new game has a castle per player on the start sites, with named units in
   const board = createBoard({ ...BOARD_OPTIONS, seed: 1337 });
   const state = newGame(board);
   assert.deepEqual(checkState(board, state), []);
-  assert.equal(state.mode, 'coop', 'cooperation by default');
+  assert.equal(state.mode, 'easy', 'Easy Lord by default');
   assert.ok(GAME_NAMES.includes(state.name), 'named from the preset list');
   assert.equal(publicView(state).name, state.name, 'which everyone sees');
   assert.deepEqual(
@@ -694,7 +694,7 @@ test('in cooperation the Dark Lord\'s lair sends out ever bigger waves of ghouls
 });
 
 test('the Dark Lord grows with the players: four times the hit points and twice the waves at eight, and no more past', () => {
-  const lairOf = (/** @type {number} */ players) => Object.values(newGame(createBoard({ ...BOARD_OPTIONS, seed: 3, players })).buildings)
+  const lairOf = (/** @type {number} */ players) => Object.values(newGame(createBoard({ ...BOARD_OPTIONS, seed: 3, players }), { mode: 'coop' }).buildings)
     .find((b) => b.type === 'lair');
   assert.equal(lairOf(2)?.hp, BUILDING_TYPES.lair.hp);
   assert.equal(lairOf(8)?.hp, 4 * BUILDING_TYPES.lair.hp);
