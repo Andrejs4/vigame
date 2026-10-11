@@ -7,7 +7,7 @@ import {
   depthOf, endWinner, fullMeal, sharesStock, isRising, killChance, maxHp, pointsOf, quickWin, scoreOf, seatsOf, starveChance, ROOM_COMMANDS, teamOfSeat, workFor,
 } from '../src/core/game.js';
 import {
-  BAND_TRAINING, BUILDING_TYPES, COMBAT_PERIOD, DARK_LORD, FELL_XP, OGRE_CALL, TICKS_PER_SECOND, HORDE_PERIOD, HORDE_START, RAIDERS, RAID_PERIOD, RAID_PER_PLAYER, SALVAGE, SIDES, FOOD_PER_UNIT, FOOD_PERIOD, KILL_XP, LEVEL_RATE, RANGED_DAMAGE, LEVEL_XP, MAX_HUNGER, MAX_LEVEL, SKILL_RATE, SKILL_XP, START_UNITS, UNIT_LIMIT, WAGON_PATIENCE,
+  BAND_TRAINING, BUILDING_TYPES, COMBAT_PERIOD, DARK_LORD, FELL_XP, OGRE_CALL, TICKS_PER_SECOND, HORDE_PERIOD, HORDE_START, RAIDERS, RAID_PERIOD, RAID_PER_PLAYER, SALVAGE, SIDES, FOOD_PER_UNIT, FOOD_PERIOD, HUNGER_PULL, KILL_XP, LEVEL_RATE, RANGED_DAMAGE, LEVEL_XP, MAX_HUNGER, MAX_LEVEL, SKILL_RATE, SKILL_XP, START_UNITS, UNIT_LIMIT, WAGON_PATIENCE,
   WALK_TICKS, WORK_BASE,
 } from '../src/core/rules.js';
 import { distance } from '../src/core/hex.js';
@@ -435,14 +435,14 @@ test('a side eats every minute; short shares make it hungry, full ones less so',
   crowd.players[0].food = 7;
   run(board, crowd, FOOD_PERIOD);
   // 7 + 200 from the castle (for half its 40), shared by 100: 2 each, 7 left
-  // over; hunger goes a quarter of the way to the 80% they went short.
-  assert.deepEqual([crowd.players[0].food, crowd.players[0].hunger], [7, 20]);
+  // over; hunger goes HUNGER_PULL of the way (0.4) to the 80% they went short.
+  assert.deepEqual([crowd.players[0].food, crowd.players[0].hunger], [7, Math.ceil(80 * HUNGER_PULL)]);
 
   // In a tower, so nobody is born meanwhile.
   const fed = stateWith([{ id: 'b1', type: 'castle' }, { id: 'b2', q: 3, r: 0 }], unitsIn('b2', 10, 1000));
   fed.players[0].hunger = 20;
   run(board, fed, FOOD_PERIOD);
-  assert.deepEqual([fed.players[0].food, fed.players[0].hunger], [200 - 10 * FOOD_PER_UNIT, 15]);
+  assert.deepEqual([fed.players[0].food, fed.players[0].hunger], [200 - 10 * FOOD_PER_UNIT, 20 - Math.ceil(20 * HUNGER_PULL)]);
 });
 
 test('fullMeal says whether the store and the harvest before the meal feed everyone', () => {
@@ -473,7 +473,7 @@ test('hunger follows how short meals fall: none on full ones, half on half ratio
     }
     return state.players[0].hunger;
   };
-  assert.equal(meals(5, 1), 13, 'a quarter of the way to 50, rounded up');
+  assert.equal(meals(5, 1), Math.ceil(50 * HUNGER_PULL), 'HUNGER_PULL of the way to 50, rounded up');
   assert.equal(meals(5, 30), 50, 'half rations settle at half hunger');
   assert.equal(meals(FOOD_PER_UNIT, 30), 0, 'full meals bring it back to none');
   assert.equal(meals(0, 30), MAX_HUNGER, 'nothing at all brings it to the top');

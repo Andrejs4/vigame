@@ -25,6 +25,7 @@ import { GAME_NAMES } from '../src/core/names.js';
 import { BUILDING_TYPES } from '../src/core/rules.js';
 import { GROUND_PICTURES } from '../src/client/ground.js';
 import { PICTURES } from '../src/client/tokens.js';
+import { ACTS } from '../src/story/acts.js';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const OUT = join(ROOT, 'smoke-output');
@@ -370,6 +371,82 @@ async function newPlayer(browser, url, label, name, options, expectedError) {
 }
 
 // --- scenarios ---------------------------------------------------------------
+
+/**
+ * Story mode: the lobby starts it at the first act, Starving village, a castle
+ * alone and starving, where only pits and farms may be built; given up
+ * from End, it is lost and starts again. Once its last act is won, the
+ * lobby's button says the story is complete.
+ * @param {import('playwright').Browser} browser
+ * @param {string} url
+ */
+async function story(browser, url) {
+  const page = await newPlayer(browser, url, 'story', 'Sage');
+  await inLobby(page);
+  await waitText(page, '#lobby-story', 'Start story: Starving village');
+  await page.click('#lobby-story');
+  await inGame(page);
+  // As it begins, its name and goal in the middle, faint, and the clock
+  // held until the first click, which still reaches the board.
+  await page.waitForSelector('#tip.shown');
+  assert.equal(await text(page, '#tip .tip-title'), 'Starving village');
+  assert.equal(await text(page, '#tip .tip-text'), 'Save the village from starvation. Click anywhere, or press a key, to begin.');
+  assert.equal(await page.locator('#tip').evaluate((el) => getComputedStyle(el).pointerEvents), 'none');
+  await waitText(page, '#time', '0:00 · paused');
+  await page.waitForTimeout(500); // faded in
+  await page.screenshot({ path: join(OUT, 'story-tip.png') });
+  const box = /** @type {{ x: number, y: number, width: number, height: number }} */ (await page.locator('#tip').boundingBox());
+  assert.equal(await page.evaluate(({ x, y }) => document.elementFromPoint(x, y)?.id, { x: box.x + box.width / 2, y: box.y + box.height / 2 }),
+    'board', 'a click on the message lands on the board');
+  await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+  await page.waitForSelector('#tip', { state: 'hidden' });
+  await waitMatch(page, '#story-goal', /^Starving village · Save the village from starvation\. · (10:00|9:\d\d) left$/);
+  assert.match(await page.getAttribute('#story-goal', 'title') ?? '', /^Won as soon as hunger is gone/);
+  await waitMatch(page, '#time', /^0:0[1-9]$/);
+  assert.equal(await text(page, '#hunger'), ' · hunger 100%');
+  assert.equal(await page.locator('#build-tower').isDisabled(), true, 'no towers in this act');
+  assert.equal(await page.getAttribute('#build-tower', 'title'), 'Not in this act yet');
+  assert.equal(await page.locator('#build-farm').isDisabled(), false);
+  assert.equal(await page.locator('#build-pit').isDisabled(), false);
+  assert.equal(await page.locator('#seat-button').isVisible(), false, 'its player keeps the seat');
+  await page.screenshot({ path: join(OUT, 'story.png') });
+  // At its eighth second, the first tip, which stays though the player clicks.
+  await page.waitForFunction(() => document.querySelector('#tip.shown .tip-text')?.textContent === 'Build a farm to grow food. A farm costs 30 stone.',
+    undefined, { timeout: 15000 });
+  assert.equal(await page.locator('#tip .tip-title').isVisible(), false, 'a tip has no title');
+  await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+  await page.waitForTimeout(500);
+  assert.equal(await page.locator('#tip.shown').count(), 1, 'it stays its time');
+  await page.screenshot({ path: join(OUT, 'story-tip-farm.png') });
+  // In the lobby meanwhile, it is to be continued.
+  const lobby = await page.context().newPage();
+  await lobby.goto(url);
+  await inLobby(lobby);
+  await waitText(lobby, '#lobby-story', 'Continue story: Starving village');
+  await lobby.close();
+
+  const asked = new Promise((res) => page.once('dialog', (d) => { res(d.message()); d.accept(); }));
+  await page.click('#end-button');
+  assert.equal(await asked, 'Abandon the story? It starts again from the first act.');
+  await page.waitForSelector('#scores[open]');
+  assert.equal(await text(page, '#scores-title'), 'You lost');
+  assert.match(await text(page, '#scores-outcome') ?? '', /· The story was abandoned\. The story starts again from the first act\.$/);
+  await page.screenshot({ path: join(OUT, 'story-lost.png') });
+  await page.goto(url);
+  await inLobby(page);
+  await waitText(page, '#lobby-story', 'Start story: Starving village');
+
+  // Its last act won: complete.
+  const token = await page.evaluate(() => localStorage.getItem('vigame.token'));
+  games.storage.saveStory(playerId(/** @type {string} */ (token)), { act: ACTS.length, gameId: null });
+  await page.reload();
+  await inLobby(page);
+  await waitText(page, '#lobby-story', 'Story complete');
+  assert.equal(await page.locator('#lobby-story').isDisabled(), true);
+  assert.equal(await page.locator('#lobby-story .laurel').count(), 2);
+  await page.locator('#lobby .card').screenshot({ path: join(OUT, 'lobby-story-complete.png') });
+  await page.context().close();
+}
 
 /**
  * A game for two with NPCs: its clock runs at once, with an NPC in the
@@ -1672,6 +1749,7 @@ const scenarios = /** @type {Array<[string, () => Promise<void>]>} */ ([
   ['a finished game\'s points', () => finished(browser, games.url)],
   ['sixteen players, started without the missing', () => sixteen(browser, games.url)],
   ['NPCs play the free seats', () => npcs(browser, games.url)],
+  ['story mode: started, given up, started again; complete', () => story(browser, games.url)],
 ]).filter(([name]) => name.includes(only));
 
 let failed = 0;

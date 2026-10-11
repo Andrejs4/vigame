@@ -79,6 +79,8 @@
     <h1>Vigame</h1>
     <p class="hint"><span data-word="playingAs">Playing as</span> <strong id="lobby-name"></strong> &middot; <a href="?settings" id="lobby-settings" data-word="settings">Settings</a></p>
     <p class="error" id="lobby-notice" role="status" hidden></p>
+    <!-- Story mode, before the usual games: start it, or go back to it; once its last act is won, complete (story/story.js). -->
+    <button id="lobby-story" class="story-button" type="button" hidden></button>
     <!-- The new game's choices, each label beside its chooser. -->
     <div class="new-game">
     <label for="lobby-mode" data-word="mode">Mode</label>
@@ -333,6 +335,9 @@
 <div id="stage" hidden>
   <canvas id="board"></canvas>
 
+  <!-- A message in the middle, faint, which takes no clicks (tip.js). -->
+  <div class="tip" id="tip" role="status" aria-live="polite" hidden><p class="tip-title"></p><p class="tip-text"></p></div>
+
   <div class="hud" id="status">
     <!-- Folds the panel to this header, and unfolds it; this browser keeps the choice. -->
     <button class="masthead" id="status-toggle" aria-expanded="true" aria-controls="status-body" title="Hide the game's details">
@@ -347,6 +352,8 @@
       <div class="row"><dt data-word="statusTile">Tile</dt><dd id="tile">&mdash;</dd></div>
       <div class="row"><dt data-word="statusObservers">Observers</dt><dd id="observers">0</dd></div>
     </dl>
+    <!-- A story act's name, goal and time left (story/story.js). -->
+    <p class="story-goal" id="story-goal" hidden></p>
     <p class="notice" id="message" role="status" hidden></p>
   </div>
 

@@ -24,13 +24,16 @@ import Database from 'better-sqlite3';
 import { HIGH_SCORES, scoreRows } from './scores.js';
 
 /** Bump when the tables change, and add the upgrade step to `migrate`. */
-const SCHEMA_VERSION = 26;
+const SCHEMA_VERSION = 27;
 
 /**
  * @typedef {{ id: string, seed: number, state: unknown, seq: number, seats: Array<string | null>,
  *   creator: string | null, createdAt: number, updatedAt: number }} SavedGame
  *   `creator`: the player who started it, which players aren't shown.
  * @typedef {{ seq: number, tick: number, player: number, command: unknown, at: number }} SavedCommand
+ * @typedef {{ act: number, gameId: string | null }} StoryProgress
+ *   A player's place in the story (server/story/): the act to play next, or
+ *   being played, numbered from 0; past the last once all are won.
  * @typedef {{ pid: string, name: string, language: import('../src/core/player.js').Language,
  *   createdAt: number, updatedAt: number }} SavedPlayer
  */
@@ -70,20 +73,26 @@ export function openStorage(file = ':memory:') {
     json_extract(state, '$.npcs') AS npcs, json_extract(state, '$.name') AS name,
     json_extract(state, '$.over') AS over, json_extract(state, '$.winner') AS winner,
     (SELECT json_group_array(key) FROM json_each(state, '$.players') WHERE json_extract(value, '$.lost') IS NOT NULL) AS fallen`;
-  const selectRecent = db.prepare(`SELECT ${SUMMARY} FROM games ORDER BY updated_at DESC, id LIMIT ?`);
+  // Story games are the story's alone: no list shows them, and they count toward no limit.
+  const selectRecent = db.prepare(`
+    SELECT ${SUMMARY} FROM games WHERE json_extract(state, '$.story') IS NULL ORDER BY updated_at DESC, id LIMIT ?`);
   const selectBest = db.prepare(`
     SELECT s.*, EXISTS (SELECT 1 FROM games g WHERE g.id = s.game_id) AS open FROM scores s
     WHERE points > 0 ORDER BY points DESC, ended_at, game_id, seat LIMIT ?`);
   const selectGameScores = db.prepare('SELECT * FROM scores WHERE game_id = ? ORDER BY seat');
   const selectGoingOf = db.prepare(`
     SELECT ${SUMMARY} FROM games
-    WHERE json_extract(state, '$.over') IS NULL
+    WHERE json_extract(state, '$.over') IS NULL AND json_extract(state, '$.story') IS NULL
       AND (creator = @pid OR EXISTS (SELECT 1 FROM json_each(games.seats) WHERE value = @pid))
     ORDER BY updated_at DESC, id`);
   const upsertPlayer = db.prepare(`
     INSERT INTO players (pid, name, language, created_at, updated_at) VALUES (@pid, @name, @language, @now, @now)
     ON CONFLICT (pid) DO UPDATE SET name = excluded.name, language = excluded.language, updated_at = excluded.updated_at`);
   const selectPlayer = db.prepare('SELECT * FROM players WHERE pid = ?');
+  const selectStory = db.prepare('SELECT act, game_id FROM stories WHERE pid = ?');
+  const upsertStory = db.prepare(`
+    INSERT INTO stories (pid, act, game_id, updated_at) VALUES (@pid, @act, @gameId, @now)
+    ON CONFLICT (pid) DO UPDATE SET act = excluded.act, game_id = excluded.game_id, updated_at = excluded.updated_at`);
 
   /** A command is logged, and its game marked active, together or not at all. */
   const recordCommandTx = db.transaction((/** @type {string} */ id, /** @type {any} */ row) => {
@@ -223,9 +232,29 @@ export function openStorage(file = ':memory:') {
     },
 
     /**
+     * A player's place in the story: the act to play (or being played), and
+     * its game while one is under way.
+     * @param {string} pid
+     * @returns {StoryProgress}
+     */
+    storyOf(pid) {
+      const row = /** @type {any} */ (selectStory.get(pid));
+      return { act: row?.act ?? 0, gameId: row?.game_id ?? null };
+    },
+
+    /**
+     * Keep a player's place in the story.
+     * @param {string} pid
+     * @param {StoryProgress} progress
+     */
+    saveStory(pid, { act, gameId }) {
+      upsertStory.run({ pid, act, gameId, now: Date.now() });
+    },
+
+    /**
      * A player's games under way: those they started, and those they hold a
      * seat in, most recently active first. With who started each, which the
-     * lobby's list leaves out.
+     * lobby's list leaves out. Story games aren't among them.
      * @param {string} pid
      */
     gamesUnderWayOf(pid) {
@@ -551,6 +580,20 @@ function migrate(db) {
       DELETE FROM commands;
       DELETE FROM games;
       PRAGMA user_version = 26;
+    `))();
+  }
+  if (version < 27) {
+    // Story mode: each player's place in the story (server/story/), apart
+    // from the games, which keep nothing of it but their act.
+    db.transaction(() => db.exec(`
+      CREATE TABLE IF NOT EXISTS stories (
+        pid        TEXT PRIMARY KEY,
+        act        INTEGER NOT NULL DEFAULT 0,  -- the act to play next, or being played (ACTS in src/story/acts.js);
+                                                -- past the last once all are won, so an act added later is next
+        game_id    TEXT,                        -- its game while one is under way
+        updated_at INTEGER NOT NULL
+      );
+      PRAGMA user_version = 27;
     `))();
   }
 }

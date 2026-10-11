@@ -513,6 +513,44 @@ Knobs to try first: `bandFrom` and `bandShare` (bigger, rarer bands),
 `order` (fewer farms, more towers), `keepHome`, and `hunt` against the
 Dark Lord.
 
+### Story mode: begun
+
+The author's wish (October 2026): a campaign that is also the tutorial,
+reusing the game but stepping outside it often, so kept in its own
+folders (CLAUDE.md, "Story mode lives apart"). Built so far: one story a
+player, started or continued from the lobby, abandoned from End, lost
+back to the first act, won on to the next, and complete after the last;
+one act, Starving village (first called Dying village). What it will need next, as he named it:
+
+- Hand-drawn maps: today an act's map is the usual one from a fixed
+  seed. A preset map needs one helper, "the board of this game", in the
+  four places that build one from a seed (play.js, room.js, app.js, the
+  story's own); the tests' `boardFrom` already builds a board from data.
+- Heroes reborn in the next act: the survivors' names, levels and skills
+  kept with the player's story when an act is won (`storyEnded`), and
+  put into the next act's opening (`newStoryGame`).
+- Pointing the player at what to do next: steps within an act (build a
+  farm, crew it, ...), each a check the director makes, with its words on
+  the page (an arrow or a highlight on a button or a cell).
+- Waiting and detecting: the director can see anything in the game; to
+  stop the clock while the player reads, the room would ask it.
+- A story game whose snapshot can't be read is rebuilt from its log by
+  the usual game's rules, without its story; with replays given up for
+  story mode, it could simply be started again instead.
+
+The first act as first built (Dying village, 15 minutes, won only at 0%
+hunger) was tight: hunger moved a quarter of the way
+at each meal, so from 100% every meal from the first had to be full to
+reach 0% at 14:00, a minute before the limit, and an NPC playing it
+reached 5% at 15:00 and lost. The author then made hunger move faster
+everywhere (HUNGER_PULL 0.4): 9 full meals now, from 100% to 0%. The
+NPC still loses it (1% at 15:00): it lets its village grow past its food
+(over a hundred units), which a player can hold back. The author then made the
+goal vaguer ("Save the village from starvation"), the act ten minutes, and
+won also with full supply when time runs out: the meal then feeds
+everyone, looked at the tick before it is served (the store is empty just
+after). The NPC wins it that way, at 9:59, with 94 units and 16% hunger.
+
 ### Game exports with a map version
 
 The author's thought (October 2026), after Very Easy Lord gave way to

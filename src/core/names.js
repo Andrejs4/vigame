@@ -90,6 +90,14 @@ export const GAME_NAMES = [
   "Farmers' market", 'Dust bowl', 'Slow burn', 'Last orders', 'Happy hour',
   'Pitfall', 'Marathon', 'Stampede', 'Sitting ducks', 'Early birds',
   'Snail race', 'Cabin fever', "Fool's errand", 'Hold the line',
+  'Hold my beer', 'What could go wrong', 'Trust me', 'Famous last words',
+  'Totally under control', 'Nothing to see here', 'Bring snacks', 'Plan B',
+  'There was a plan', 'Oops', 'Friendly fire', 'Not my farm',
+  'Who moved my pit', 'Ogre hugs', 'Mind the gap', 'Measure twice',
+  'Dig deeper', 'Stone cold', 'Tower of babble', 'Second breakfast',
+  'Five more minutes', 'Bedtime story', 'Peace talks', 'Polite siege',
+  'Tea and towers', 'Wagons ho', 'Fashionably late', "Beginner's luck",
+  'Brick by brick', 'Keep calm', 'Are we there yet', 'Hungry neighbours',
 ];
 
 /**

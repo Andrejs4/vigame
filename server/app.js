@@ -37,6 +37,7 @@ import { cleanLanguage, cleanPlayerName } from '../src/core/player.js';
 import { BREEDING, DEFAULT_BREEDING, DEFAULT_MODE, DEFAULT_PLAYERS, MAX_PLAYERS, MIN_PLAYERS, MODES, TICKS_PER_SECOND } from '../src/core/rules.js';
 import { createChallenges } from './challenge.js';
 import { gameRoom, isToken, liveRoom, playerId, signedIn } from './room.js';
+import { storyRoutes } from './story/progress.js';
 import { openStorage } from './storage.js';
 
 /**
@@ -227,6 +228,8 @@ export async function startGameServer({
         storage.savePlayer(player.pid, clean, lang);
         res.json({ pid: player.pid, name: clean, language: lang });
       });
+
+      storyRoutes(app, storage, { signedIn, playerId });
 
       app.post('/api/games', (req, res) => {
         if (!signedIn(storage, req.body?.token)) return void res.status(401).json({ error: 'sign in first' });
