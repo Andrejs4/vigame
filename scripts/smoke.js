@@ -440,7 +440,11 @@ async function story(browser, url) {
 
   // The second act, once the first is won: its own opening, and its first tip.
   const token = await page.evaluate(() => localStorage.getItem('vigame.token'));
-  games.storage.saveStory(playerId(/** @type {string} */ (token)), { act: 1, gameId: null });
+  // With a hero from the first act, who is born again as the second begins.
+  const skills = (/** @type {number} */ n) => ({ breeding: n, ranged: n, melee: n, build: n, farming: n, running: n });
+  games.storage.saveStory(playerId(/** @type {string} */ (token)), {
+    act: 1, gameId: null, heroes: [{ name: 'Everard Bywater', level: 31, xp: 0, skills: skills(12), practice: skills(0) }],
+  });
   await page.reload();
   await inLobby(page);
   await waitText(page, '#lobby-story', 'Continue story: Village defence');
@@ -456,6 +460,14 @@ async function story(browser, url) {
     undefined, { timeout: 15000 });
   await page.waitForTimeout(500);
   await page.screenshot({ path: join(OUT, 'story-defence.png') });
+  await page.keyboard.press('h'); // home, then Heroes
+  await page.keyboard.press('h');
+  await page.waitForSelector('#heroes[open]');
+  const first = await page.$eval('#heroes-list li:not(.none)', (li) => li.textContent ?? '');
+  assert.match(first, /Everard Bywater/, 'the first act\'s hero, highest first');
+  assert.match(first, /31/);
+  await page.locator('#heroes').screenshot({ path: join(OUT, 'story-heroes.png') });
+  await page.keyboard.press('Escape');
   await page.goto(url);
   await inLobby(page);
 

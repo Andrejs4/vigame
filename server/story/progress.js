@@ -9,7 +9,7 @@
 
 import { randomBytes } from 'node:crypto';
 
-import { ACTS, newStoryGame } from '../../src/story/acts.js';
+import { ACTS, newStoryGame, veteransOf } from '../../src/story/acts.js';
 
 /**
  * A player's place in the story, with an act's game that is gone, or over,
@@ -35,7 +35,7 @@ export function playStory(storage, pid) {
   const progress = progressOf(storage, pid);
   if (progress.gameId !== null) return progress.gameId;
   if (complete(progress)) return null;
-  const { seed, state } = newStoryGame(progress.act);
+  const { seed, state } = newStoryGame(progress.act, progress.heroes);
   const id = randomBytes(6).toString('base64url');
   storage.createGame({ id, seed, state, seats: [pid], creator: pid });
   storage.saveStory(pid, { ...progress, gameId: id });
@@ -49,14 +49,15 @@ export function playStory(storage, pid) {
  * @param {import('../storage.js').Storage} storage
  * @param {string} pid
  * @param {string} gameId
- * @param {{ winner?: number, players: Array<{ team: number }> }} game
+ * @param {import('../../src/core/game.js').GameState} game
  */
 export function storyEnded(storage, pid, gameId, game) {
   const progress = storage.storyOf(pid);
   if (progress.gameId !== gameId) return;
   // Won only by the player's own team: given up with the Dark Lord about, he wins.
   const won = game.winner !== undefined && game.winner === game.players[0]?.team;
-  storage.saveStory(pid, { act: won ? progress.act + 1 : 0, gameId: null });
+  // Won, its heroes go on to the next act; lost, the story starts again without them.
+  storage.saveStory(pid, { act: won ? progress.act + 1 : 0, gameId: null, heroes: won ? veteransOf(game) : [] });
 }
 
 /**

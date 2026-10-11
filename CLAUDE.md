@@ -238,7 +238,11 @@ drawing during play). Read it before art or graphics work.
   director runs after each tick (its waves: plain data, no dice). When
   the core ends an act's game itself (the castle fell with the Dark Lord
   standing), the director still gives it its outcome, and the story counts
-  as won only for the player's own team. A player's place
+  as won only for the player's own team. Heroes go on from act to act:
+  `stories.heroes` keeps those an act was won with (`veteransOf`), the
+  next act's game keeps those not yet born again (`story.heroes`, which
+  `publicView` leaves out), and `welcomeHeroes` gives each hero born there
+  (at its opening too) one's name, levels and skills. A player's place
   (`stories.act`) is the act to play next, past the last once all are
   won, so a story complete now goes on to an act added later. A message in the middle of the screen is
   `tip.js`: it takes no clicks (`pointer-events: none`), and goes at the

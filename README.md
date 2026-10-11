@@ -171,7 +171,12 @@ Run `npm start` and open http://127.0.0.1:2567.
   the story starts again from the first act; won, it goes on to the next;
   once the last is won, the button says **Story complete**, between
   laurels, and does nothing (until an act is added, which is then next).
-  Each act begins with a fresh castle on its own map. So far there are two:
+  Each act begins with a fresh castle on its own map, but the heroes who
+  came through the acts before come too: each hero born in the new act
+  (those it starts with too) is one of them, the best first, with all
+  their levels and skills; once they are all back, new heroes are born as
+  usual. Lost, the story starts again without them. So far there are two
+  acts:
   - **Starving village**: your castle alone, with the usual 200 stone and
     12 units and normal unit production, but starving: hunger at 100% and
     no food. Only pits and farms may be built, and nobody comes but the
@@ -183,8 +188,9 @@ Run `npm start` and open http://127.0.0.1:2567.
   - **Village defence**: a fresh castle (200 stone, 12 units, no hunger)
     on another map, and towers allowed too. The Dark Lord, with no lair
     here, sends waves of his Easy Lord horde from across the map: from
-    1:00, one a minute, wave n being n/2 ghouls (rounded up) and n/4 ogres
-    (rounded down). Monsters go for farms first, then the castle; units
+    1:00, one a minute, wave n being n + 1 ghouls and n/3 ogres (rounded
+    down): keeping everyone home, the castle barely holds; two towers
+    crewed hold it easily. Monsters go for farms first, then the castle; units
     mending a castle raise none meanwhile. Tips at 0:08 (put other
     buildings in their way), 1:40 (towers) and 2:30 (good luck). Won if
     the castle stands when the 10 minutes run out; lost if it falls or
@@ -723,7 +729,8 @@ its table of points counts it, with their name then, the game's name and
 mode, and the details: their side, the quick-win bonus, when it ended and
 their whole tally, such as the units born), and `stories` (each player's
 place in the story: the act to play next, or being played, past the last
-once all are won; and its game while one is under way). Games may be cleared when the
+once all are won; its game while one is under way; and the heroes who came
+through the acts before, as JSON). Games may be cleared when the
 rules or the format change; the scores and stories stay.
 A room reopening a game loads its snapshot and replays the commands logged
 after it; if the snapshot is unreadable, it replays the whole log from the

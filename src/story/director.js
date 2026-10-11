@@ -1,16 +1,17 @@
 /**
  * Story mode's director: after every tick of an act's game, the game server
- * lets the act do its own part (its `tick`, such as sending waves), and asks
- * it whether the act has come out (its `outcome`), and if so ends the game:
- * won, the player's team wins; lost, nobody does. A game the core ended
- * this tick (the castle fell, and only the Dark Lord stands) is given its
- * outcome too. It changes the game
- * as plain data, as the core does, but outside the core's rules, so a game
- * rebuilt from its command log alone doesn't end the same: story games
- * don't need that (their snapshots carry them).
+ * has it put heroes from earlier acts in the places of those just born
+ * (`welcomeHeroes`), let the act do its own part (its `tick`, such as
+ * sending waves), and ask whether the act has come out (its `outcome`):
+ * if so it ends the game, won, the player's team wins; lost, nobody does.
+ * A game the core ended this tick (the castle fell, and only the Dark Lord
+ * stands) is given its outcome too. It changes the game as plain data, as
+ * the core does, but outside the core's rules, so a game rebuilt from its
+ * command log alone doesn't end the same: story games don't need that
+ * (their snapshots carry them).
  */
 
-import { actOf } from './acts.js';
+import { actOf, welcomeHeroes } from './acts.js';
 
 /**
  * After a tick of an act's game: what the act does itself (`tick`, such as
@@ -24,7 +25,10 @@ export function direct(board, state) {
   const ended = state.over !== undefined;
   if (ended && state.over !== state.tick) return false; // ended earlier: given up, or before the director knew
   const act = actOf(state.story.act);
-  if (!ended) act?.tick?.(board, state);
+  if (!ended) {
+    welcomeHeroes(state);
+    act?.tick?.(board, state);
+  }
   const result = act?.outcome(state);
   if (!act || !result) return false;
   state.story.result = result;

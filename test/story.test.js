@@ -6,7 +6,7 @@ import { distance } from '../src/core/hex.js';
 import { advance, applyCommand, checkState, publicView } from '../src/core/game.js';
 import { MAX_HUNGER, START_STONE, START_UNITS, TICKS_PER_SECOND } from '../src/core/rules.js';
 import { ACT_WORDS, storyTip } from '../src/client/story/story.js';
-import { ACTS, WAVES, actOf, newStoryGame } from '../src/story/acts.js';
+import { ACTS, WAVES, actOf, newStoryGame, veteransOf } from '../src/story/acts.js';
 import { direct } from '../src/story/director.js';
 
 /** @param {number} seed */
@@ -109,7 +109,7 @@ test('the second act, Village defence: a fresh castle on a fresh map, waves from
   until(WAVES.first - 1);
   assert.equal(monsters().length, 0);
   until(WAVES.first);
-  assert.deepEqual(monsters().map((b) => b.type), ['ghoul']);
+  assert.deepEqual(monsters().map((b) => b.type), ['ghoul', 'ghoul']);
   assert.ok(monsters().every((b) => distance(b, castle) >= 18), 'across the map');
   assert.equal(monsters()[0].hp, 600, 'the Easy Lord\'s, at half their hit points');
   assert.deepEqual(checkState(board, state), []);
@@ -132,4 +132,47 @@ test('the second act, Village defence: a fresh castle on a fresh map, waves from
   assert.deepEqual(end(() => {}), [undefined, undefined, undefined]);
   assert.deepEqual(end((s) => { Object.values(s.buildings)[0].hp = 0; }), ['fallen', 1, undefined], 'not the Dark Lord\'s win');
   assert.deepEqual(end((s) => { s.units = {}; }), ['empty', 1, undefined]);
+});
+
+test("an act's heroes go on to the next: each hero born there takes one's place, the best first, then new ones are born", () => {
+  const { seed, state } = newStoryGame(0);
+  const board = boardOf(seed);
+  const skills = (/** @type {number} */ n) => ({ breeding: n, ranged: n, melee: n, build: 0, farming: n, running: 0 });
+  /** @type {import('../src/core/game.js').Veteran[]} */
+  const pool = [
+    { name: 'Old Ada', level: 30, xp: 5, skills: skills(20), practice: skills(3) },
+    { name: 'Old Bo', level: 12, xp: 0, skills: skills(4), practice: skills(0) },
+  ];
+  // Two of the first act's units made heroes, one already gone.
+  const units = /** @type {any[]} */ (Object.values(state.units));
+  units[0].hero = true;
+  units[1].hero = true;
+  delete state.units[units[1].id];
+  const veterans = veteransOf({ ...state, story: { ...state.story, heroes: [pool[1]] } });
+  assert.deepEqual(veterans.map((v) => v.name), ['Old Bo', units[0].name], 'the living, and those still waiting, the best first');
+  assert.deepEqual(Object.keys(veterans[1]).sort(), ['level', 'name', 'practice', 'skills', 'xp']);
+
+  // The next act: its opening heroes are the veterans, the rest wait for heroes born.
+  const next = newStoryGame(1, pool);
+  const heroes = Object.values(next.state.units).filter((u) => u.hero);
+  const placed = Math.min(heroes.length, pool.length);
+  heroes.slice(0, placed).forEach((u, i) => assert.deepEqual({ name: u.name, level: u.level, xp: u.xp, skills: u.skills, practice: u.practice }, pool[i]));
+  assert.ok(heroes.slice(placed).every((u) => u.level === 1), 'then new ones');
+  assert.deepEqual(next.state.story?.heroes ?? [], pool.slice(placed), 'still waiting');
+  assert.equal(publicView(next.state).story?.heroes, undefined, 'players aren\'t shown them');
+  const nextBoard = boardOf(next.seed);
+  assert.deepEqual(checkState(nextBoard, next.state), []);
+  // Played on, the next heroes born take the rest; then new ones come.
+  while (next.state.story?.heroes && next.state.tick < 20 * 60 * TICKS_PER_SECOND) {
+    advance(nextBoard, next.state);
+    direct(nextBoard, next.state);
+  }
+  assert.equal(next.state.story?.heroes, undefined, 'all placed');
+  const names = Object.values(next.state.units).map((u) => u.name);
+  for (const v of pool) assert.ok(names.includes(v.name), `${v.name} born again`);
+  const ada = /** @type {any} */ (Object.values(next.state.units).find((u) => u.name === 'Old Ada'));
+  assert.ok(ada.level >= 30, 'with its levels');
+  assert.deepEqual(checkState(nextBoard, next.state), []);
+  assert.deepEqual(checkState(board, { ...state, story: { ...state.story, heroes: [{ ...pool[0], level: 0 }] } }), ['bad story hero']);
+  assert.deepEqual(checkState(board, { ...state, story: { ...state.story, heroes: [] } }), ['bad story']);
 });

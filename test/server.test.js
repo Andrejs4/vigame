@@ -909,16 +909,29 @@ test('story mode: the director ends an act once won, and the story moves on; pas
     await leaveAll(c);
     return { id, winner, act: story.act, result: story.result };
   };
-  // A moment in, with hunger gone.
-  const first = await play((s) => ({ ...s, tick: 1, players: s.players.map((/** @type {any} */ p, /** @type {number} */ i) => (i === 0 ? { ...p, hunger: 0 } : p)) }));
+  // A moment in, with hunger gone, and a hero of level 7.
+  const first = await play((s) => {
+    const hero = /** @type {any} */ (Object.values(s.units)[0]);
+    Object.assign(hero, { hero: true, level: 7 });
+    return { ...s, tick: 1, players: s.players.map((/** @type {any} */ p, /** @type {number} */ i) => (i === 0 ? { ...p, hunger: 0 } : p)) };
+  });
   assert.deepEqual(first, { id: first.id, winner: 0, act: 'starving-village', result: 'fed' });
   await until(() => server.storage.storyOf(pid).act === 1);
+  // Its heroes go on to the next act, the best first.
+  const heroesOf = (/** @type {string} */ game) => Object.values(/** @type {any} */ (server.storage.loadGame(game)).state.units)
+    .filter((/** @type {any} */ u) => u.owner === 0 && u.hero).map((/** @type {any} */ u) => u.name).sort();
+  const carried = server.storage.storyOf(pid).heroes;
+  assert.ok(carried.length > 0, 'act one ends with a hero');
+  assert.deepEqual(carried.map((h) => h.name).sort(), heroesOf(first.id));
   // A tick before its time runs out, the castle standing.
   const second = await play((s) => ({ ...s, tick: s.story.until - 1 }));
   assert.deepEqual(second, { id: second.id, winner: 0, act: 'village-defence', result: 'held' });
   const id = second.id;
   await until(() => server.storage.storyOf(pid).act === ACTS.length);
-  assert.deepEqual(server.storage.storyOf(pid), { act: ACTS.length, gameId: null }, 'past the last act');
+  assert.deepEqual({ ...server.storage.storyOf(pid), heroes: [] }, { act: ACTS.length, gameId: null, heroes: [] }, 'past the last act');
+  // Act two's heroes born at its start are act one's, or they wait to be; all go on.
+  const after = server.storage.storyOf(pid).heroes.map((h) => h.name);
+  for (const name of carried.map((h) => h.name)) assert.ok(after.includes(name), `${name} goes on`);
   const status = async () => (await post('/api/story/status', { token: TOKENS.c })).json();
   assert.equal((await status()).complete, true, 'the story is complete');
   assert.equal((await post('/api/story', { token: TOKENS.c })).status, 409);
@@ -942,7 +955,7 @@ test('story mode: Village defence given up is lost, though the Dark Lord is left
   assert.equal(seen(a).story.act, 'village-defence');
   assert.equal(await a.request('endGame'), true);
   await until(() => server.storage.storyOf(pid).gameId === null);
-  assert.deepEqual(server.storage.storyOf(pid), { act: 0, gameId: null }, 'from the first act again');
+  assert.deepEqual(server.storage.storyOf(pid), { act: 0, gameId: null, heroes: [] }, 'from the first act again, without its heroes');
   await leaveAll(a);
 });
 

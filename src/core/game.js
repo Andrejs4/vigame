@@ -150,6 +150,14 @@ import {
  * @property {number} until The tick its time runs out.
  * @property {true} [final] The story's last act.
  * @property {string} [result] How it came out, once it has (`direct`).
+ * @property {Veteran[]} [heroes] The player's heroes from earlier acts not
+ *   yet born again in this one: each hero born takes the next one's place
+ *   (src/story/). Players aren't shown them.
+ */
+
+/**
+ * @typedef {Pick<Unit, 'name' | 'level' | 'xp' | 'skills' | 'practice'>} Veteran
+ *   A hero from an earlier act, with all it had learnt.
  */
 
 /**
@@ -2185,7 +2193,8 @@ export function checkState(board, raw) {
     const s = state.story;
     const fits = s !== null && typeof s === 'object' && typeof s.act === 'string' && Number.isSafeInteger(s.until)
       && Array.isArray(s.builds) && s.builds.every((k) => typeof k === 'string' && BUILDING_TYPES[k]?.build === true)
-      && (s.result === undefined || typeof s.result === 'string') && (s.final === undefined || s.final === true);
+      && (s.result === undefined || typeof s.result === 'string') && (s.final === undefined || s.final === true)
+      && (s.heroes === undefined || (Array.isArray(s.heroes) && s.heroes.length > 0));
     if (!fits) fail('bad story');
   }
   if (state.over !== undefined && !isCount(state.over, Infinity)) fail('bad over');
@@ -2262,6 +2271,13 @@ export function checkState(board, raw) {
   const isSkillSet = (/** @type {unknown} */ v, /** @type {number} */ below) => isRecord(v)
     && Object.keys(/** @type {object} */ (v)).length === SKILL_NAMES.length
     && SKILL_NAMES.every((s) => isCount(/** @type {Record<string, unknown>} */ (v)[s], below));
+  for (const v of Array.isArray(state.story?.heroes) ? state.story.heroes : []) {
+    const fits = isRecord(v) && Object.keys(v).length === 5 && typeof v.name === 'string' && v.name && v.name.length <= 40
+      && Number.isInteger(v.level) && v.level >= 1 && v.level <= MAX_LEVEL
+      && isCount(v.xp, v.level === MAX_LEVEL ? 1 : levelXp(v.level, true))
+      && isSkillSet(v.skills, v.level + 1) && isSkillSet(v.practice, SKILL_XP + 1);
+    if (!fits) fail('bad story hero');
+  }
   for (const [id, u] of Object.entries(state.units)) {
     if (!u || u.id !== id || !issued(id, 'u')) { fail(`unit ${id}: bad id`); continue; }
     if (!isOwner(u.owner)) { fail(`unit ${id}: bad owner`); continue; }
@@ -2310,6 +2326,15 @@ function isRecord(v) {
 }
 
 /**
+ * An act's story as players see it: without the heroes waiting from earlier acts.
+ * @param {Story} story
+ * @returns {Story}
+ */
+function storyShown({ heroes: _heroes, ...shown }) {
+  return shown;
+}
+
+/**
  * What players are shown of a state: all of it, except the random seed, the
  * id counter and units' experience points, with each route cut to its next
  * cell. That is all a screen needs to draw movement and levels, and it keeps
@@ -2331,7 +2356,7 @@ export function publicView(state) {
     mode: state.mode,
     breeding: state.breeding,
     ...(state.npcs ? { npcs: state.npcs } : {}),
-    ...(state.story ? { story: state.story } : {}),
+    ...(state.story ? { story: storyShown(state.story) } : {}),
     name: state.name,
     ...(state.over !== undefined ? { over: state.over } : {}),
     ...(state.winner !== undefined ? { winner: state.winner } : {}),

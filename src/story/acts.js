@@ -16,6 +16,7 @@ import { distance, key } from '../core/hex.js';
 import { DARK_LORD, MAX_HUNGER, TICKS_PER_SECOND } from '../core/rules.js';
 
 /** @typedef {import('../core/game.js').GameState} GameState */
+/** @typedef {import('../core/game.js').Veteran} Veteran */
 /** @typedef {import('../core/board.js').Board} Board */
 
 /**
@@ -45,9 +46,11 @@ const YOU = 0;
 const nobodyLeft = (state) => !Object.values(state.units).some((u) => u.owner === YOU);
 
 /**
- * Village defence's waves: from `first`, every `every`, wave n is
- * ceil(n / 2) ghouls and floor(n / 4) ogres (the Easy Lord's, at half their
- * hit points), on open cells across the map from the player's castle.
+ * Village defence's waves: from `first`, every `every`, wave n is n + 1
+ * ghouls and floor(n / 3) ogres (the Easy Lord's, at half their hit
+ * points), on open cells across the map from the player's castle. Tried
+ * with a player who only keeps everyone home: the castle barely holds;
+ * with two towers crewed, easily.
  */
 export const WAVES = Object.freeze({ first: 60 * TICKS_PER_SECOND, every: 60 * TICKS_PER_SECOND });
 
@@ -64,7 +67,7 @@ function sendWave(board, state) {
   const castle = Object.values(state.buildings).find((b) => b.owner === YOU && b.type === 'castle');
   if (!lord || !castle) return;
   const wave = since / WAVES.every + 1;
-  const kinds = [...Array(Math.ceil(wave / 2)).fill('ghoul'), ...Array(Math.floor(wave / 4)).fill('ogre')];
+  const kinds = [...Array(wave + 1).fill('ghoul'), ...Array(Math.floor(wave / 3)).fill('ogre')];
   // Across the map: the castle mirrored through its middle (the lair's site).
   const middle = board.starts[board.starts.length - 1];
   const across = { q: 2 * middle.q - castle.q, r: 2 * middle.r - castle.r };
@@ -138,6 +141,37 @@ export const ACTS = [
 ];
 
 /**
+ * Heroes born to the player this tick take the places of the heroes waiting
+ * from earlier acts, the best first, with all they had learnt; once none
+ * wait, heroes are born new as usual. The director calls it after every
+ * tick; an act's opening, for the heroes it starts with.
+ * @param {GameState} state
+ */
+export function welcomeHeroes(state) {
+  const waiting = state.story?.heroes;
+  if (!waiting) return;
+  for (const u of Object.values(state.units)) {
+    if (!waiting.length) break;
+    if (u.owner !== YOU || !u.hero || u.born !== state.tick) continue;
+    Object.assign(u, /** @type {Veteran} */ (waiting.shift()));
+  }
+  if (state.story && !waiting.length) delete state.story.heroes;
+}
+
+/**
+ * The heroes an act's game leaves for the next act: the player's that
+ * are still alive, and those still waiting, the best first.
+ * @param {GameState} state
+ * @returns {Veteran[]}
+ */
+export function veteransOf(state) {
+  const alive = Object.values(state.units)
+    .filter((u) => u.owner === YOU && u.hero)
+    .map(({ name, level, xp, skills, practice }) => ({ name, level, xp, skills: { ...skills }, practice: { ...practice } }));
+  return [...alive, ...structuredClone(state.story?.heroes ?? [])].sort((a, b) => b.level - a.level || b.xp - a.xp);
+}
+
+/**
  * An act by its id.
  * @param {string} id
  */
@@ -147,11 +181,13 @@ export function actOf(id) {
 
 /**
  * The opening of an act, numbered from 0: its map's seed and its game,
- * with the player in seat 0.
+ * with the player in seat 0, and the heroes from earlier acts waiting to
+ * be born again (`welcomeHeroes`).
  * @param {number} index
+ * @param {Veteran[]} [heroes]
  * @returns {{ seed: number, state: GameState }}
  */
-export function newStoryGame(index) {
+export function newStoryGame(index, heroes = []) {
   const act = ACTS[index];
   const board = createBoard({ ...BOARD_OPTIONS, seed: act.seed, players: 1 });
   // One side, and the raiders, unless the act has a mode of its own.
@@ -162,5 +198,7 @@ export function newStoryGame(index) {
     ...(index === ACTS.length - 1 ? { final: /** @type {true} */ (true) } : {}),
   };
   act.setup(state);
+  if (heroes.length) state.story.heroes = structuredClone(heroes);
+  welcomeHeroes(state);
   return { seed: act.seed, state };
 }
