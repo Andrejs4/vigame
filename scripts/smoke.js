@@ -25,6 +25,7 @@ import { GAME_NAMES } from '../src/core/names.js';
 import { BUILDING_TYPES } from '../src/core/rules.js';
 import { GROUND_PICTURES } from '../src/client/ground.js';
 import { PICTURES } from '../src/client/tokens.js';
+import { ACTS } from '../src/story/acts.js';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const OUT = join(ROOT, 'smoke-output');
@@ -409,6 +410,14 @@ async function story(browser, url) {
   assert.equal(await page.locator('#build-pit').isDisabled(), false);
   assert.equal(await page.locator('#seat-button').isVisible(), false, 'its player keeps the seat');
   await page.screenshot({ path: join(OUT, 'story.png') });
+  // At its eighth second, the first tip, which stays though the player clicks.
+  await page.waitForFunction(() => document.querySelector('#tip.shown .tip-text')?.textContent === 'Build a farm to grow food. A farm costs 30 stone.',
+    undefined, { timeout: 15000 });
+  assert.equal(await page.locator('#tip .tip-title').isVisible(), false, 'a tip has no title');
+  await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+  await page.waitForTimeout(500);
+  assert.equal(await page.locator('#tip.shown').count(), 1, 'it stays its time');
+  await page.screenshot({ path: join(OUT, 'story-tip-farm.png') });
   // In the lobby meanwhile, it is to be continued.
   const lobby = await page.context().newPage();
   await lobby.goto(url);
@@ -429,7 +438,7 @@ async function story(browser, url) {
 
   // Its last act won: complete.
   const token = await page.evaluate(() => localStorage.getItem('vigame.token'));
-  games.storage.saveStory(playerId(/** @type {string} */ (token)), { act: 0, gameId: null, complete: true });
+  games.storage.saveStory(playerId(/** @type {string} */ (token)), { act: ACTS.length, gameId: null });
   await page.reload();
   await inLobby(page);
   await waitText(page, '#lobby-story', 'Story complete');

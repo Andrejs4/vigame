@@ -232,8 +232,10 @@ drawing during play). Read it before art or graphics work.
   so every player gets the same. The director works outside the core's
   rules, so a story game rebuilt from its log alone wouldn't end the same:
   the author gave replays up for story mode. A new act: an entry in
-  `ACTS`, its words in `ACT_WORDS` (story.js) and words.js, and its
-  outcomes in `RESULT_WORDS`. A message in the middle of the screen is
+  `ACTS`, its words and its timed tips in `ACT_WORDS` (story.js) and
+  words.js, and its outcomes in `RESULT_WORDS`. A player's place
+  (`stories.act`) is the act to play next, past the last once all are
+  won, so a story complete now goes on to an act added later. A message in the middle of the screen is
   `tip.js`: it takes no clicks (`pointer-events: none`), and goes at the
   player's first click or key without stopping it. Its caller may hold
   the clock meanwhile (`net.hold`), which the room allows only a story

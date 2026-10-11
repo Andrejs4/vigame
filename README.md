@@ -163,7 +163,9 @@ Run `npm start` and open http://127.0.0.1:2567.
   act begins, its name and goal show in the middle of the screen, faint,
   and its clock waits until your first click or key, which still does what
   it would (the message takes no clicks, so they reach the board); then it
-  fades. Its
+  fades. Tips follow at set seconds of the act, the same way but staying
+  their time, while the game goes on: in Starving village, farms at 0:08,
+  pits at 0:20, keeping units at home and crews at 0:34, good luck at 0:40. Its
   name, goal and time left stay under the game's details; buildings it
   doesn't allow are greyed out. **End** abandons it. Lost (or abandoned),
   the story starts again from the first act; won, it goes on to the next;

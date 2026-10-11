@@ -19,6 +19,7 @@ import { key } from '../src/core/hex.js';
 import { GAME_NAMES } from '../src/core/names.js';
 import { createServerNet } from '../src/client/net.js';
 import { BUILDING_TYPES, END_ANYONE_TICKS, END_IDLE_MS, NPC, TICKS_PER_SECOND } from '../src/core/rules.js';
+import { ACTS } from '../src/story/acts.js';
 
 /** @type {Awaited<ReturnType<typeof startGameServer>>} */
 let server;
@@ -902,9 +903,20 @@ test('story mode: the director ends an act once won, and the story moves on; pas
   const c = await join(id, TOKENS.c);
   await until(() => seen(c).over !== undefined);
   assert.deepEqual([seen(c).winner, seen(c).story.result], [0, 'fed']);
-  await until(() => server.storage.storyOf(pid).complete);
-  assert.deepEqual(server.storage.storyOf(pid), { act: 0, gameId: null, complete: true }, 'one act so far: the story is complete');
+  await until(() => server.storage.storyOf(pid).act === ACTS.length);
+  assert.deepEqual(server.storage.storyOf(pid), { act: ACTS.length, gameId: null }, 'past the last act');
+  const status = async () => (await post('/api/story/status', { token: TOKENS.c })).json();
+  assert.equal((await status()).complete, true, 'the story is complete');
   assert.equal((await post('/api/story', { token: TOKENS.c })).status, 409);
+  // An act added later is the next to play.
+  ACTS.push({ ...ACTS[0], id: 'later', name: 'Later' });
+  try {
+    assert.deepEqual(await status(), { act: 'later', first: false, playing: false, complete: false });
+    const next = await (await post('/api/story', { token: TOKENS.c })).json();
+    assert.equal(/** @type {any} */ (server.storage.loadGame(next.id)).state.story.act, 'later');
+  } finally {
+    ACTS.pop();
+  }
   assert.equal((await server.storage.scoresOf(id)).length, 0, 'a story act keeps no scores');
   await leaveAll(c);
 });

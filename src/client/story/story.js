@@ -5,13 +5,41 @@
  * of src/story/.
  */
 
+import { TICKS_PER_SECOND } from '../../core/rules.js';
+
 /** @typedef {import('../words.js').Word} Word */
 /** @typedef {(word: Word, values?: Record<string, string | number>) => string} Say */
 
-/** Each act's words, by its id (ACTS in src/story/acts.js): its name, goal, and how it is won or lost. */
-export const ACT_WORDS = /** @type {Record<string, { name: Word, goal: Word, rules: Word }>} */ ({
-  'starving-village': { name: 'actStarvingVillage', goal: 'goalStarvingVillage', rules: 'rulesStarvingVillage' },
+/**
+ * Each act's words, by its id (ACTS in src/story/acts.js): its name, goal,
+ * and how it is won or lost; and its tips, each shown in the middle of the
+ * screen at its game second, whatever the player has done by then.
+ */
+export const ACT_WORDS = /** @type {Record<string, { name: Word, goal: Word, rules: Word, tips: Array<[number, Word]> }>} */ ({
+  'starving-village': {
+    name: 'actStarvingVillage', goal: 'goalStarvingVillage', rules: 'rulesStarvingVillage',
+    tips: [[8, 'tipStarvingFarm'], [20, 'tipStarvingPit'], [34, 'tipStarvingCrew'], [40, 'tipStarvingLuck']],
+  },
 });
+
+/** How late a tip may still show: a page that comes later (reloaded, say) skips it. */
+const TIP_LATE = 2 * TICKS_PER_SECOND;
+
+/**
+ * The act's tip due now, if one after the game second `after` is.
+ * @param {{ tick: number, over?: number, story?: import('../../core/game.js').Story }} view
+ * @param {number} after The second of the last tip shown, or 0.
+ * @returns {{ second: number, word: Word } | null}
+ */
+export function storyTip(view, after) {
+  const tips = view.story && view.over === undefined ? ACT_WORDS[view.story.act]?.tips ?? [] : [];
+  let due = null;
+  for (const [second, word] of tips) {
+    const at = second * TICKS_PER_SECOND;
+    if (second > after && at <= view.tick && view.tick < at + TIP_LATE) due = { second, word };
+  }
+  return due;
+}
 
 /** How an act came out, by its `result`; one given up has none. */
 const RESULT_WORDS = /** @type {Record<string, Word>} */ ({

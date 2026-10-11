@@ -2,7 +2,9 @@
  * Story mode on the server: each player's place in the story (the
  * `stories` table), starting or going back to the act they are on, and
  * moving on when an act ends. One story per player: lost, it starts again
- * from the first act; the last act won, it is complete.
+ * from the first act; the last act won, it is complete, until an act is
+ * added: a player's place is the act to play next, past the last one once
+ * all are won, which a new act then is.
  */
 
 import { randomBytes } from 'node:crypto';
@@ -31,9 +33,9 @@ export function progressOf(storage, pid) {
  */
 export function playStory(storage, pid) {
   const progress = progressOf(storage, pid);
-  if (progress.complete) return null;
   if (progress.gameId !== null) return progress.gameId;
-  const { seed, state } = newStoryGame(Math.min(progress.act, ACTS.length - 1));
+  if (complete(progress)) return null;
+  const { seed, state } = newStoryGame(progress.act);
   const id = randomBytes(6).toString('base64url');
   storage.createGame({ id, seed, state, seats: [pid], creator: pid });
   storage.saveStory(pid, { ...progress, gameId: id });
@@ -53,13 +55,14 @@ export function storyEnded(storage, pid, gameId, game) {
   const progress = storage.storyOf(pid);
   if (progress.gameId !== gameId) return;
   const won = game.winner !== undefined;
-  const last = progress.act >= ACTS.length - 1;
-  storage.saveStory(pid, {
-    act: !won ? 0 : last ? progress.act : progress.act + 1,
-    gameId: null,
-    complete: won && last,
-  });
+  storage.saveStory(pid, { act: won ? progress.act + 1 : 0, gameId: null });
 }
+
+/**
+ * Whether every act is won: true until an act is added.
+ * @param {import('../storage.js').StoryProgress} progress
+ */
+export const complete = (progress) => progress.act >= ACTS.length;
 
 /**
  * The story's routes: where the player is in it, and playing on.
@@ -78,7 +81,7 @@ export function storyRoutes(app, storage, { signedIn, playerId }) {
       act: ACTS[Math.min(progress.act, ACTS.length - 1)].id,
       first: progress.act === 0,
       playing: progress.gameId !== null,
-      complete: progress.complete,
+      complete: complete(progress),
     });
   });
   // Start the story, or go back to it: `{ id }` of the act's game.

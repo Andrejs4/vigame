@@ -31,8 +31,9 @@ const SCHEMA_VERSION = 27;
  *   creator: string | null, createdAt: number, updatedAt: number }} SavedGame
  *   `creator`: the player who started it, which players aren't shown.
  * @typedef {{ seq: number, tick: number, player: number, command: unknown, at: number }} SavedCommand
- * @typedef {{ act: number, gameId: string | null, complete: boolean }} StoryProgress
- *   A player's place in the story (server/story/).
+ * @typedef {{ act: number, gameId: string | null }} StoryProgress
+ *   A player's place in the story (server/story/): the act to play next, or
+ *   being played, numbered from 0; past the last once all are won.
  * @typedef {{ pid: string, name: string, language: import('../src/core/player.js').Language,
  *   createdAt: number, updatedAt: number }} SavedPlayer
  */
@@ -88,11 +89,10 @@ export function openStorage(file = ':memory:') {
     INSERT INTO players (pid, name, language, created_at, updated_at) VALUES (@pid, @name, @language, @now, @now)
     ON CONFLICT (pid) DO UPDATE SET name = excluded.name, language = excluded.language, updated_at = excluded.updated_at`);
   const selectPlayer = db.prepare('SELECT * FROM players WHERE pid = ?');
-  const selectStory = db.prepare('SELECT act, game_id, complete FROM stories WHERE pid = ?');
+  const selectStory = db.prepare('SELECT act, game_id FROM stories WHERE pid = ?');
   const upsertStory = db.prepare(`
-    INSERT INTO stories (pid, act, game_id, complete, updated_at) VALUES (@pid, @act, @gameId, @complete, @now)
-    ON CONFLICT (pid) DO UPDATE SET act = excluded.act, game_id = excluded.game_id, complete = excluded.complete,
-      updated_at = excluded.updated_at`);
+    INSERT INTO stories (pid, act, game_id, updated_at) VALUES (@pid, @act, @gameId, @now)
+    ON CONFLICT (pid) DO UPDATE SET act = excluded.act, game_id = excluded.game_id, updated_at = excluded.updated_at`);
 
   /** A command is logged, and its game marked active, together or not at all. */
   const recordCommandTx = db.transaction((/** @type {string} */ id, /** @type {any} */ row) => {
@@ -232,14 +232,14 @@ export function openStorage(file = ':memory:') {
     },
 
     /**
-     * A player's place in the story: the act to play (or being played), its
-     * game while one is under way, and whether the last act is won.
+     * A player's place in the story: the act to play (or being played), and
+     * its game while one is under way.
      * @param {string} pid
      * @returns {StoryProgress}
      */
     storyOf(pid) {
       const row = /** @type {any} */ (selectStory.get(pid));
-      return { act: row?.act ?? 0, gameId: row?.game_id ?? null, complete: row?.complete === 1 };
+      return { act: row?.act ?? 0, gameId: row?.game_id ?? null };
     },
 
     /**
@@ -247,8 +247,8 @@ export function openStorage(file = ':memory:') {
      * @param {string} pid
      * @param {StoryProgress} progress
      */
-    saveStory(pid, { act, gameId, complete }) {
-      upsertStory.run({ pid, act, gameId, complete: complete ? 1 : 0, now: Date.now() });
+    saveStory(pid, { act, gameId }) {
+      upsertStory.run({ pid, act, gameId, now: Date.now() });
     },
 
     /**
@@ -588,9 +588,9 @@ function migrate(db) {
     db.transaction(() => db.exec(`
       CREATE TABLE IF NOT EXISTS stories (
         pid        TEXT PRIMARY KEY,
-        act        INTEGER NOT NULL DEFAULT 0,  -- the act to play next, or being played (ACTS in src/story/acts.js)
+        act        INTEGER NOT NULL DEFAULT 0,  -- the act to play next, or being played (ACTS in src/story/acts.js);
+                                                -- past the last once all are won, so an act added later is next
         game_id    TEXT,                        -- its game while one is under way
-        complete   INTEGER NOT NULL DEFAULT 0,  -- the last act won
         updated_at INTEGER NOT NULL
       );
       PRAGMA user_version = 27;

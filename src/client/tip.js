@@ -3,8 +3,9 @@
  * over the board, which it never gets in the way of. It takes no clicks
  * (`pointer-events: none`), so they reach the cells under it. It fades in,
  * and out again after its time, or at the player's first click, tap or key
- * press, which still does what it would have. Its caller may pause the
- * game meanwhile (`onClose` says when to go on).
+ * press, which still does what it would have (unless it is to stay its
+ * time). Its caller may pause the game meanwhile (`onClose` says when to
+ * go on).
  */
 
 /** How long one stays, unless the player acts first, in milliseconds. */
@@ -51,10 +52,11 @@ export function createTip(box) {
   return {
     /**
      * Show a message, in place of any shown now.
-     * @param {{ title?: string, text: string, ms?: number, onClose?: () => void }} message
-     *   `ms`: how long it stays unless the player acts first (Infinity: until they do).
+     * @param {{ title?: string, text: string, ms?: number, stays?: boolean, onClose?: () => void }} message
+     *   `ms`: how long it stays unless the player acts first (Infinity: until they do);
+     *   `stays`: it stays all that time, whatever the player does.
      */
-    show({ title: heading = '', text: body, ms = TIP_MS, onClose = () => {} }) {
+    show({ title: heading = '', text: body, ms = TIP_MS, stays = false, onClose = () => {} }) {
       hide();
       clearTimeout(gone);
       title.textContent = heading;
@@ -65,7 +67,7 @@ export function createTip(box) {
       requestAnimationFrame(() => requestAnimationFrame(() => { if (closing) box.classList.add('shown'); }));
       closing = onClose;
       if (Number.isFinite(ms)) timer = setTimeout(hide, ms);
-      listen(true);
+      if (!stays) listen(true);
     },
     hide,
     /** Whether one is shown. */

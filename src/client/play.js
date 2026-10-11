@@ -18,7 +18,7 @@ import { Camera } from './camera.js';
 import { Effects, fallenHeroes, fallenHeroesNote } from './effects.js';
 import { Minimap } from './minimap.js';
 import { BoardRenderer, COUNT_ZOOM, levelTier, pickAt } from './render.js';
-import { storyLine, storyOutcome } from './story/story.js';
+import { storyLine, storyOutcome, storyTip } from './story/story.js';
 import { createTip } from './tip.js';
 import { autoLanguage, browserLanguages, chosenLanguage, keyCandidates } from './language.js';
 import { Sounds, soundsFor } from './sounds.js';
@@ -639,6 +639,18 @@ export async function startGame(net, me) {
     tip.show({ title: line.name, text: `${line.goal} ${word('tipGoOn')}`, ms: Infinity, onClose: () => net.hold(false) });
   }
 
+  /** The game second of the last story tip shown. */
+  let tipped = 0;
+
+  /** A story act's tip, when its time comes: it stays its time, and the game goes on. */
+  function storyTips() {
+    if (!view || net.seat() === null) return;
+    const due = storyTip(view, tipped);
+    if (!due) return;
+    tipped = due.second;
+    tip.show({ text: word(due.word, { cost: BUILDING_TYPES.farm.cost }), stays: true });
+  }
+
   /** A story act's line under the game's details: the act, its goal, and the time left. */
   function showStory() {
     const line = view ? storyLine(view, word, formatTime) : null;
@@ -773,6 +785,7 @@ export async function startGame(net, me) {
     }
     showStory();
     openStory();
+    storyTips();
     const b = selected ? view?.buildings[selected] : null;
     const mine = Boolean(can && b && isMine(selected));
     const upgradable = Boolean(mine && b && !isRising(b) && b.upgrading === undefined && b.grade < BUILDING_TYPES[b.type].grades);

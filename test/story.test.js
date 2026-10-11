@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 
 import { BOARD_OPTIONS, createBoard } from '../src/core/board.js';
 import { advance, applyCommand, checkState, publicView } from '../src/core/game.js';
-import { MAX_HUNGER, START_STONE, START_UNITS } from '../src/core/rules.js';
+import { MAX_HUNGER, START_STONE, START_UNITS, TICKS_PER_SECOND } from '../src/core/rules.js';
+import { ACT_WORDS, storyTip } from '../src/client/story/story.js';
 import { ACTS, actOf, newStoryGame } from '../src/story/acts.js';
 import { direct } from '../src/story/director.js';
 
@@ -68,4 +69,19 @@ test('the director ends Starving village: won once hunger is gone, or at the tim
   state.players[0].hunger = 0;
   assert.equal(direct(state), false);
   assert.equal(actOf('nope'), null);
+});
+
+test("Starving village's tips come at their game seconds, each once, and not to a page that comes late", () => {
+  const story = newStoryGame(0).state.story;
+  const at = (/** @type {number} */ second, after = 0) => storyTip({ tick: second * TICKS_PER_SECOND, story }, after)?.word ?? null;
+  assert.equal(at(7), null);
+  assert.equal(at(8), 'tipStarvingFarm');
+  assert.equal(at(8, 8), null, 'shown once');
+  assert.equal(at(9.5), 'tipStarvingFarm');
+  assert.equal(at(10), null, 'too late for it');
+  assert.deepEqual([at(20, 8), at(34, 20), at(40, 34)], ['tipStarvingPit', 'tipStarvingCrew', 'tipStarvingLuck']);
+  assert.equal(storyTip({ tick: 8 * TICKS_PER_SECOND, over: 80, story }, 0), null, 'none once over');
+  for (const words of Object.values(ACT_WORDS)) {
+    assert.deepEqual(words.tips.map(([s]) => s), words.tips.map(([s]) => s).sort((a, b) => a - b), 'in order');
+  }
 });
