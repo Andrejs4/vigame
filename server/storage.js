@@ -24,16 +24,17 @@ import Database from 'better-sqlite3';
 import { HIGH_SCORES, scoreRows } from './scores.js';
 
 /** Bump when the tables change, and add the upgrade step to `migrate`. */
-const SCHEMA_VERSION = 27;
+const SCHEMA_VERSION = 28;
 
 /**
  * @typedef {{ id: string, seed: number, state: unknown, seq: number, seats: Array<string | null>,
  *   creator: string | null, createdAt: number, updatedAt: number }} SavedGame
  *   `creator`: the player who started it, which players aren't shown.
  * @typedef {{ seq: number, tick: number, player: number, command: unknown, at: number }} SavedCommand
- * @typedef {{ act: number, gameId: string | null }} StoryProgress
+ * @typedef {{ act: number, gameId: string | null, heroes: import('../src/core/game.js').Veteran[] }} StoryProgress
  *   A player's place in the story (server/story/): the act to play next, or
- *   being played, numbered from 0; past the last once all are won.
+ *   being played, numbered from 0; past the last once all are won; and the
+ *   heroes that came through the acts before it.
  * @typedef {{ pid: string, name: string, language: import('../src/core/player.js').Language,
  *   createdAt: number, updatedAt: number }} SavedPlayer
  */
@@ -89,10 +90,12 @@ export function openStorage(file = ':memory:') {
     INSERT INTO players (pid, name, language, created_at, updated_at) VALUES (@pid, @name, @language, @now, @now)
     ON CONFLICT (pid) DO UPDATE SET name = excluded.name, language = excluded.language, updated_at = excluded.updated_at`);
   const selectPlayer = db.prepare('SELECT * FROM players WHERE pid = ?');
-  const selectStory = db.prepare('SELECT act, game_id FROM stories WHERE pid = ?');
+  const selectStory = db.prepare('SELECT act, game_id, heroes FROM stories WHERE pid = ?');
+  const countStories = db.prepare('SELECT COUNT(*) FILTER (WHERE act >= 1) AS past, COUNT(*) FILTER (WHERE act >= ?) AS done FROM stories');
   const upsertStory = db.prepare(`
-    INSERT INTO stories (pid, act, game_id, updated_at) VALUES (@pid, @act, @gameId, @now)
-    ON CONFLICT (pid) DO UPDATE SET act = excluded.act, game_id = excluded.game_id, updated_at = excluded.updated_at`);
+    INSERT INTO stories (pid, act, game_id, heroes, updated_at) VALUES (@pid, @act, @gameId, @heroes, @now)
+    ON CONFLICT (pid) DO UPDATE SET act = excluded.act, game_id = excluded.game_id, heroes = excluded.heroes,
+      updated_at = excluded.updated_at`);
 
   /** A command is logged, and its game marked active, together or not at all. */
   const recordCommandTx = db.transaction((/** @type {string} */ id, /** @type {any} */ row) => {
@@ -232,23 +235,35 @@ export function openStorage(file = ':memory:') {
     },
 
     /**
-     * A player's place in the story: the act to play (or being played), and
-     * its game while one is under way.
+     * A player's place in the story: the act to play (or being played), its
+     * game while one is under way, and the heroes from the acts before.
      * @param {string} pid
      * @returns {StoryProgress}
      */
     storyOf(pid) {
       const row = /** @type {any} */ (selectStory.get(pid));
-      return { act: row?.act ?? 0, gameId: row?.game_id ?? null };
+      const heroes = parse(row?.heroes ?? '[]');
+      return { act: row?.act ?? 0, gameId: row?.game_id ?? null, heroes: Array.isArray(heroes) ? heroes : [] };
+    },
+
+    /**
+     * How many players are past the story's first act (`past`), and how
+     * many have won its last, the act `last` (`done`).
+     * @param {number} last
+     * @returns {{ past: number, done: number }}
+     */
+    storyCounts(last) {
+      const { past, done } = /** @type {any} */ (countStories.get(last + 1));
+      return { past, done };
     },
 
     /**
      * Keep a player's place in the story.
      * @param {string} pid
-     * @param {StoryProgress} progress
+     * @param {Omit<StoryProgress, 'heroes'> & { heroes?: StoryProgress['heroes'] }} progress
      */
-    saveStory(pid, { act, gameId }) {
-      upsertStory.run({ pid, act, gameId, now: Date.now() });
+    saveStory(pid, { act, gameId, heroes = [] }) {
+      upsertStory.run({ pid, act, gameId, heroes: JSON.stringify(heroes), now: Date.now() });
     },
 
     /**
@@ -595,6 +610,14 @@ function migrate(db) {
       );
       PRAGMA user_version = 27;
     `))();
+  }
+  if (version < 28) {
+    // The heroes that came through the acts a player has won, for the next.
+    db.transaction(() => {
+      const columns = /** @type {Array<{ name: string }>} */ (db.prepare('PRAGMA table_info(stories)').all());
+      if (!columns.some((c) => c.name === 'heroes')) db.exec(`ALTER TABLE stories ADD COLUMN heroes TEXT NOT NULL DEFAULT '[]'`);
+      db.exec('PRAGMA user_version = 28;');
+    })();
   }
 }
 

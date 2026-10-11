@@ -37,11 +37,11 @@
  */
 
 import { distance, key, neighbors, parseKey } from './hex.js';
-import { tileAt } from './board.js';
+import { BOARD_OPTIONS, createBoard, tileAt } from './board.js';
 import { gameName, unitName } from './names.js';
 import { GAME_NAME_MAX, cleanGameName } from './player.js';
 import {
-  BAND_TRAINING, BREEDING, BUILDING_TYPES, BUILD_RANGE, DARK_LORD, HERO_LEVEL_GROWTH, HERO_LEVEL_XP, HERO_SHARE, LORD_HP, LORD_PLAYERS_MAX, SHARED_STOCK, HORDE_MAX, HORDE_PERIOD, HORDE_START, OGRE_CALL, POINTS, QUICK_WIN, RAIDERS, SALVAGE, SEAT_SIDES, RAID_CHANCE, RAID_CLEAR, RAID_PER_PLAYER, RAID_PERIOD, RAID_ROAM, START_METAL, DEFAULT_BREEDING, DEFAULT_MODE, MAX_PLAYERS, MODES, COMBAT_PERIOD, DEPART_GAP, FELL_XP, FOOD_PER_UNIT, KILL_EVEN, KILL_MAX, KILL_STEP, KILL_XP, MELEE_DAMAGE, MELEE_RANGE,
+  BAND_TRAINING, BREEDING, BUILDING_TYPES, BUILD_RANGE, DARK_LORD, GUARD_LEASH, GUARD_SIGHT, HERO_LEVEL_GROWTH, HERO_LEVEL_XP, HERO_SHARE, LORD_HP, LORD_PLAYERS_MAX, SHARED_STOCK, HORDE_MAX, HORDE_PERIOD, HORDE_START, OGRE_CALL, POINTS, QUICK_WIN, RAIDERS, SALVAGE, SEAT_SIDES, RAID_CHANCE, RAID_CLEAR, RAID_PER_PLAYER, RAID_PERIOD, RAID_ROAM, START_METAL, DEFAULT_BREEDING, DEFAULT_MODE, MAX_PLAYERS, MODES, COMBAT_PERIOD, DEPART_GAP, FELL_XP, FOOD_PER_UNIT, KILL_EVEN, KILL_MAX, KILL_STEP, KILL_XP, MELEE_DAMAGE, MELEE_RANGE,
   RANGED_DAMAGE, RANGED_RANGE, REPAIR_WORK, FOOD_PERIOD, FOOD_STORE, HUNGER_PULL, LEVEL_GROWTH,
   LEVEL_RATE, LEVEL_XP, MAX_HUNGER, MAX_LEVEL, SIDES, SKILLS, SKILL_RATE, SKILL_XP, START_STONE, START_UNITS, STARVE_CHANCE,
   UNIT_LIMIT, WAGON_PATIENCE, WALK_TICKS, WORK_BASE,
@@ -75,6 +75,8 @@ import {
  * @property {number} [waiting] The tick it found its next cell taken.
  * @property {number} [walked] A band's ticks of marching not yet trained
  *   into its units' running (BAND_TRAINING).
+ * @property {Cell} [home] One of the horde that guards this cell rather
+ *   than hunting (GUARD_SIGHT in rules.js).
  */
 
 /**
@@ -147,9 +149,19 @@ import {
  * @typedef {object} Story An act of story mode, as its game keeps it.
  * @property {string} act Which act (ACTS in src/story/acts.js).
  * @property {string[]} builds The kinds of building it allows.
- * @property {number} until The tick its time runs out.
+ * @property {number} [until] The tick its time runs out, if it does.
  * @property {true} [final] The story's last act.
+ * @property {number} [width] Its map's width in cells, when wider than
+ *   usual (`boardOf`).
  * @property {string} [result] How it came out, once it has (`direct`).
+ * @property {Veteran[]} [heroes] The player's heroes from earlier acts not
+ *   yet born again in this one: each hero born takes the next one's place
+ *   (src/story/). Players aren't shown them.
+ */
+
+/**
+ * @typedef {Pick<Unit, 'name' | 'level' | 'xp' | 'skills' | 'practice'>} Veteran
+ *   A hero from an earlier act, with all it had learnt.
  */
 
 /**
@@ -1575,7 +1587,14 @@ function fight(board, state, occ) {
   for (const b of Object.values(state.buildings)) {
     if (b.target !== undefined && state.buildings[b.target]?.owner === undefined) delete b.target;
     const type = BUILDING_TYPES[b.type];
-    if (type.hunts && b.target === undefined) hunt(state, b);
+    if (b.home && b.target !== undefined && fromHome(b, state.buildings[b.target]) > GUARD_LEASH) {
+      delete b.target; // too far from home: it goes back
+      stopAfterStep(b);
+    }
+    if (type.hunts && b.target === undefined) {
+      if (b.home) guard(board, state, occ, b);
+      else hunt(state, b);
+    }
     if (type.speed && b.target !== undefined && !isRising(b)) chase(board, state, occ, b);
     const inside = /** @type {string[]} */ (occ.inside.get(b.id));
     if (!inside.length && !type.attack) continue;
@@ -1617,7 +1636,7 @@ function chase(board, state, occ, b) {
   const blocked = wayFor(state, occ, b);
   const route = findPath(board, b, t, (k) => !goals.has(k) && blocked(k));
   if (!route) {
-    const other = BUILDING_TYPES[b.type].hunts && nearestEnemy(state, b, (x) => x.id !== t.id && x.hp !== undefined);
+    const other = BUILDING_TYPES[b.type].hunts && !b.home && nearestEnemy(state, b, (x) => x.id !== t.id && x.hp !== undefined);
     if (other) turnTo(b, other.id);
     return;
   }
@@ -1678,6 +1697,34 @@ function hunt(state, b) {
   const here = (/** @type {Building} */ t) => !state.players[t.owner]?.away;
   const prey = nearestEnemy(state, b, (t) => t.type === 'farm' && here(t)) ?? nearestEnemy(state, b, (t) => t.type === 'castle' && here(t));
   if (prey) turnTo(b, prey.id);
+}
+
+/**
+ * How far a building is from a guard's home: its nearest cell.
+ * @param {Building} b A guard (with `home`).
+ * @param {Building} t
+ */
+function fromHome(b, t) {
+  const [q, r] = /** @type {Cell} */ (b.home);
+  return Math.min(...footprint(t.type, t.q, t.r).map((c) => distance(c, { q, r })));
+}
+
+/**
+ * One of the horde guarding its home, with nothing to go for, takes the
+ * nearest enemy building within GUARD_SIGHT of its home, of the sides
+ * whose players are here; with none, it goes back home.
+ * @param {Board} board
+ * @param {GameState} state
+ * @param {Occupancy} occ
+ * @param {Building} b
+ */
+function guard(board, state, occ, b) {
+  const [q, r] = /** @type {Cell} */ (b.home);
+  const prey = nearestEnemy(state, { ...b, q, r }, (t) => !state.players[t.owner]?.away);
+  if (prey && fromHome(b, prey) <= GUARD_SIGHT) return void turnTo(b, prey.id);
+  if (b.path || (b.q === q && b.r === r)) return;
+  const route = findPath(board, b, { q, r }, takenCells(occ, b.id));
+  if (route?.length) b.path = route;
 }
 
 /**
@@ -2183,9 +2230,11 @@ export function checkState(board, raw) {
   if (state.npcs !== undefined && state.npcs !== true) fail('bad npcs');
   if (state.story !== undefined) {
     const s = state.story;
-    const fits = s !== null && typeof s === 'object' && typeof s.act === 'string' && Number.isSafeInteger(s.until)
+    const fits = s !== null && typeof s === 'object' && typeof s.act === 'string' && (s.until === undefined || Number.isSafeInteger(s.until))
       && Array.isArray(s.builds) && s.builds.every((k) => typeof k === 'string' && BUILDING_TYPES[k]?.build === true)
-      && (s.result === undefined || typeof s.result === 'string') && (s.final === undefined || s.final === true);
+      && (s.result === undefined || typeof s.result === 'string') && (s.final === undefined || s.final === true)
+      && (s.heroes === undefined || (Array.isArray(s.heroes) && s.heroes.length > 0))
+      && (s.width === undefined || (Number.isInteger(s.width) && s.width > 0 && s.width <= 200));
     if (!fits) fail('bad story');
   }
   if (state.over !== undefined && !isCount(state.over, Infinity)) fail('bad over');
@@ -2244,6 +2293,7 @@ export function checkState(board, raw) {
       if (!(type.speed ? tile?.passable : tile?.buildable)) fail(`building ${id}: cannot stand on ${c.q},${c.r}`);
     }
     if (b.path !== undefined && !(Array.isArray(b.path) && b.path.length && b.path.every(isCell))) fail(`building ${id}: bad path`);
+    if (b.home !== undefined && !(type.hunts && isCell(b.home) && tileAt(board, b.home[0], b.home[1]))) fail(`building ${id}: bad home`);
     if (!isTiming(b) || (b.until !== undefined && !b.path?.length)) fail(`building ${id}: bad timing`);
     if ((b.path !== undefined || b.until !== undefined) && !type.speed) fail(`building ${id}: cannot move`);
 
@@ -2262,6 +2312,13 @@ export function checkState(board, raw) {
   const isSkillSet = (/** @type {unknown} */ v, /** @type {number} */ below) => isRecord(v)
     && Object.keys(/** @type {object} */ (v)).length === SKILL_NAMES.length
     && SKILL_NAMES.every((s) => isCount(/** @type {Record<string, unknown>} */ (v)[s], below));
+  for (const v of Array.isArray(state.story?.heroes) ? state.story.heroes : []) {
+    const fits = isRecord(v) && Object.keys(v).length === 5 && typeof v.name === 'string' && v.name && v.name.length <= 40
+      && Number.isInteger(v.level) && v.level >= 1 && v.level <= MAX_LEVEL
+      && isCount(v.xp, v.level === MAX_LEVEL ? 1 : levelXp(v.level, true))
+      && isSkillSet(v.skills, v.level + 1) && isSkillSet(v.practice, SKILL_XP + 1);
+    if (!fits) fail('bad story hero');
+  }
   for (const [id, u] of Object.entries(state.units)) {
     if (!u || u.id !== id || !issued(id, 'u')) { fail(`unit ${id}: bad id`); continue; }
     if (!isOwner(u.owner)) { fail(`unit ${id}: bad owner`); continue; }
@@ -2310,6 +2367,27 @@ function isRecord(v) {
 }
 
 /**
+ * The map a game is played on: the usual one for its seed and number of
+ * seats, or as wide as its story act has it (`story.width`). The game
+ * server, the page and story mode all build it here, so they agree.
+ * @param {{ seed: number, story?: { width?: number } }} game
+ * @param {number} players Its number of seats.
+ */
+export function boardOf(game, players) {
+  const width = game.story?.width;
+  return createBoard({ ...BOARD_OPTIONS, seed: game.seed, players, ...(width ? { width } : {}) });
+}
+
+/**
+ * An act's story as players see it: without the heroes waiting from earlier acts.
+ * @param {Story} story
+ * @returns {Story}
+ */
+function storyShown({ heroes: _heroes, ...shown }) {
+  return shown;
+}
+
+/**
  * What players are shown of a state: all of it, except the random seed, the
  * id counter and units' experience points, with each route cut to its next
  * cell. That is all a screen needs to draw movement and levels, and it keeps
@@ -2331,7 +2409,7 @@ export function publicView(state) {
     mode: state.mode,
     breeding: state.breeding,
     ...(state.npcs ? { npcs: state.npcs } : {}),
-    ...(state.story ? { story: state.story } : {}),
+    ...(state.story ? { story: storyShown(state.story) } : {}),
     name: state.name,
     ...(state.over !== undefined ? { over: state.over } : {}),
     ...(state.winner !== undefined ? { winner: state.winner } : {}),

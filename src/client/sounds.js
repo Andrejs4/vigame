@@ -42,6 +42,8 @@ export const SOUNDS = {
   wave: { wave: 'triangle', gain: 0.18, notes: [[43, 0, 0.45, 2], [50, 0.4, 0.7]] },
   win: { wave: 'triangle', gain: 0.15, notes: [[72, 0, 0.14], [76, 0.14, 0.14], [79, 0.28, 0.14], [84, 0.42, 0.5]] },
   lose: { wave: 'triangle', gain: 0.15, notes: [[69, 0, 0.18], [65, 0.18, 0.18], [62, 0.36, 0.18], [57, 0.54, 0.6]] },
+  // A message in the middle of the screen (tip.js): a soft bell, a fifth apart.
+  tip: { wave: 'sine', gain: 0.08, notes: [[79, 0, 0.5], [86, 0.14, 0.7]] },
 };
 
 /** How far to either side a sound on screen may go, from 0 to 1. */

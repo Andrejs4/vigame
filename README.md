@@ -163,14 +163,19 @@ Run `npm start` and open http://127.0.0.1:2567.
   act begins, its name and goal show in the middle of the screen, faint,
   and its clock waits until your first click or key, which still does what
   it would (the message takes no clicks, so they reach the board); then it
-  fades. Tips follow at set seconds of the act, the same way but staying
+  fades, with a soft bell (as do the tips). Tips follow at set seconds of the act, the same way but staying
   their time, while the game goes on: in Starving village, farms at 0:08,
-  pits at 0:20, keeping units at home and crews at 0:34, good luck at 0:40. Its
+  pits at 0:20, keeping units at home and crews at 0:34, good luck at 1:00. Its
   name, goal and time left stay under the game's details; buildings it
   doesn't allow are greyed out. **End** abandons it. Lost (or abandoned),
   the story starts again from the first act; won, it goes on to the next;
   once the last is won, the button says **Story complete**, between
-  laurels, and does nothing. So far there is one act:
+  laurels, and does nothing (until an act is added, which is then next).
+  Each act begins with a fresh castle on its own map, but the heroes who
+  came through the acts before come too: each hero born in the new act
+  (those it starts with too) is one of them, the best first, with all
+  their levels and skills; once they are all back, new heroes are born as
+  usual. Lost, the story starts again without them. There are four acts:
   - **Starving village**: your castle alone, with the usual 200 stone and
     12 units and normal unit production, but starving: hunger at 100% and
     no food. Only pits and farms may be built, and nobody comes but the
@@ -179,6 +184,50 @@ Run `npm start` and open http://127.0.0.1:2567.
     meals in a row, one a minute), or when the 10 minutes run out if the
     meal then feeds everyone; lost if every unit dies, the castle falls,
     or that meal falls short.
+  - **Village defence**: a fresh castle (200 stone, 12 units, no hunger)
+    on another map, and towers allowed too. The Dark Lord, with no lair
+    here, sends waves of his Easy Lord horde from across the map: from
+    1:00, one a minute, wave n being n + 1 ghouls and n/3 ogres (rounded
+    down): keeping everyone home, the castle barely holds; two towers
+    crewed hold it easily. Monsters go for farms first, then the castle; units
+    mending a castle raise none meanwhile. Tips at 0:08 (put other
+    buildings in their way), 1:40 (towers) and 2:30 (good luck). Won if
+    the castle stands when the 10 minutes run out; lost if it falls or
+    every unit dies.
+  - **Clearing the woods**: a fresh castle on another map, bands allowed
+    too, and the far side of the map crawling with the Easy Lord's horde:
+    five camps of three ghouls and an ogre, more than enough to bring the
+    castle down all at once, and four smaller camps of three ghouls. They
+    guard their camps: each goes for an enemy building within 5 cells of
+    its home, gives up one more than 8 away, and goes back home. Instead
+    of waves, the smaller camps set off for the castle (farms first) one at
+    a time, the nearest first, at 2:30, 4:30, 6:30 and 8:30, unless cleared
+    before (the act's tooltip doesn't say). Won as soon as every monster is dead. At
+    10:00, a last wave of six ghouls and two ogres comes, and every
+    monster left goes for the castle (the status says **the last wave**):
+    won if they all die; lost if the castle falls or every unit dies. Tips
+    at 0:08 ("Clear all monsters on the map before they come for you"),
+    2:00 (bands, attacking from a distance), 3:30 (higher levels are
+    sturdier) and 9:00 ("Soon all monsters will come for you"). Tried: keeping everyone
+    home, the castle kills the smaller camps unharmed but falls a minute
+    and a half into the last wave; bands of 12 to 20 fall short; bands of
+    30 clear the map in that wave's wake (13:24); with the first two acts'
+    heroes, bands of 12 or more clear it there too.
+  - **Clearing the lair**, the last: a fresh castle on another map, half
+    as wide again as usual (44 cells by 20), in an Easy Lord game (his lair
+    16 cells away, his waves from 2:00), with
+    everything allowed, wagons too, and no time limit. Three small camps
+    of three ghouls guard the lair, 4 cells from it and at least 9 from the
+    castle, and three raiders start 7 cells round the castle. Won once the
+    lair falls: congratulations in the middle of the screen, the game held,
+    and the points once the player clicks or presses a key. Lost if the
+    castle falls or every unit dies. Tips at 0:08 (slay monsters for metal,
+    build wagons, defeat the lair), 5:00 (wagons are mobile cover: they
+    tank damage and retreat for repairs; about when 15 dark metal is in), 7:30
+    (upgrading wagons) and 8:00 (good luck). Tried: keeping everyone home,
+    the castle holds for 40 minutes and the lair stands; the NPC stand-in,
+    and bands of 30 sent at the camps and the lair, lose the castle within
+    ten minutes, heroes or not.
 - **The game clock** runs only while every player is here. (`npm run dev`
   runs it with one, for trying things alone.) While it waits, the player
   who started the game has **Start** beside the count of players (**Go on**
@@ -699,7 +748,7 @@ HTTP API:
 | `GET /api/games/:id` | One game: its seed, latest snapshot and seats. |
 | `GET /api/games/:id/commands` | Its command log, with each command's tick. |
 | `GET /api/games/:id/seats` | Who holds each seat: `{ pid, name }`, or `null` for a free one. |
-| `POST /api/story/status` | `{ token }`: where a signed-in player is in the story, `{ act, first, playing, complete }` (the act's id, whether it is the first, whether its game is under way, whether the story is complete). |
+| `POST /api/story/status` | `{ token }`: where a signed-in player is in the story, `{ act, first, playing, complete, players }` (the act's id, whether it is the first, whether its game is under way, whether the story is complete, and `{ past, done }`: how many players are past the first act and have finished the story, which the lobby's button shows as its tooltip). |
 | `POST /api/story` | `{ token }`: starts the act the player is on, or goes back to its game under way: `201 { id }`; `409` once the story is complete. |
 
 The database has five tables: `games` (each game's seed, seats, each
@@ -712,8 +761,9 @@ the token) and `scores` (when a game ends, each seated player's total, as
 its table of points counts it, with their name then, the game's name and
 mode, and the details: their side, the quick-win bonus, when it ended and
 their whole tally, such as the units born), and `stories` (each player's
-place in the story: the act, its game while one is under way, and whether
-the story is complete). Games may be cleared when the
+place in the story: the act to play next, or being played, past the last
+once all are won; its game while one is under way; and the heroes who came
+through the acts before, as JSON). Games may be cleared when the
 rules or the format change; the scores and stories stay.
 A room reopening a game loads its snapshot and replays the commands logged
 after it; if the snapshot is unreadable, it replays the whole log from the

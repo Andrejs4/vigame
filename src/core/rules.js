@@ -287,6 +287,14 @@ export const HORDE_MAX = 24;
  * past HORDE_MAX.
  */
 export const OGRE_CALL = 15;
+/**
+ * One of the horde with a home (`home` on a building, as story mode's acts
+ * place them) guards it rather than hunting: it goes for the nearest enemy
+ * building within GUARD_SIGHT of its home, gives up one further than
+ * GUARD_LEASH from it, and goes back home once it has nothing to go for.
+ */
+export const GUARD_SIGHT = 5;
+export const GUARD_LEASH = 8;
 
 /**
  * Points, for the table at a game's end: what each thing in a side's tally

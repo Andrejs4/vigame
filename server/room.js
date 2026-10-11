@@ -24,8 +24,8 @@ import { createHash } from 'node:crypto';
 
 import { ErrorCode, Room, ServerError, logger } from '@colyseus/core';
 
-import { BOARD_OPTIONS, createBoard, tileAt } from '../src/core/board.js';
-import { ROOM_COMMANDS, advance, applyCommand, checkState, fallenMayMove, newGame, publicView } from '../src/core/game.js';
+import { tileAt } from '../src/core/board.js';
+import { ROOM_COMMANDS, advance, applyCommand, boardOf, checkState, fallenMayMove, newGame, publicView } from '../src/core/game.js';
 import { npcMemory, npcMove, npcRefused } from '../src/core/npc.js';
 import { direct } from '../src/story/director.js';
 import { BREEDING, BUILDING_TYPES, DEFAULT_BREEDING, DEFAULT_MODE, END_ANYONE_TICKS, END_IDLE_MS, MODES, NPC, TICKS_PER_SECOND } from '../src/core/rules.js';
@@ -98,7 +98,7 @@ export function replay(board, game, commands, seq = 0) {
  * @param {(after: number) => import('./storage.js').SavedCommand[]} commandsAfter
  */
 export function restoreGame(saved, commandsAfter) {
-  const board = createBoard({ ...BOARD_OPTIONS, seed: saved.seed, players: saved.seats.length });
+  const board = boardOf({ seed: saved.seed, story: /** @type {any} */ (saved.state)?.story }, saved.seats.length);
   if (checkState(board, saved.state).length === 0) {
     const game = /** @type {import('../src/core/game.js').GameState} */ (saved.state);
     return { board, game, seq: replay(board, game, commandsAfter(saved.seq), saved.seq) };
@@ -431,7 +431,7 @@ export class GameRoom extends Room {
     if (!running) return;
     advance(this.board, this.game);
     // A story act ends by its own rules (src/story/director.js).
-    if (this.game.story) direct(this.game);
+    if (this.game.story) direct(this.board, this.game);
     if (this.game.over === undefined) this.playNpcs();
     if (this.game.over !== undefined) this.finish();
     else if (this.game.tick - this.snapshotAt >= SNAPSHOT_TICKS) this.snapshot();

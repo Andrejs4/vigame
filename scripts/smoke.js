@@ -18,6 +18,7 @@ import { chromium } from 'playwright';
 
 import { startGameServer } from '../server/app.js';
 import { playerId } from '../server/room.js';
+import { playStory } from '../server/story/progress.js';
 import { BOARD_OPTIONS, createBoard } from '../src/core/board.js';
 import { checkState, newGame } from '../src/core/game.js';
 import { axialToPixel, distance } from '../src/core/hex.js';
@@ -376,7 +377,7 @@ async function newPlayer(browser, url, label, name, options, expectedError) {
  * Story mode: the lobby starts it at the first act, Starving village, a castle
  * alone and starving, where only pits and farms may be built; given up
  * from End, it is lost and starts again. Once its last act is won, the
- * lobby's button says the story is complete.
+ * lobby's button says the story is complete; the second act begins.
  * @param {import('playwright').Browser} browser
  * @param {string} url
  */
@@ -384,6 +385,9 @@ async function story(browser, url) {
   const page = await newPlayer(browser, url, 'story', 'Sage');
   await inLobby(page);
   await waitText(page, '#lobby-story', 'Start story: Starving village');
+  assert.equal(await text(page, '#lobby-story-or'), 'or');
+  assert.match(await page.getAttribute('#lobby-story', 'title') ?? '', /^Players past the first act: \d+; finished the story: \d+\.$/);
+  await page.locator('#lobby .card').screenshot({ path: join(OUT, 'lobby-story.png') });
   await page.click('#lobby-story');
   await inGame(page);
   // As it begins, its name and goal in the middle, faint, and the clock
@@ -436,14 +440,102 @@ async function story(browser, url) {
   await inLobby(page);
   await waitText(page, '#lobby-story', 'Start story: Starving village');
 
-  // Its last act won: complete.
+  // The second act, once the first is won: its own opening, and its first tip.
   const token = await page.evaluate(() => localStorage.getItem('vigame.token'));
+  // With a hero from the first act, who is born again as the second begins.
+  const skills = (/** @type {number} */ n) => ({ breeding: n, ranged: n, melee: n, build: n, farming: n, running: n });
+  games.storage.saveStory(playerId(/** @type {string} */ (token)), {
+    act: 1, gameId: null, heroes: [{ name: 'Everard Bywater', level: 31, xp: 0, skills: skills(12), practice: skills(0) }],
+  });
+  await page.reload();
+  await inLobby(page);
+  await waitText(page, '#lobby-story', 'Continue story: Village defence');
+  await page.click('#lobby-story');
+  await inGame(page);
+  await page.waitForSelector('#tip.shown');
+  assert.equal(await text(page, '#tip .tip-title'), 'Village defence');
+  assert.equal(await text(page, '#tip .tip-text'), 'Hold out against the monsters for ten minutes. Click anywhere, or press a key, to begin.');
+  await page.keyboard.press('Shift');
+  await page.waitForSelector('#tip', { state: 'hidden' });
+  assert.equal(await page.locator('#build-tower').isDisabled(), false, 'towers in this act');
+  await page.waitForFunction(() => document.querySelector('#tip.shown .tip-text')?.textContent?.startsWith('Monsters come from across the map.'),
+    undefined, { timeout: 15000 });
+  await page.waitForTimeout(500);
+  await page.screenshot({ path: join(OUT, 'story-defence.png') });
+  await page.keyboard.press('h'); // home, then Heroes
+  await page.keyboard.press('h');
+  await page.waitForSelector('#heroes[open]');
+  const first = await page.$eval('#heroes-list li:not(.none)', (li) => li.textContent ?? '');
+  assert.match(first, /Everard Bywater/, 'the first act\'s hero, highest first');
+  assert.match(first, /31/);
+  await page.locator('#heroes').screenshot({ path: join(OUT, 'story-heroes.png') });
+  await page.keyboard.press('Escape');
+  await page.goto(url);
+  await inLobby(page);
+
+  // The third act: monsters' camps over the far side of the map.
+  games.storage.saveStory(playerId(/** @type {string} */ (token)), { act: 2, gameId: null });
+  await page.reload();
+  await inLobby(page);
+  await waitText(page, '#lobby-story', 'Continue story: Clearing the woods');
+  await page.click('#lobby-story');
+  await inGame(page);
+  await page.waitForSelector('#tip.shown');
+  assert.equal(await text(page, '#tip .tip-title'), 'Clearing the woods');
+  await page.keyboard.press('Shift');
+  await page.waitForSelector('#tip', { state: 'hidden' });
+  assert.equal(await page.locator('#build-band').isDisabled(), false, 'bands in this act');
+  await page.waitForFunction(() => document.querySelector('#tip.shown .tip-text')?.textContent === 'Clear all monsters on the map before they come for you.',
+    undefined, { timeout: 15000 });
+  await page.keyboard.press('-');
+  await page.keyboard.press('-');
+  await page.waitForTimeout(500);
+  await page.screenshot({ path: join(OUT, 'story-woods.png') });
+  await page.goto(url);
+  await inLobby(page);
+
+  // The last act, its lair brought down a moment ago: congratulations, in
+  // the middle, the game held, and the points once the player goes on.
+  const pid = playerId(/** @type {string} */ (token));
+  games.storage.saveStory(pid, { act: ACTS.length - 1, gameId: null });
+  const lastId = /** @type {string} */ (playStory(games.storage, pid));
+  const saved = /** @type {any} */ (games.storage.loadGame(lastId));
+  assert.equal(saved.state.story.act, 'clearing-lair');
+  games.storage.saveSnapshot(lastId, {
+    seq: saved.seq,
+    state: {
+      // Past its opening message, which would hold the clock.
+      ...saved.state, tick: 50,
+      buildings: Object.fromEntries(Object.entries(saved.state.buildings).filter(([, b]) => /** @type {any} */ (b).type !== 'lair')),
+      players: saved.state.players.map((/** @type {any} */ p) => (p.side === 8 ? { ...p, lost: 50 } : p)),
+    },
+  });
+  await page.reload();
+  await inLobby(page);
+  await waitText(page, '#lobby-story', 'Continue story: Clearing the lair');
+  await page.click('#lobby-story');
+  await inGame(page);
+  await page.waitForSelector('#tip.shown');
+  assert.equal(await text(page, '#tip .tip-title'), 'Congratulations!');
+  assert.equal(await page.locator('#scores').evaluate((d) => /** @type {HTMLDialogElement} */ (d).open), false, 'the points wait');
+  await page.waitForTimeout(500);
+  await page.screenshot({ path: join(OUT, 'story-congratulations.png') });
+  await page.keyboard.press('Shift');
+  await page.waitForSelector('#scores[open]');
+  assert.equal(await text(page, '#scores-title'), 'You won');
+  assert.match(await text(page, '#scores-outcome') ?? '', /The lair has fallen\. The story is complete\.$/);
+  await page.goto(url);
+  await inLobby(page);
+
+  // Its last act won: complete.
   games.storage.saveStory(playerId(/** @type {string} */ (token)), { act: ACTS.length, gameId: null });
   await page.reload();
   await inLobby(page);
   await waitText(page, '#lobby-story', 'Story complete');
   assert.equal(await page.locator('#lobby-story').isDisabled(), true);
   assert.equal(await page.locator('#lobby-story .laurel').count(), 2);
+  assert.equal(await page.locator('#lobby-story-or').isVisible(), false, 'no "or" once complete');
+  assert.match(await page.getAttribute('#lobby-story', 'title') ?? '', /finished the story: [1-9]\d*\.$/, 'this player among them');
   await page.locator('#lobby .card').screenshot({ path: join(OUT, 'lobby-story-complete.png') });
   await page.context().close();
 }

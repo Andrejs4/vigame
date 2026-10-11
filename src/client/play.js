@@ -7,7 +7,7 @@
 import { axialToPixel, bounds, distance, key, pixelToAxial } from '../core/hex.js';
 import { BOARD_OPTIONS, createBoard, tileAt } from '../core/board.js';
 import {
-  buildCost, capacityOf, castleOf, crewOf, depthOf, endWinner, foodStore, fullMeal, inBuildRange, isDugOut, isRising, maxHp, occupancy, purseOf, quickWin, scoreOf,
+  boardOf, buildCost, capacityOf, castleOf, crewOf, depthOf, endWinner, foodStore, fullMeal, inBuildRange, isDugOut, isRising, maxHp, occupancy, purseOf, quickWin, scoreOf,
   raiseWork, seatsOf, sharesStock, shortOf, sideOf, upgradeCost, workFor,
 } from '../core/game.js';
 import { GAME_NAME_MAX, cleanGameName } from '../core/player.js';
@@ -260,6 +260,8 @@ export async function startGame(net, me) {
 
   let board = createBoard({ ...BOARD_OPTIONS, seed: 0 });
   let boardPlayers = 0;
+  /** The map's width, when a story act has it wider than usual (0: as usual). */
+  let boardWidth = 0;
   const camera = new Camera();
   // The pictures arrive after the first draws; each one redraws the board.
   const tokens = new Tokens(() => { needsDraw = true; });
@@ -364,9 +366,11 @@ export async function startGame(net, me) {
    */
   function onState(next) {
     const players = seatsOf(next);
-    if (next.seed !== board.seed || players !== boardPlayers) {
+    const width = next.story?.width ?? 0;
+    if (next.seed !== board.seed || players !== boardPlayers || width !== boardWidth) {
       boardPlayers = players;
-      board = createBoard({ ...BOARD_OPTIONS, seed: next.seed, players });
+      boardWidth = width;
+      board = boardOf(next, players);
       renderer = new BoardRenderer(canvas, board, tokens, ground);
       renderer.showCoords = showCoords;
       minimap = new Minimap(mapCanvas, mapFrame, board, mapHome);
@@ -399,10 +403,18 @@ export async function startGame(net, me) {
       heroesAgain = false;
       showHeroes();
     }
-    // The table of points, once, when the game is over (or opens over).
+    // The table of points, once, when the game is over (or opens over);
+    // the story's last act won, congratulations first, the game held.
     if (next.over !== undefined && !scoresSeen) {
       scoresSeen = true;
-      showScores();
+      const seat = net.seat();
+      const finished = next.story?.final && seat !== null && next.winner !== undefined && next.winner === next.players[seat]?.team;
+      if (finished) {
+        tip.show({ title: word('congratsTitle'), text: word('congratsText'), ms: Infinity, onClose: () => { showScores(); } });
+        sounds.play('tip');
+      } else {
+        showScores();
+      }
     }
   }
 
@@ -637,6 +649,7 @@ export async function startGame(net, me) {
     if (!line) return;
     net.hold(true);
     tip.show({ title: line.name, text: `${line.goal} ${word('tipGoOn')}`, ms: Infinity, onClose: () => net.hold(false) });
+    sounds.play('tip');
   }
 
   /** The game second of the last story tip shown. */
@@ -648,7 +661,9 @@ export async function startGame(net, me) {
     const due = storyTip(view, tipped);
     if (!due) return;
     tipped = due.second;
-    tip.show({ text: word(due.word, { cost: BUILDING_TYPES.farm.cost }), stays: true });
+    const { farm, tower, wagon } = BUILDING_TYPES;
+    tip.show({ text: word(due.word, { cost: farm.cost, tower: tower.cost, wagon: wagon.metal ?? 0, hp: wagon.hpPerGrade ?? 0 }), stays: true });
+    sounds.play('tip');
   }
 
   /** A story act's line under the game's details: the act, its goal, and the time left. */

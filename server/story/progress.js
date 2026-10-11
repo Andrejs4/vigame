@@ -9,7 +9,7 @@
 
 import { randomBytes } from 'node:crypto';
 
-import { ACTS, newStoryGame } from '../../src/story/acts.js';
+import { ACTS, newStoryGame, veteransOf } from '../../src/story/acts.js';
 
 /**
  * A player's place in the story, with an act's game that is gone, or over,
@@ -35,7 +35,7 @@ export function playStory(storage, pid) {
   const progress = progressOf(storage, pid);
   if (progress.gameId !== null) return progress.gameId;
   if (complete(progress)) return null;
-  const { seed, state } = newStoryGame(progress.act);
+  const { seed, state } = newStoryGame(progress.act, progress.heroes);
   const id = randomBytes(6).toString('base64url');
   storage.createGame({ id, seed, state, seats: [pid], creator: pid });
   storage.saveStory(pid, { ...progress, gameId: id });
@@ -49,13 +49,15 @@ export function playStory(storage, pid) {
  * @param {import('../storage.js').Storage} storage
  * @param {string} pid
  * @param {string} gameId
- * @param {{ winner?: number }} game
+ * @param {import('../../src/core/game.js').GameState} game
  */
 export function storyEnded(storage, pid, gameId, game) {
   const progress = storage.storyOf(pid);
   if (progress.gameId !== gameId) return;
-  const won = game.winner !== undefined;
-  storage.saveStory(pid, { act: won ? progress.act + 1 : 0, gameId: null });
+  // Won only by the player's own team: given up with the Dark Lord about, he wins.
+  const won = game.winner !== undefined && game.winner === game.players[0]?.team;
+  // Won, its heroes go on to the next act; lost, the story starts again without them.
+  storage.saveStory(pid, { act: won ? progress.act + 1 : 0, gameId: null, heroes: won ? veteransOf(game) : [] });
 }
 
 /**
@@ -71,8 +73,9 @@ export const complete = (progress) => progress.act >= ACTS.length;
  * @param {{ signedIn: (storage: any, token: unknown) => boolean, playerId: (token: string) => string }} auth
  */
 export function storyRoutes(app, storage, { signedIn, playerId }) {
-  // `{ act, first, playing, complete }`: the act's id, whether it is the
-  // first, and whether its game is under way.
+  // `{ act, first, playing, complete, players }`: the act's id, whether it
+  // is the first, whether its game is under way, and how many players are
+  // past the first act and have finished the story (`{ past, done }`).
   app.post('/api/story/status', (req, res) => {
     const token = req.body?.token;
     if (!signedIn(storage, token)) return void res.status(401).json({ error: 'sign in first' });
@@ -82,6 +85,7 @@ export function storyRoutes(app, storage, { signedIn, playerId }) {
       first: progress.act === 0,
       playing: progress.gameId !== null,
       complete: complete(progress),
+      players: storage.storyCounts(ACTS.length - 1),
     });
   });
   // Start the story, or go back to it: `{ id }` of the act's game.
