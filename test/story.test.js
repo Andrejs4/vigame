@@ -7,7 +7,7 @@ import { advance, applyCommand, checkState, publicView } from '../src/core/game.
 import { COMBAT_PERIOD, MAX_HUNGER, START_STONE, START_UNITS, TICKS_PER_SECOND } from '../src/core/rules.js';
 import { openBoard, stateWith, unitsIn } from './helpers.js';
 import { ACT_WORDS, storyTip } from '../src/client/story/story.js';
-import { ACTS, CAMPS, WAVES, actOf, newStoryGame, veteransOf } from '../src/story/acts.js';
+import { ACTS, CAMPS, WAVES, actOf, campCentres, newStoryGame, veteransOf } from '../src/story/acts.js';
 import { direct } from '../src/story/director.js';
 
 /** @param {number} seed */
@@ -187,7 +187,8 @@ test('the third act, Clearing the woods: camps of guards across the map; cleared
   assert.deepEqual(newStoryGame(2), { seed, state }, 'the same for every player');
   const castle = /** @type {any} */ (Object.values(state.buildings).find((b) => b.type === 'castle'));
   const monsters = () => Object.values(state.buildings).filter((b) => b.owner === 1);
-  assert.equal(monsters().length, CAMPS.count * CAMPS.camp.length);
+  const placed = CAMPS.count * CAMPS.camp.length + CAMPS.raids.at.length * CAMPS.raids.camp.length;
+  assert.equal(monsters().length, placed);
   assert.ok(monsters().every((b) => b.home && b.home[0] === b.q && b.home[1] === b.r), 'each guards its cell');
   assert.ok(monsters().every((b) => distance(b, castle) >= CAMPS.far - 1), 'far from the castle');
   assert.ok(!Object.values(state.buildings).some((b) => b.type === 'lair'));
@@ -204,12 +205,25 @@ test('the third act, Clearing the woods: camps of guards across the map; cleared
   const homes = (/** @type {any} */ s) => Object.values(s.buildings).filter((b) => /** @type {any} */ (b).owner === 1)
     .map((b) => /** @type {any} */ (b)).filter((b) => b.home && distance(b, { q: b.home[0], r: b.home[1] }) > 0).length;
   assert.equal(homes(quiet), 0, 'none wandered off');
+  // At its time, the nearest smaller camp sets off for the castle; the next at the next.
+  const raiders = (/** @type {any} */ s) => Object.values(s.buildings).filter((b) => /** @type {any} */ (b).owner === 1 && !/** @type {any} */ (b).home);
+  const { raids } = campCentres(board, castle);
+  quiet.tick = CAMPS.raids.at[0] * TICKS_PER_SECOND - 1;
+  step(quiet, 1);
+  assert.equal(raiders(quiet).length, CAMPS.raids.camp.length);
+  assert.ok(raiders(quiet).every((b) => distance(/** @type {any} */ (b), raids[0]) <= 1), 'the nearest first');
+  step(quiet, 20 * TICKS_PER_SECOND);
+  assert.ok(raiders(quiet).some((b) => /** @type {any} */ (b).target === castle.id || /** @type {any} */ (b).path), 'on its way');
+  quiet.tick = CAMPS.raids.at[1] * TICKS_PER_SECOND - 1;
+  step(quiet, 1);
+  assert.ok(raiders(quiet).length > CAMPS.raids.camp.length, 'then the next');
+  assert.deepEqual(checkState(board, quiet), []);
   // At its time, a last wave, and none guards any more.
   const late = structuredClone(state);
   late.tick = /** @type {number} */ (late.story?.until) - 1;
   step(late, 1);
   const lord = Object.values(late.buildings).filter((b) => b.owner === 1);
-  assert.equal(lord.length, CAMPS.count * CAMPS.camp.length + CAMPS.last.length);
+  assert.equal(lord.length, placed + CAMPS.last.length);
   assert.ok(lord.every((b) => b.home === undefined), 'all come for the castle');
   assert.deepEqual(checkState(board, late), []);
   // Cleared, won; the castle fallen, lost.

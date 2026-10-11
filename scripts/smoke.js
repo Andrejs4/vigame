@@ -483,7 +483,7 @@ async function story(browser, url) {
   await page.keyboard.press('Shift');
   await page.waitForSelector('#tip', { state: 'hidden' });
   assert.equal(await page.locator('#build-band').isDisabled(), false, 'bands in this act');
-  await page.waitForFunction(() => document.querySelector('#tip.shown .tip-text')?.textContent?.startsWith('Monsters crawl over the far side'),
+  await page.waitForFunction(() => document.querySelector('#tip.shown .tip-text')?.textContent === 'Clear all monsters on the map.',
     undefined, { timeout: 15000 });
   await page.keyboard.press('-');
   await page.keyboard.press('-');

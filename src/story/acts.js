@@ -121,30 +121,65 @@ function sendWave(board, state) {
 export const CAMPS = Object.freeze({
   count: 5,
   camp: Object.freeze(['ghoul', 'ghoul', 'ghoul', 'ogre']),
+  /**
+   * Smaller camps, among the others, that set off for the castle one at a
+   * time, the nearest first, at these seconds: they keep up the pressure.
+   */
+  raids: Object.freeze({ camp: Object.freeze(['ghoul', 'ghoul', 'ghoul']), at: Object.freeze([150, 270, 390, 510]) }),
   last: Object.freeze(['ghoul', 'ghoul', 'ghoul', 'ghoul', 'ghoul', 'ghoul', 'ogre', 'ogre']),
   /** Cells at least this far from the castle may hold a camp. */
   far: 13,
 });
 
 /**
- * The camps of Clearing the woods, as it opens: their centres spread over
- * the far side of the map, the farthest from the castle first, then each
- * as far as can be from the castle and those before.
+ * The centres of Clearing the woods' camps, spread over the far side of
+ * the map: the farthest from the castle first, then each as far as can be
+ * from the castle and those before. The first CAMPS.count are the big
+ * camps; the rest, the smaller ones, nearest the castle first.
+ * @param {Board} board
+ * @param {import('../core/hex.js').Axial} castle
+ */
+export function campCentres(board, castle) {
+  const room = board.list.filter((t) => t.passable && distance(t, castle) >= CAMPS.far);
+  /** @type {import('../core/hex.js').Axial[]} */
+  const centres = [];
+  for (let i = 0; i < CAMPS.count + CAMPS.raids.at.length && room.length; i++) {
+    const spread = (/** @type {import('../core/hex.js').Axial} */ t) => Math.min(distance(t, castle), ...centres.map((c) => distance(t, c)));
+    const best = room.reduce((a, b) => (spread(b) > spread(a) || (spread(b) === spread(a) && (b.q < a.q || (b.q === a.q && b.r < a.r))) ? b : a));
+    centres.push({ q: best.q, r: best.r });
+  }
+  const raids = centres.slice(CAMPS.count).sort((a, b) => distance(a, castle) - distance(b, castle) || a.q - b.q || a.r - b.r);
+  return { camps: centres.slice(0, CAMPS.count), raids };
+}
+
+/**
+ * The camps of Clearing the woods, as it opens.
  * @param {Board} board
  * @param {GameState} state
  */
 function makeCamps(board, state) {
   const at = sides(board, state);
   if (!at) return;
-  const room = board.list.filter((t) => t.passable && distance(t, at.castle) >= CAMPS.far);
-  /** @type {import('../core/hex.js').Axial[]} */
-  const centres = [];
-  for (let i = 0; i < CAMPS.count && room.length; i++) {
-    const spread = (/** @type {import('../core/hex.js').Axial} */ t) => Math.min(distance(t, at.castle), ...centres.map((c) => distance(t, c)));
-    const best = room.reduce((a, b) => (spread(b) > spread(a) || (spread(b) === spread(a) && (b.q < a.q || (b.q === a.q && b.r < a.r))) ? b : a));
-    centres.push(best);
+  const { camps, raids } = campCentres(board, at.castle);
+  for (const c of camps) placeMonsters(board, state, at.lord.id, [...CAMPS.camp], c, true);
+  for (const c of raids) placeMonsters(board, state, at.lord.id, [...CAMPS.raids.camp], c, true);
+}
+
+/**
+ * Clearing the woods' own part after each tick: a smaller camp setting off
+ * for the castle at its time (its guards, at most one cell from its
+ * centre, guard no more), and the last wave.
+ * @param {Board} board
+ * @param {GameState} state
+ */
+function woods(board, state) {
+  const raid = CAMPS.raids.at.indexOf(state.tick / TICKS_PER_SECOND);
+  const at = raid >= 0 ? sides(board, state) : null;
+  if (at) {
+    const centre = campCentres(board, at.castle).raids[raid];
+    for (const b of monstersOf(state)) if (centre && b.home && distance({ q: b.home[0], r: b.home[1] }, centre) <= 1) delete b.home;
   }
-  for (const c of centres) placeMonsters(board, state, at.lord.id, [...CAMPS.camp], c, true);
+  lastWave(board, state);
 }
 
 /**
@@ -223,7 +258,7 @@ export const ACTS = [
   {
     // A fresh castle on a fresh map whose far side is crawling with
     // monsters, guarding their camps: more than enough to bring the castle
-    // down all at once. Bands clear them out; won once none is left. At
+    // down all at once. Smaller camps come for it now and then. Bands clear them out; won once none is left. At
     // ten minutes, those left and a last wave all come for the castle:
     // won if they all die.
     id: 'clearing-woods',
@@ -236,7 +271,7 @@ export const ACTS = [
       for (const b of Object.values(state.buildings)) if (b.type === 'lair') delete state.buildings[b.id];
     },
     opening: makeCamps,
-    tick: lastWave,
+    tick: woods,
     outcome(state) {
       const you = state.players[YOU];
       if (you.lost !== undefined) return 'fallen';

@@ -198,17 +198,21 @@ Run `npm start` and open http://127.0.0.1:2567.
   - **Clearing the woods**: a fresh castle on another map, bands allowed
     too, and the far side of the map crawling with the Easy Lord's horde:
     five camps of three ghouls and an ogre, more than enough to bring the
-    castle down all at once. They guard their camps: each goes for an
-    enemy building within 5 cells of its home, gives up one more than 8
-    away, and goes back home. Won as soon as every monster is dead. At
+    castle down all at once, and four smaller camps of three ghouls. They
+    guard their camps: each goes for an enemy building within 5 cells of
+    its home, gives up one more than 8 away, and goes back home. Instead
+    of waves, the smaller camps set off for the castle (farms first) one at
+    a time, the nearest first, at 2:30, 4:30, 6:30 and 8:30, unless cleared
+    before. Won as soon as every monster is dead. At
     10:00, a last wave of six ghouls and two ogres comes, and every
     monster left goes for the castle (the status says **the last wave**):
     won if they all die; lost if the castle falls or every unit dies. Tips
-    at 0:08 (clear them out), 2:00 (bands), 3:30 (higher levels are
-    sturdier) and 9:00 (good luck). Tried: keeping everyone home, the
-    castle falls a minute into the last wave; bands of 30 clear the map
-    as that wave ends; with the first two acts' heroes, a band of 20
-    clears it by 6:00.
+    at 0:08 ("Clear all monsters on the map"), 2:00 (bands), 3:30 (higher
+    levels are sturdier) and 9:00 (good luck). Tried: keeping everyone
+    home, the castle kills the smaller camps unharmed but falls a minute
+    and a half into the last wave; bands of 12 to 20 fall short; bands of
+    30 clear the map in that wave's wake (13:24); with the first two acts'
+    heroes, bands of 12 or more clear it there too.
 - **The game clock** runs only while every player is here. (`npm run dev`
   runs it with one, for trying things alone.) While it waits, the player
   who started the game has **Start** beside the count of players (**Go on**
