@@ -342,6 +342,7 @@ export function showLobby(token, me, { notice } = {}) {
  */
 async function showStoryButton(token, language, tell) {
   const button = /** @type {HTMLButtonElement} */ (document.getElementById('lobby-story'));
+  const or = /** @type {HTMLElement} */ (document.getElementById('lobby-story-or'));
   const word = (/** @type {Word} */ w, /** @type {Record<string, string | number>} */ values = {}) => say(language, { word: w, values });
   try {
     const res = await post('api/story/status', { token });
@@ -349,6 +350,7 @@ async function showStoryButton(token, language, tell) {
     const { act, first, playing, complete } = await res.json();
     button.classList.toggle('complete', complete);
     button.disabled = complete;
+    or.hidden = complete;
     if (complete) {
       const laurel = () => Object.assign(document.createElement('span'), { className: 'laurel' });
       button.replaceChildren(laurel(), word('storyComplete'), laurel());

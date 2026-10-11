@@ -384,6 +384,8 @@ async function story(browser, url) {
   const page = await newPlayer(browser, url, 'story', 'Sage');
   await inLobby(page);
   await waitText(page, '#lobby-story', 'Start story: Starving village');
+  assert.equal(await text(page, '#lobby-story-or'), 'or');
+  await page.locator('#lobby .card').screenshot({ path: join(OUT, 'lobby-story.png') });
   await page.click('#lobby-story');
   await inGame(page);
   // As it begins, its name and goal in the middle, faint, and the clock
@@ -444,6 +446,7 @@ async function story(browser, url) {
   await waitText(page, '#lobby-story', 'Story complete');
   assert.equal(await page.locator('#lobby-story').isDisabled(), true);
   assert.equal(await page.locator('#lobby-story .laurel').count(), 2);
+  assert.equal(await page.locator('#lobby-story-or').isVisible(), false, 'no "or" once complete');
   await page.locator('#lobby .card').screenshot({ path: join(OUT, 'lobby-story-complete.png') });
   await page.context().close();
 }
