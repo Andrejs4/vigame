@@ -538,9 +538,13 @@ one act, Dying village. What it will need next, as he named it:
   the usual game's rules, without its story; with replays given up for
   story mode, it could simply be started again instead.
 
-Dying village as built is tight: from 100% hunger every meal from the
-first must be full to reach 0% at 14:00, a minute before the limit. An
-NPC playing it reached 5% at 15:00 and lost.
+Dying village as first built was tight: hunger moved a quarter of the way
+at each meal, so from 100% every meal from the first had to be full to
+reach 0% at 14:00, a minute before the limit, and an NPC playing it
+reached 5% at 15:00 and lost. The author then made hunger move faster
+everywhere (HUNGER_PULL 0.4): 9 full meals now, from 100% to 0%. The
+NPC still loses it (1% at 15:00): it lets its village grow past its food
+(over a hundred units), which a player can hold back.
 
 ### Game exports with a map version
 

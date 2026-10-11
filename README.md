@@ -168,9 +168,8 @@ Run `npm start` and open http://127.0.0.1:2567.
     units and normal unit production, but starving: hunger at 100% and no
     food. Only pits and farms may be built, and nobody comes but the
     raiders. Won once hunger is down to 0%; lost if every unit dies, the
-    castle falls, or 15 minutes pass. Hunger moves a quarter of the way
-    to the shortfall at each meal, a minute apart, so from 100% it takes
-    14 full meals in a row to reach 0%: from the first meal on.
+    castle falls, or 15 minutes pass. From 100%, 9 full meals in a row
+    (one a minute) bring hunger to 0%.
 - **The game clock** runs only while every player is here. (`npm run dev`
   runs it with one, for trying things alone.) While it waits, the player
   who started the game has **Start** beside the count of players (**Go on**
@@ -314,10 +313,10 @@ Run `npm start` and open http://127.0.0.1:2567.
   over, seats can't be given up, so the table keeps their holders' names.
 - **Hunger**: one number per side, 0 to 100%. At each meal, if there isn't
   enough, the food is shared evenly and what doesn't divide waits for the
-  next meal. Hunger follows how short the meals fall: each meal moves it a
-  quarter of the way toward the shortfall, so full meals bring it down to
-  0%, half rations to 50%, and nothing at all up to 100% (in about a
-  quarter of an hour). At 100%, every unit may starve at each meal: about
+  next meal. Hunger follows how short the meals fall: each meal moves it
+  40% of the way toward the shortfall, so full meals bring it down to
+  0%, half rations to 50%, and nothing at all up to 100% (in 9 meals,
+  about 9 minutes; full meals bring it down from 100% as fast). At 100%, every unit may starve at each meal: about
   5% at level 1, 0.6% at level 50, never at 100.
 - **Upgrade** the selected building: the castle for 200 stone × its grade,
   a tower for 60 × its grade, a wagon for 50 dark metal up to three

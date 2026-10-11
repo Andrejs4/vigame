@@ -222,7 +222,7 @@ export const START_STONE = 200;
 export const FOOD_PERIOD = 60 * TICKS_PER_SECOND;
 export const FOOD_PER_UNIT = 10;
 export const FOOD_STORE = 10;
-export const HUNGER_PULL = 0.25;
+export const HUNGER_PULL = 0.4;
 export const MAX_HUNGER = 100;
 export const STARVE_CHANCE = 0.05;
 
