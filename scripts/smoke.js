@@ -376,7 +376,7 @@ async function newPlayer(browser, url, label, name, options, expectedError) {
  * Story mode: the lobby starts it at the first act, Starving village, a castle
  * alone and starving, where only pits and farms may be built; given up
  * from End, it is lost and starts again. Once its last act is won, the
- * lobby's button says the story is complete.
+ * lobby's button says the story is complete; the second act begins.
  * @param {import('playwright').Browser} browser
  * @param {string} url
  */
@@ -438,8 +438,28 @@ async function story(browser, url) {
   await inLobby(page);
   await waitText(page, '#lobby-story', 'Start story: Starving village');
 
-  // Its last act won: complete.
+  // The second act, once the first is won: its own opening, and its first tip.
   const token = await page.evaluate(() => localStorage.getItem('vigame.token'));
+  games.storage.saveStory(playerId(/** @type {string} */ (token)), { act: 1, gameId: null });
+  await page.reload();
+  await inLobby(page);
+  await waitText(page, '#lobby-story', 'Continue story: Village defence');
+  await page.click('#lobby-story');
+  await inGame(page);
+  await page.waitForSelector('#tip.shown');
+  assert.equal(await text(page, '#tip .tip-title'), 'Village defence');
+  assert.equal(await text(page, '#tip .tip-text'), 'Hold out against the monsters for ten minutes. Click anywhere, or press a key, to begin.');
+  await page.keyboard.press('Shift');
+  await page.waitForSelector('#tip', { state: 'hidden' });
+  assert.equal(await page.locator('#build-tower').isDisabled(), false, 'towers in this act');
+  await page.waitForFunction(() => document.querySelector('#tip.shown .tip-text')?.textContent?.startsWith('Monsters come from across the map.'),
+    undefined, { timeout: 15000 });
+  await page.waitForTimeout(500);
+  await page.screenshot({ path: join(OUT, 'story-defence.png') });
+  await page.goto(url);
+  await inLobby(page);
+
+  // Its last act won: complete.
   games.storage.saveStory(playerId(/** @type {string} */ (token)), { act: ACTS.length, gameId: null });
   await page.reload();
   await inLobby(page);

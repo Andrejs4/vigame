@@ -431,7 +431,7 @@ export class GameRoom extends Room {
     if (!running) return;
     advance(this.board, this.game);
     // A story act ends by its own rules (src/story/director.js).
-    if (this.game.story) direct(this.game);
+    if (this.game.story) direct(this.board, this.game);
     if (this.game.over === undefined) this.playNpcs();
     if (this.game.over !== undefined) this.finish();
     else if (this.game.tick - this.snapshotAt >= SNAPSHOT_TICKS) this.snapshot();

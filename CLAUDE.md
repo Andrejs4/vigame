@@ -233,7 +233,12 @@ drawing during play). Read it before art or graphics work.
   rules, so a story game rebuilt from its log alone wouldn't end the same:
   the author gave replays up for story mode. A new act: an entry in
   `ACTS`, its words and its timed tips in `ACT_WORDS` (story.js) and
-  words.js, and its outcomes in `RESULT_WORDS`. A player's place
+  words.js, and its outcomes in `RESULT_WORDS`. An act may have a mode
+  (Village defence is Easy Lord with its lair removed) and a `tick` the
+  director runs after each tick (its waves: plain data, no dice). When
+  the core ends an act's game itself (the castle fell with the Dark Lord
+  standing), the director still gives it its outcome, and the story counts
+  as won only for the player's own team. A player's place
   (`stories.act`) is the act to play next, past the last once all are
   won, so a story complete now goes on to an act added later. A message in the middle of the screen is
   `tip.js`: it takes no clicks (`pointer-events: none`), and goes at the

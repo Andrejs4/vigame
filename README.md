@@ -165,12 +165,13 @@ Run `npm start` and open http://127.0.0.1:2567.
   it would (the message takes no clicks, so they reach the board); then it
   fades. Tips follow at set seconds of the act, the same way but staying
   their time, while the game goes on: in Starving village, farms at 0:08,
-  pits at 0:20, keeping units at home and crews at 0:34, good luck at 0:40. Its
+  pits at 0:20, keeping units at home and crews at 0:34, good luck at 1:00. Its
   name, goal and time left stay under the game's details; buildings it
   doesn't allow are greyed out. **End** abandons it. Lost (or abandoned),
   the story starts again from the first act; won, it goes on to the next;
   once the last is won, the button says **Story complete**, between
-  laurels, and does nothing. So far there is one act:
+  laurels, and does nothing (until an act is added, which is then next).
+  Each act begins with a fresh castle on its own map. So far there are two:
   - **Starving village**: your castle alone, with the usual 200 stone and
     12 units and normal unit production, but starving: hunger at 100% and
     no food. Only pits and farms may be built, and nobody comes but the
@@ -179,6 +180,15 @@ Run `npm start` and open http://127.0.0.1:2567.
     meals in a row, one a minute), or when the 10 minutes run out if the
     meal then feeds everyone; lost if every unit dies, the castle falls,
     or that meal falls short.
+  - **Village defence**: a fresh castle (200 stone, 12 units, no hunger)
+    on another map, and towers allowed too. The Dark Lord, with no lair
+    here, sends waves of his Easy Lord horde from across the map: from
+    1:00, one a minute, wave n being n/2 ghouls (rounded up) and n/4 ogres
+    (rounded down). Monsters go for farms first, then the castle; units
+    mending a castle raise none meanwhile. Tips at 0:08 (put other
+    buildings in their way), 1:40 (towers) and 2:30 (good luck). Won if
+    the castle stands when the 10 minutes run out; lost if it falls or
+    every unit dies.
 - **The game clock** runs only while every player is here. (`npm run dev`
   runs it with one, for trying things alone.) While it waits, the player
   who started the game has **Start** beside the count of players (**Go on**
@@ -712,8 +722,8 @@ the token) and `scores` (when a game ends, each seated player's total, as
 its table of points counts it, with their name then, the game's name and
 mode, and the details: their side, the quick-win bonus, when it ended and
 their whole tally, such as the units born), and `stories` (each player's
-place in the story: the act, its game while one is under way, and whether
-the story is complete). Games may be cleared when the
+place in the story: the act to play next, or being played, past the last
+once all are won; and its game while one is under way). Games may be cleared when the
 rules or the format change; the scores and stories stay.
 A room reopening a game loads its snapshot and replays the commands logged
 after it; if the snapshot is unreadable, it replays the whole log from the

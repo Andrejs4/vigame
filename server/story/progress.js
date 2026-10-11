@@ -49,12 +49,13 @@ export function playStory(storage, pid) {
  * @param {import('../storage.js').Storage} storage
  * @param {string} pid
  * @param {string} gameId
- * @param {{ winner?: number }} game
+ * @param {{ winner?: number, players: Array<{ team: number }> }} game
  */
 export function storyEnded(storage, pid, gameId, game) {
   const progress = storage.storyOf(pid);
   if (progress.gameId !== gameId) return;
-  const won = game.winner !== undefined;
+  // Won only by the player's own team: given up with the Dark Lord about, he wins.
+  const won = game.winner !== undefined && game.winner === game.players[0]?.team;
   storage.saveStory(pid, { act: won ? progress.act + 1 : 0, gameId: null });
 }
 

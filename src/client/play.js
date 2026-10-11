@@ -648,7 +648,7 @@ export async function startGame(net, me) {
     const due = storyTip(view, tipped);
     if (!due) return;
     tipped = due.second;
-    tip.show({ text: word(due.word, { cost: BUILDING_TYPES.farm.cost }), stays: true });
+    tip.show({ text: word(due.word, { cost: BUILDING_TYPES.farm.cost, tower: BUILDING_TYPES.tower.cost }), stays: true });
   }
 
   /** A story act's line under the game's details: the act, its goal, and the time left. */

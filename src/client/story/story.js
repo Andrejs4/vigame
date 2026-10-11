@@ -18,7 +18,12 @@ import { TICKS_PER_SECOND } from '../../core/rules.js';
 export const ACT_WORDS = /** @type {Record<string, { name: Word, goal: Word, rules: Word, tips: Array<[number, Word]> }>} */ ({
   'starving-village': {
     name: 'actStarvingVillage', goal: 'goalStarvingVillage', rules: 'rulesStarvingVillage',
-    tips: [[8, 'tipStarvingFarm'], [20, 'tipStarvingPit'], [34, 'tipStarvingCrew'], [40, 'tipStarvingLuck']],
+    tips: [[8, 'tipStarvingFarm'], [20, 'tipStarvingPit'], [34, 'tipStarvingCrew'], [60, 'tipStarvingLuck']],
+  },
+  'village-defence': {
+    name: 'actVillageDefence', goal: 'goalVillageDefence', rules: 'rulesVillageDefence',
+    // The first wave comes at 1:00 and is gone by about 1:35.
+    tips: [[8, 'tipDefenceShield'], [100, 'tipDefenceTowers'], [150, 'tipDefenceLuck']],
   },
 });
 
@@ -43,7 +48,7 @@ export function storyTip(view, after) {
 
 /** How an act came out, by its `result`; one given up has none. */
 const RESULT_WORDS = /** @type {Record<string, Word>} */ ({
-  fed: 'storyFed', supplied: 'storySupplied', time: 'storyTime', empty: 'storyEmpty', fallen: 'storyFallen',
+  fed: 'storyFed', supplied: 'storySupplied', held: 'storyHeld', time: 'storyTime', empty: 'storyEmpty', fallen: 'storyFallen',
 });
 
 /**
