@@ -344,10 +344,11 @@
   <div class="pause-notice waiting" id="pause-notice" hidden data-word="pauseNotice">Paused</div>
 
   <div class="hud" id="status">
-    <!-- A story act's pause, by its player: a play/pause sign in the header, or Space. -->
+    <!-- A story act's pause, by its player, in the header, or Space: two stripes to pause, an arrow to go on. -->
     <button class="pause-toggle" id="pause-button" type="button" hidden aria-pressed="false" aria-keyshortcuts="Space"
       title="Pause or go on (Space)" aria-label="Pause or go on (Space)" data-word-title="pauseTitle" data-word-label="pauseTitle">
-      <svg viewBox="0 0 24 16" aria-hidden="true"><path d="M1 2 L9 8 L1 14 Z"/><rect x="13" y="2" width="3" height="12"/><rect x="19" y="2" width="3" height="12"/></svg>
+      <svg class="go-on" viewBox="0 0 12 16" aria-hidden="true"><path d="M2 2 L11 8 L2 14 Z"/></svg>
+      <svg class="pause" viewBox="0 0 12 16" aria-hidden="true"><rect x="2" y="2" width="3" height="12"/><rect x="7" y="2" width="3" height="12"/></svg>
     </button>
     <!-- Folds the panel to this header, and unfolds it; this browser keeps the choice. -->
     <button class="masthead" id="status-toggle" aria-expanded="true" aria-controls="status-body" title="Hide the game's details">

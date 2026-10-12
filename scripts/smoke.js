@@ -418,10 +418,12 @@ async function story(browser, url) {
   // Space pauses the act: the clock stops, a faint "Paused" blinks, orders
   // grey out, but the heroes can still be looked at. Space again goes on.
   assert.equal(await page.locator('#pause-button').isVisible(), true, 'a story act may be paused');
+  assert.deepEqual([await page.locator('#pause-button .go-on').isVisible(), await page.locator('#pause-button .pause').isVisible()], [false, true], 'two stripes to pause');
   await page.keyboard.press('Space');
   await waitMatch(page, '#time', / · paused$/);
   assert.equal(await page.locator('#pause-notice').isVisible(), true);
   assert.equal(await page.getAttribute('#pause-button', 'aria-pressed'), 'true');
+  assert.deepEqual([await page.locator('#pause-button .go-on').isVisible(), await page.locator('#pause-button .pause').isVisible()], [true, false], 'an arrow to go on');
   assert.equal(await page.locator('#build-farm').isDisabled(), true, 'no orders while paused');
   await page.keyboard.press('h');
   await page.keyboard.press('h');

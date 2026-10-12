@@ -272,8 +272,9 @@ button.masthead, .corner-toggle { -webkit-tap-highlight-color: transparent; }
 #status.folded button.masthead { padding-bottom: 0; margin-bottom: 0; border-bottom: 0; }
 #status.folded .notice { margin-top: 7px; }
 
-/* A story act's pause: a play/pause sign in the status panel's header, left
-   of its arrow; and while paused, a faint notice over the board. */
+/* A story act's pause, in the status panel's header, left of its arrow: two
+   stripes while it runs, an arrow to go on while paused; and while paused,
+   a faint notice over the board. */
 .pause-toggle {
   position: absolute; top: 6px; right: 30px; z-index: 1;
   display: flex; align-items: center; justify-content: center;
@@ -281,7 +282,8 @@ button.masthead, .corner-toggle { -webkit-tap-highlight-color: transparent; }
   color: var(--ink-dim); background: none; border: 0; border-radius: 6px;
   -webkit-tap-highlight-color: transparent;
 }
-.pause-toggle svg { width: 18px; height: 12px; fill: currentColor; }
+.pause-toggle svg { width: 9px; height: 12px; fill: currentColor; }
+.pause-toggle[aria-pressed="true"] .pause, .pause-toggle:not([aria-pressed="true"]) .go-on { display: none; }
 .pause-toggle:hover:not(:disabled) { background: none; color: var(--ink); }
 .pause-toggle[aria-pressed="true"] { color: var(--amber); background: none; border: 0; }
 .pause-notice {
