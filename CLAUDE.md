@@ -261,6 +261,9 @@ drawing during play). Read it before art or graphics work.
   player's first click or key without stopping it. Its caller may hold
   the clock meanwhile (`net.hold`), which the room allows only a story
   act's player; a page that held it and went releases it on rejoining.
+  The same hold is a story act's pause (`togglePause` in play.js, the
+  header's play/pause sign or Space): `canCommand` already greys every
+  order while the clock is stopped, and the room refuses them too.
 - Commands are flat objects of short strings, numbers and short lists of
   short strings (such as a crew's unit ids); the room rejects
   anything else before the core sees it (`flatCommand`).

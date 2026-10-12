@@ -166,7 +166,12 @@ Run `npm start` and open http://127.0.0.1:2567.
   fades, with a soft bell (as do the tips). Tips follow at set seconds of the act, the same way but staying
   their time, while the game goes on: in Starving village, farms at 0:08,
   pits at 0:20, keeping units at home and crews at 0:34, good luck at 1:00. Its
-  name, goal and time left stay under the game's details; buildings it
+  name, goal and time left stay under the game's details. Its player may
+  pause it at will, with the play/pause sign in the status panel's header
+  or **Space**: the clock stops, **Paused** blinks faintly over the board
+  (it takes no clicks), and orders wait, but the board, the selected
+  building and the heroes can still be looked at; the same again goes on.
+  Its buildings it
   doesn't allow are greyed out. **End** abandons it. Lost (or abandoned),
   the story starts again from the first act; won, it goes on to the next;
   once the last is won, the button says **Story complete**, between

@@ -219,6 +219,8 @@ export async function startGame(net, me) {
   const upgradeButton = /** @type {HTMLButtonElement} */ (document.getElementById('upgrade'));
   const crewButton = /** @type {HTMLButtonElement} */ (document.getElementById('crew-button'));
   const heroesButton = /** @type {HTMLButtonElement} */ (document.getElementById('heroes-button'));
+  const pauseButton = /** @type {HTMLButtonElement} */ (document.getElementById('pause-button'));
+  const pauseNotice = /** @type {HTMLElement} */ (document.getElementById('pause-notice'));
   const returnButton = /** @type {HTMLButtonElement} */ (document.getElementById('return-button'));
   const abortButton = /** @type {HTMLButtonElement} */ (document.getElementById('abort-button'));
   const attackButton = /** @type {HTMLButtonElement} */ (document.getElementById('attack-button'));
@@ -648,8 +650,29 @@ export async function startGame(net, me) {
     const line = storyLine(view, word, formatTime);
     if (!line) return;
     net.hold(true);
-    tip.show({ title: line.name, text: `${line.goal} ${word('tipGoOn')}`, ms: Infinity, onClose: () => net.hold(false) });
+    tip.show({ title: line.name, text: `${line.goal} ${word('tipGoOn')}`, ms: Infinity, onClose: () => {
+      // The action that closed it only begins the act: it doesn't pause it too.
+      beginning = true;
+      setTimeout(() => { beginning = false; });
+      if (!pausedByMe) net.hold(false);
+    } });
     sounds.play('tip');
+  }
+
+  /** Whether this player has paused their story act (with its clock held). */
+  let pausedByMe = false;
+  /** True for the moment the act's opening message closes, so its click or key doesn't pause it. */
+  let beginning = false;
+
+  /** Whether this viewer may pause the game: a story act's player, while it goes on. */
+  const mayPause = () => Boolean(view?.story && view.over === undefined && net.seat() !== null);
+
+  /** Pause the story act, or go on. */
+  function togglePause() {
+    if (!mayPause() || beginning) return;
+    pausedByMe = !pausedByMe;
+    net.hold(pausedByMe);
+    updateHud();
   }
 
   /** The game second of the last story tip shown. */
@@ -697,7 +720,7 @@ export async function startGame(net, me) {
         ? word('overSideWon', { side: names })
         : word(players[seat]?.team === winners ? 'overYouWon' : 'overYouLost');
       hud.time.textContent = [formatTime(view?.tick ?? 0), paused && !over ? word('paused') : '', outcome].filter(Boolean).join(' · ');
-      hud.time.title = paused && !over ? word('pausedTitle') : '';
+      hud.time.title = paused && !over ? word(pausedByMe ? 'pauseTitle' : 'pausedTitle') : '';
     }
     if (hud.seat) {
       const mine = seat !== null && view ? sideOf(view, seat) : null;
@@ -801,6 +824,10 @@ export async function startGame(net, me) {
     showStory();
     openStory();
     storyTips();
+    if (pausedByMe && !mayPause()) pausedByMe = false;
+    pauseButton.hidden = !mayPause();
+    pauseButton.setAttribute('aria-pressed', String(pausedByMe));
+    pauseNotice.hidden = !pausedByMe;
     const b = selected ? view?.buildings[selected] : null;
     const mine = Boolean(can && b && isMine(selected));
     const upgradable = Boolean(mine && b && !isRising(b) && b.upgrading === undefined && b.grade < BUILDING_TYPES[b.type].grades);
@@ -1454,6 +1481,17 @@ export async function startGame(net, me) {
   for (const button of /** @type {NodeListOf<HTMLButtonElement>} */ (stage.querySelectorAll('button[aria-keyshortcuts]'))) {
     for (const k of keysOf(button).map((k) => k.toLowerCase())) shortcuts.set(k, [...(shortcuts.get(k) ?? []), button]);
   }
+  // Space pauses a story act, or goes on, but not while typing or in a dialog.
+  addEventListener('keydown', (e) => {
+    if (e.code !== 'Space' || e.defaultPrevented || e.repeat || e.ctrlKey || e.metaKey || e.altKey) return;
+    if (crewDialog.open || heroesDialog.open || scoresDialog.open || renameDialog.open) return;
+    if (e.target instanceof Element && e.target.closest('input, select, textarea, [contenteditable]')) return;
+    if (!mayPause()) return;
+    e.preventDefault(); // nor scroll, nor press a focused button
+    togglePause();
+  });
+  pauseButton.addEventListener('click', () => togglePause());
+
   addEventListener('keydown', (e) => {
     const button = keyCandidates(e).flatMap((k) => shortcuts.get(k) ?? []).find((b) => !b.disabled && !b.hidden);
     if (!button) return;

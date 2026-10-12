@@ -415,6 +415,33 @@ async function story(browser, url) {
   assert.equal(await page.locator('#build-pit').isDisabled(), false);
   assert.equal(await page.locator('#seat-button').isVisible(), false, 'its player keeps the seat');
   await page.screenshot({ path: join(OUT, 'story.png') });
+  // Space pauses the act: the clock stops, a faint "Paused" blinks, orders
+  // grey out, but the heroes can still be looked at. Space again goes on.
+  assert.equal(await page.locator('#pause-button').isVisible(), true, 'a story act may be paused');
+  await page.keyboard.press('Space');
+  await waitMatch(page, '#time', / · paused$/);
+  assert.equal(await page.locator('#pause-notice').isVisible(), true);
+  assert.equal(await page.getAttribute('#pause-button', 'aria-pressed'), 'true');
+  assert.equal(await page.locator('#build-farm').isDisabled(), true, 'no orders while paused');
+  await page.keyboard.press('h');
+  await page.keyboard.press('h');
+  await page.waitForSelector('#heroes[open]');
+  await page.keyboard.press('Escape');
+  await page.waitForSelector('#heroes', { state: 'hidden' });
+  await page.screenshot({ path: join(OUT, 'story-paused.png') });
+  // On a phone, the notice sits in the board's middle, clear of the panels.
+  const desktop = page.viewportSize();
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.waitForTimeout(300);
+  const notice = /** @type {{ x: number, y: number, width: number, height: number }} */ (await page.locator('#pause-notice').boundingBox());
+  const panel = /** @type {{ x: number, y: number, width: number, height: number }} */ (await page.locator('#status').boundingBox());
+  assert.ok(notice.y > panel.y + panel.height || notice.x > panel.x + panel.width, 'clear of the status panel');
+  await page.screenshot({ path: join(OUT, 'story-paused-phone.png') });
+  if (desktop) await page.setViewportSize(desktop);
+  await page.click('#pause-button');
+  await waitMatch(page, '#time', /^\d+:\d\d$/);
+  assert.equal(await page.locator('#pause-notice').isVisible(), false);
+  assert.equal(await page.locator('#build-farm').isDisabled(), false);
   // At its eighth second, the first tip, which stays though the player clicks.
   await page.waitForFunction(() => document.querySelector('#tip.shown .tip-text')?.textContent === 'Build a farm to grow food. A farm costs 30 stone.',
     undefined, { timeout: 15000 });
