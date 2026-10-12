@@ -171,8 +171,7 @@ Run `npm start` and open http://127.0.0.1:2567.
   or **Space**: the clock stops, **Paused** blinks faintly over the board
   (it takes no clicks), and orders wait, but the board, the selected
   building and the heroes can still be looked at; the same again goes on.
-  Its buildings it
-  doesn't allow are greyed out. **End** abandons it. Lost (or abandoned),
+  Buildings it doesn't allow are greyed out. **End** abandons it. Lost (or abandoned),
   the story starts again from the first act; won, it goes on to the next;
   once the last is won, the button says **Story complete**, between
   laurels, and does nothing (until an act is added, which is then next).
